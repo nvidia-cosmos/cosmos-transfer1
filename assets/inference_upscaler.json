@@ -1,0 +1,6 @@
+{
+    "input_video_path" : "assets/inference_upscaler_input_video.mp4",
+    "upscale": {
+        "control_weight": 0.5
+    }
+}

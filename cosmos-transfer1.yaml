@@ -1,0 +1,16 @@
+# conda env create --file cosmos-transfer1.yaml
+name: cosmos-transfer1
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip=25.0
+  - cmake
+  - ninja
+  - libgl
+  - ffmpeg
+  - gcc=12.4.0
+  - gxx=12.4.0
+  - cuda=12.4
+  - cuda-nvcc=12.4
+  - cuda-toolkit=12.4

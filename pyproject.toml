@@ -1,0 +1,66 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Note that the build will take some time due to transformer_engine installation which does a lot of CUDA compilation.
+# But, at the end, you should be able to do an `import cosmos_transfer1` in python without any issues.
+
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cosmos-transfer1"
+version = "1.0.0"
+authors = [
+    {name = "NVIDIA Corporation"},
+]
+description = "Cosmos World Foundation Model"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+dynamic = ["dependencies"]
+
+[project.urls]
+homepage = "https://github.com/nvidia-cosmos/cosmos-transfer1/"
+issues = "https://github.com/nvidia-cosmos/cosmos-transfer1/issues"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages]
+find = {}
+
+[tool.isort]
+profile = "black"
+known_third_party = ["third_party"]
+skip = ["third_party"]
+line_length = 120
+
+[tool.black]
+line-length = 120
+target_version = ['py310']
+exclude = 'third_party'
+
+[tool.coverage.report]
+include_namespace_packages = true
+skip_empty = true
+omit = [
+    "tests/*",
+    "legacy/*",
+    ".venv/*",
+    "**/test_*.py",
+    "config.py",
+    "config-3.10.py"
+]

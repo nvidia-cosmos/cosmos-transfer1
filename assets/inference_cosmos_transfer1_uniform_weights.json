@@ -1,0 +1,18 @@
+{
+    "prompt": "The video is set in a modern, well-lit office environment with a sleek, minimalist design. The background features several people working at desks, indicating a busy workplace atmosphere. The main focus is on a robotic interaction at a counter. Two robotic arms, equipped with black gloves, are seen handling a red and white patterned coffee cup with a black lid. The arms are positioned in front of a woman who is standing on the opposite side of the counter. She is wearing a dark vest over a gray long-sleeve shirt and has long dark hair. The robotic arms are articulated and move with precision, suggesting advanced technology. \n\nAt the beginning, the robotic arms hold the coffee cup securely. As the video progresses, the woman reaches out with her right hand to take the cup. The interaction is smooth, with the robotic arms adjusting their grip to facilitate the handover. The woman's hand approaches the cup, and she grasps it confidently, lifting it from the robotic grip. The camera remains static throughout, focusing on the exchange between the robotic arms and the woman. The setting includes a white countertop with a container holding stir sticks and a potted plant, adding to the modern aesthetic. The video highlights the seamless integration of robotics in everyday tasks, emphasizing efficiency and precision in a contemporary office setting.",
+    "input_video_path" : "assets/example1_input_video.mp4",
+    "vis": {
+        "control_weight": 0.25
+    },
+    "edge": {
+        "control_weight": 0.25
+    },
+    "depth": {
+        "input_control": "assets/example1_depth.mp4",
+        "control_weight": 0.25
+    },
+    "seg": {
+        "input_control": "assets/example1_seg.mp4",
+        "control_weight": 0.25
+    }
+}

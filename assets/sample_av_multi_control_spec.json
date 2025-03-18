@@ -1,0 +1,10 @@
+{
+    "hdmap": {
+        "control_weight": 0.3,
+        "input_control": "assets/sample_av_multi_control_input_hdmap.mp4"
+    },
+    "lidar": {
+        "control_weight": 0.7,
+        "input_control": "assets/sample_av_multi_control_input_lidar.mp4"
+    }
+}
