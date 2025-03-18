@@ -236,9 +236,12 @@ This launches `transfer.py` and configures the controlnets for inference accordi
 }
 ```
 
-The output video can be found at `assets/example3_spatiotemporal_weights.mp4`. The first frame of the generated video is shown below.
+The output video can be found at `assets/example3_spatiotemporal_weights.mp4`. The generated video is shown below.
 
-<img src="../assets/example3_spatiotemporal_weights.png" width="640" alt="example3_spatiotemporal_weights">
+<video src="https://github.com/user-attachments/assets/69c9575a-04de-4b1c-a09c-352d66ea425e">
+  Your browser does not support the video tag.
+</video>
+
 
 The first frame of the spatiotemporal mask extracted by the prompt `robotic arms . gloves` is show below.
 
