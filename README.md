@@ -22,6 +22,30 @@ The model is available via [Hugging Face](https://huggingface.co/collections/nvi
 * [Installation instructions and inference examples for Cosmos-Transfer1-7B-4KUpscaler](examples/inference_cosmos_transfer1_7b_4kupscaler.md)
 * Cosmos-Transfer1 post-training is coming soon!
 
+The code snippet below provides a gist of the inference usage.
+
+```bash
+export CUDA_VISIBLE_DEVICES=0
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+    --checkpoint_dir $CHECKPOINT_DIR \
+    --video_save_folder outputs/robot_sample \
+    --controlnet_specs assets/robot_sample_spec.json \
+    --offload_text_encoder_model
+```
+
+<p align="center">
+<video src="https://github.com/user-attachments/assets/54994029-18a9-4e79-859b-e6325179fdb7">
+  Your browser does not support the video tag.
+</video>
+</p>
+
+<p align="center">
+<video src="https://github.com/user-attachments/assets/55daed44-5a2d-4af1-b547-e610f5ff32c6">
+  Your browser does not support the video tag.
+</video>
+</p>
+
 ## Model Family
 
 | Model name | Description | Try it out | Supported Hardware |

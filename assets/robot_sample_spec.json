@@ -1,0 +1,10 @@
+{
+    "prompt": "Inside a warm, rustic farmhouse kitchen, a bi-manual robot gently closes the door of a vintage-style refrigerator with a curved handle. The kitchen exudes charm with wooden cabinets, open shelves lined with ceramic dishware, and a cast-iron stove nearby. Sunlight streams in through a window adorned with lace curtains, illuminating the tiled floor. The fridge door latches with a soft click as the robot completes its task.",
+    "input_video_path" : "assets/robot_sample_input.mp4",
+    "seg": {
+	"input_control": "assets/robot_sample_seg.mp4",
+        "control_weight": 1.0,
+	"sigma_max": 70
+    }
+}
+
