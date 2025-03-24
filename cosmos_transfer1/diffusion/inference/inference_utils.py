@@ -643,7 +643,7 @@ def create_condition_latent_from_input_frames(
         num_frames_encode >= num_frames_condition
     ), f"num_frames_encode should be larger than num_frames_condition, get {num_frames_encode}, {num_frames_condition}"
 
-    # Put the conditioal frames to the begining of the video, and pad the end with zero
+    # Put the conditioal frames to the beginning of the video, and pad the end with zero
     condition_frames = input_frames[:, :, -num_frames_condition:]
     padding_frames = condition_frames.new_zeros(B, C, num_frames_encode - num_frames_condition, H, W)
     encode_input_frames = torch.cat([condition_frames, padding_frames], dim=2)
