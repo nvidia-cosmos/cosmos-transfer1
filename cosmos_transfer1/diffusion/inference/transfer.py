@@ -116,9 +116,7 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--num_steps", type=int, default=35, help="Number of diffusion sampling steps")
     parser.add_argument("--guidance", type=float, default=5, help="Classifier-free guidance scale value")
-    parser.add_argument("--height", type=int, default=704, help="Height of video to sample")
-    parser.add_argument("--width", type=int, default=1280, help="Width of video to sample")
-    parser.add_argument("--fps", type=int, default=24, help="FPS of the sampled video")
+    parser.add_argument("--fps", type=int, default=24, help="FPS of the output video")
     parser.add_argument("--seed", type=int, default=1, help="Random seed")
     parser.add_argument("--num_gpus", type=int, default=1, help="Number of GPUs used to run inference in parallel.")
     parser.add_argument(
@@ -135,6 +133,16 @@ def parse_arguments() -> argparse.Namespace:
         "--offload_guardrail_models",
         action="store_true",
         help="Offload guardrail models after inference",
+    )
+    parser.add_argument(
+        "--upsample_prompt",
+        action="store_true",
+        help="Upsample prompt using Pixtral upsampler model",
+    )
+    parser.add_argument(
+        "--offload_prompt_upsampler",
+        action="store_true",
+        help="Offload prompt upsampler model after inference",
     )
 
     cmd_args = parser.parse_args()
@@ -197,6 +205,7 @@ def demo(cfg, control_inputs):
         device_rank = distributed.get_rank(process_group)
 
     preprocessors = Preprocessors()
+
     checkpoint = BASE_7B_CHECKPOINT_AV_SAMPLE_PATH if cfg.is_av_sample else BASE_7B_CHECKPOINT_PATH
 
     # Initialize transfer generation model pipeline
@@ -208,8 +217,6 @@ def demo(cfg, control_inputs):
         offload_guardrail_models=cfg.offload_guardrail_models,
         guidance=cfg.guidance,
         num_steps=cfg.num_steps,
-        height=cfg.height,
-        width=cfg.width,
         fps=cfg.fps,
         seed=cfg.seed,
         num_input_frames=cfg.num_input_frames,
@@ -217,10 +224,15 @@ def demo(cfg, control_inputs):
         sigma_max=cfg.sigma_max,
         blur_strength=cfg.blur_strength,
         canny_threshold=cfg.canny_threshold,
+        upsample_prompt=cfg.upsample_prompt,
+        offload_prompt_upsampler=cfg.offload_prompt_upsampler,
     )
 
     if cfg.num_gpus > 1:
-        pipeline.model.net.enable_context_parallel(process_group)
+        pipeline.model.model.net.enable_context_parallel(process_group)
+        pipeline.model.model.base_model.net.enable_context_parallel(process_group)
+        if hasattr(pipeline.model.model, "hint_encoders"):
+            pipeline.model.model.hint_encoders.net.enable_context_parallel(process_group)
 
     # Handle multiple prompts if prompt file is provided
     if cfg.batch_input_path:
@@ -235,7 +247,7 @@ def demo(cfg, control_inputs):
         current_prompt = input_dict.get("prompt", None)
         current_video_path = input_dict.get("visual_input", None)
 
-        # if control inputs are not provided, run respective preprocessor
+        # if control inputs are not provided, run respective preprocessor (for seg and depth)
         preprocessors(current_video_path, current_prompt, control_inputs, cfg.video_save_folder)
 
         # Generate video
@@ -244,6 +256,7 @@ def demo(cfg, control_inputs):
             video_path=current_video_path,
             negative_prompt=cfg.negative_prompt,
             control_inputs=control_inputs,
+            save_folder=cfg.video_save_folder,
         )
         if generated_output is None:
             log.critical("Guardrail blocked generation.")

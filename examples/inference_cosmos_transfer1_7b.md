@@ -23,6 +23,8 @@ ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREF
 ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.10
 # Install Transformer engine.
 pip install transformer-engine[pytorch]==1.12.0
+# Install vLLM for prompt upsampler
+pip install vllm==0.8.0
 ```
 
 You can test the environment setup with
@@ -74,11 +76,27 @@ checkpoints/
 │   │   ├── hdmap_control.pt
 │   │   └── lidar_control.pt
 │   │
-│   └── Cosmos-Tokenize1-CV8x8x8-720p
-│       ├── decoder.jit
-│       ├── encoder.jit
-│       ├── autoencoder.jit
-│       └── mean_std.pt
+│   │── Cosmos-Tokenize1-CV8x8x8-720p
+│   │   ├── decoder.jit
+│   │   ├── encoder.jit
+│   │   ├── autoencoder.jit
+│   │   └── mean_std.pt
+│   │
+│   └── Cosmos-UpsamplePrompt1-12B-Transfer
+│       ├── depth
+│       │   ├── consolidated.safetensors
+│       │   ├── params.json
+│       │   └── tekken.json
+│       ├── README.md
+│       ├── segmentation
+│       │   ├── consolidated.safetensors
+│       │   ├── params.json
+│       │   └── tekken.json
+│       ├── seg_upsampler_example.png
+│       └── viscontrol
+│           ├── consolidated.safetensors
+│           ├── params.json
+│           └── tekken.json
 │
 ├── depth-anything/...
 ├── facebook/...
@@ -115,6 +133,20 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/infe
     --offload_text_encoder_model
 ```
 
+You can also choose to run the inference on multiple GPUs as follows:
+
+```bash
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0,1,2,3}"
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+export NUM_GPU="${NUM_GPU:=4}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+    --checkpoint_dir $CHECKPOINT_DIR \
+    --video_save_folder outputs/example1_single_control_edge \
+    --controlnet_specs assets/inference_cosmos_transfer1_single_control_edge.json \
+    --offload_text_encoder_model \
+    --num_gpus $NUM_GPU
+```
+
 This launches `transfer.py` and configures the controlnets for inference according to `assets/inference_cosmos_transfer1_single_control_edge.json`:
 
 ```json
@@ -134,11 +166,38 @@ The input video is a low-resolution 640 × 480 video.
   Your browser does not support the video tag.
 </video>
 
-We generate a 1280 x 704 video.
+We generate a 960 x 704 video.
 
 <video src="https://github.com/user-attachments/assets/b36de8b5-80f4-4479-9f1c-79933e2892f2">
   Your browser does not support the video tag.
 </video>
+
+You can use our prompt upsampler to convert your short prompt into a longer, more detailed prompt for video generation by using the `--upsample_prompt` argument.
+
+
+```bash
+export CUDA_VISIBLE_DEVICES=0
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+    --checkpoint_dir $CHECKPOINT_DIR \
+    --video_save_folder outputs/example1_single_control_edge_upsampled_prompt \
+    --controlnet_specs assets/inference_cosmos_transfer1_single_control_edge_short_prompt.json \
+    --offload_text_encoder_model \
+    --upsample_prompt \
+    --offload_prompt_upsampler
+```
+
+
+Input prompt: *Robotic arms hand over a coffee cup to a woman in a modern office.*
+
+Upsampled prompt: *The video opens with a close-up of a robotic arm holding a coffee cup with a lid, positioned next to a coffee machine. The arm is metallic with a black wrist, and the coffee cup is white with a brown lid. The background shows a modern office environment with a woman in a blue top and black pants standing in the distance. As the video progresses, the robotic arm moves the coffee cup towards the woman, who approaches to receive it. The woman has long hair and is wearing a blue top and black pants. The office has a contemporary design with glass partitions, potted plants, and other office furniture.*
+
+Here is the generated video using the upsampled prompt.
+
+<video src="https://github.com/user-attachments/assets/58488644-5fa6-449f-a51c-22f84db6f1bf">
+  Your browser does not support the video tag.
+</video>
+
 
 ### Examples 2: multimodal control
 
@@ -236,12 +295,9 @@ This launches `transfer.py` and configures the controlnets for inference accordi
 }
 ```
 
-The output video can be found at `assets/example3_spatiotemporal_weights.mp4`. The generated video is shown below.
+The output video can be found at `assets/example3_spatiotemporal_weights.mp4`. The first frame of the generated video is shown below.
 
-<video src="https://github.com/user-attachments/assets/69c9575a-04de-4b1c-a09c-352d66ea425e">
-  Your browser does not support the video tag.
-</video>
-
+<img src="../assets/example3_spatiotemporal_weights.png" width="640" alt="example3_spatiotemporal_weights">
 
 The first frame of the spatiotemporal mask extracted by the prompt `robotic arms . gloves` is show below.
 
@@ -272,16 +328,16 @@ In effect, for the configuration given in `assets/inference_cosmos_transfer1_spa
 | `--sigma_max` | The level of partial noise added to the input video in the range [0, 80.0]. Any value equal or higher than 80.0 will result in not using the input video and providing the model with pure noise. | 70.0 |
 | `--blur_strength` | The strength of blurring when preparing the control input for the vis controlnet. Valid values are 'very_low', 'low', 'medium', 'high', and 'very_high'. | 'medium' |
 | `--canny_threshold` | The threshold for canny edge detection when preparing the control input for the edge controlnet. Lower threshold means more edges detected. Valid values are 'very_low', 'low', 'medium', 'high', and 'very_high'. | 'medium' |
-| `--height` | Output video height | 704 |
-| `--width` | Output video width | 1280 |
-| `--fps` | Frames per second | 24 |
+| `--fps` | Output frames-per-second | 24 |
 | `--seed` | Random seed | 1 |
 | `--offload_text_encoder_model` | Offload text encoder after inference, used for low-memory GPUs | False |
 | `--offload_guardrail_models` | Offload guardrail models after inference, used for low-memory GPUs | False |
+| `--upsample_prompt` | Upsample prompt using prompt upsampler model | False |
+| `--offload_prompt_upsampler` |  Offload prompt upsampler models after inference, used for low-memory GPUs | False |
 
 Note: in order to run Cosmos on low-memory GPUs, you can use model offloading. This is accomplished by offloading the model from GPU memory after it has served its purpose to open space for the next model execution.
 
-Note: we support various aspect ratios, including 1:1 (960x960 for height and width), 4:3 (960x704), 3:4 (704x960), 16:9 (1280x704), and 9:16 (704x1280). The frame rate is also adjustable within a range of 12 to 40 fps. The current version of the model only supports 121 frames.
+Note: we support various aspect ratios, including 1:1 (960x960 for height and width), 4:3 (960x704), 3:4 (704x960), 16:9 (1280x704), and 9:16 (704x1280). If the input is not one of these five resolutions, it is first resized to one of them according to the nearest aspect ratio.
 
 ## Safety Features
 

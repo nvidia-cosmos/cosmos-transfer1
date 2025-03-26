@@ -17,6 +17,7 @@
 COSMOS_TRANSFER1_7B_CHECKPOINT = "nvidia/Cosmos-Transfer1-7B"
 COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT = "nvidia/Cosmos-Transfer1-7B-Sample-AV"
 COSMOS_TOKENIZER_CHECKPOINT = "nvidia/Cosmos-Tokenize1-CV8x8x8-720p"
+COSMOS_UPSAMPLER_CHECKPOINT = "nvidia/Cosmos-UpsamplePrompt1-12B-Transfer"
 
 # 3rd Party Model Checkpoints
 SAM2_MODEL_CHECKPOINT = "facebook/sam2-hiera-large"

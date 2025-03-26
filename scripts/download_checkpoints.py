@@ -83,6 +83,9 @@ MD5_CHECKSUM_LOOKUP = {
     "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/autoencoder.jit": "7f658580d5cf617ee1a1da85b1f51f0d",
     "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/decoder.jit": "ff21a63ed817ffdbe4b6841111ec79a8",
     "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/encoder.jit": "f5834d03645c379bc0f8ad14b9bc0299",
+    f"{checkpoints.COSMOS_UPSAMPLER_CHECKPOINT}/viscontrol/consolidated.safetensors": "d05197354ba886509c91445f00176f99",
+    f"{checkpoints.COSMOS_UPSAMPLER_CHECKPOINT}/segmentation/consolidated.safetensors": "8529fb4064ff75cb87a855709fb15c2e",
+    f"{checkpoints.COSMOS_UPSAMPLER_CHECKPOINT}/depth/consolidated.safetensors": "6ce6b8520fd12a3219cdfe7cc387b666",
 }
 
 

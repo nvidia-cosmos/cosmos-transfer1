@@ -1,0 +1,7 @@
+{
+    "prompt": "a robotic arm hand over a coffee cup to a woman in a modern office.",
+    "input_video_path" : "assets/example1_input_video.mp4",
+    "edge": {
+        "control_weight": 1.0
+    }
+}

@@ -2,7 +2,7 @@
     <img src="assets/nvidia-cosmos-header.png" alt="NVIDIA Cosmos Header">
 </p>
 
-### [Website](https://www.nvidia.com/en-us/ai/cosmos/) | [Hugging Face](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e) | [Paper](https://arxiv.org/abs/2501.03575) | [Paper Website](https://research.nvidia.com/labs/dir/cosmos-transfer1/)
+### [Website](https://www.nvidia.com/en-us/ai/cosmos/) | [Hugging Face](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e) | [Paper](https://arxiv.org/abs/2501.03575) | [Paper Website](https://research.nvidia.com/labs/dir/cosmos_transfer1/)
 
 [NVIDIA Cosmos](https://www.nvidia.com/cosmos/) is a developer-first world foundation model platform designed to help Physical AI developers build their Physical AI systems better and faster. Cosmos contains
 
@@ -22,7 +22,7 @@ The model is available via [Hugging Face](https://huggingface.co/collections/nvi
 * [Installation instructions and inference examples for Cosmos-Transfer1-7B-4KUpscaler](examples/inference_cosmos_transfer1_7b_4kupscaler.md)
 * Cosmos-Transfer1 post-training is coming soon!
 
-The code snippet below provides a gist of the inference usage.
+Here is an example of Transfer1 with a code snippet highlighting the inference usage.
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0
@@ -32,6 +32,20 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/infe
     --video_save_folder outputs/robot_sample \
     --controlnet_specs assets/robot_sample_spec.json \
     --offload_text_encoder_model
+```
+
+You can also run cosmos-transfer1 on multiple GPUs as follows:
+
+```bash
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0,1,2,3}"
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+export NUM_GPU="${NUM_GPU:=4}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+    --checkpoint_dir $CHECKPOINT_DIR \
+    --video_save_folder outputs/example2_uniform_weights \
+    --controlnet_specs assets/inference_cosmos_transfer1_uniform_weights.json \
+    --offload_text_encoder_model \
+    --num_gpus $NUM_GPU
 ```
 
 <p align="center">

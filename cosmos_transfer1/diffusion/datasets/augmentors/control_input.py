@@ -459,6 +459,9 @@ class AddControlInputBlurDownUp(Augmentor):
         return frames, is_image
 
     def __call__(self, data_dict: dict) -> dict:
+        if "control_input_vis" in data_dict:
+            # already processed
+            return data_dict
         key_img = self.input_keys[1]
         key_out = self.output_keys[0]
         frames, is_image = self._load_frame(data_dict)
@@ -526,6 +529,9 @@ class AddControlInputEdge(Augmentor):
         self.preset_strength = preset_canny_threshold
 
     def __call__(self, data_dict: dict) -> dict:
+        if "control_input_edge" in data_dict:
+            # already processed
+            return data_dict
         key_img = self.input_keys[1]
         key_out = self.output_keys[0]
         frames = data_dict[key_img]
@@ -574,7 +580,7 @@ class AddControlInput(Augmentor):
     def __init__(
         self,
         input_keys: list,
-        output_keys=["control_input_gaussian_guided_bilateral_median_log_anisotropic"],
+        output_keys=["control_input_vis"],
         args=None,
         blur_config: BlurAugmentorConfig = BlurAugmentorConfig(),
         use_random=True,
@@ -1135,12 +1141,9 @@ class AddControlInputUpscale(Augmentor):
 if __name__ == "__main__":
     import sys
 
-    from cosmos_transfer1.diffusion.config.transfer.augmentors import (
-        BilateralOnlyBlurAugmentorConfig,
-        GaussianOnlyBlurAugmentorConfig,
-    )
-    from cosmos_transfer1.diffusion.inference.demo_video import save_video
-    from cosmos_transfer1.diffusion.utils.inference_long_video import read_video_or_image_into_frames_BCTHW
+    from cosmos_transfer1.auxiliary.guardrail.common.io_utils import save_video
+    from cosmos_transfer1.diffusion.config.transfer.augmentors import BilateralOnlyBlurAugmentorConfig
+    from cosmos_transfer1.diffusion.inference.inference_utils import read_video_or_image_into_frames_BCTHW
 
     path_in = sys.argv[1]
 
@@ -1150,14 +1153,13 @@ if __name__ == "__main__":
         C, T, H, W = video_input.shape
         blur_processes = {
             "bilateral": BilateralOnlyBlurAugmentorConfig,
-            "gaussian": GaussianOnlyBlurAugmentorConfig,
         }
         for blur_name, blur_process in blur_processes.items():
             for preset_strength in ["low", "medium", "high"]:
                 process = get_augmentor_for_eval(
                     "video",
                     "control_input_vis",
-                    preset_strength=preset_strength,
+                    preset_blur_strength=preset_strength,
                     blur_config=blur_process[preset_strength],
                 )
                 output = process({"video": video_input})
@@ -1165,12 +1167,9 @@ if __name__ == "__main__":
 
                 output_file_path = f"{input_file_path[:-4]}_{blur_name}_{preset_strength}.mp4"
                 save_video(
-                    grid=output,
+                    frames=output,
                     fps=5,
-                    H=H,
-                    W=W,
-                    video_save_quality=9,
-                    video_save_path=output_file_path,
+                    filepath=output_file_path,
                 )
 
                 print(f"Output video saved as {output_file_path}")

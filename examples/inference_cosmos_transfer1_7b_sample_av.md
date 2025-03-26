@@ -109,6 +109,23 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/infe
     --controlnet_specs assets/sample_av_multi_control_spec.json
 ```
 
+You can also choose to run the inference on multiple GPUs as follows:
+
+```bash
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0,1,2,3}"
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+export NUM_GPU="${NUM_GPU:=4}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+    --checkpoint_dir $CHECKPOINT_DIR \
+    --video_save_name output_video \
+    --video_save_folder outputs/sample_av_multi_control \
+    --prompt "$PROMPT" \
+    --sigma_max 80 \
+    --offload_text_encoder_model --is_av_sample \
+    --controlnet_specs assets/sample_av_multi_control_spec.json \
+    --num_gpus $NUM_GPU
+```
+
 This launches `transfer.py` and configures the controlnets for inference according to `assets/sample_av_multi_control_spec.json`:
 
 ```json

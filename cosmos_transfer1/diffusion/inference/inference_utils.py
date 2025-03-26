@@ -27,6 +27,7 @@ import torch
 import torchvision.transforms.functional as transforms_F
 from einops import rearrange
 
+from cosmos_transfer1.auxiliary.guardrail.common.io_utils import save_video
 from cosmos_transfer1.checkpoints import (
     DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
@@ -58,6 +59,13 @@ elif (
 
 DEFAULT_AUGMENT_SIGMA = 0.001
 NUM_MAX_FRAMES = 5000
+VIDEO_RES_SIZE_INFO = {
+    "1,1": (960, 960),
+    "4,3": (960, 704),
+    "3,4": (704, 960),
+    "16,9": (1280, 704),
+    "9,16": (704, 1280),
+}
 
 
 class _IncompatibleKeys(
@@ -331,7 +339,7 @@ def get_upscale_size(orig_size: tuple[int], aspect_ratio: str, upscale_factor: i
     return target_w, target_h
 
 
-def read_and_resize_input(input_control_path, num_total_frames, h, w, interpolation):
+def read_and_resize_input(input_control_path, num_total_frames, interpolation):
     control_input, fps = read_video_or_image_into_frames_BCTHW(
         input_control_path,
         normalize=False,  # s.t. output range is [0, 255]
@@ -339,6 +347,7 @@ def read_and_resize_input(input_control_path, num_total_frames, h, w, interpolat
         also_return_fps=True,
     )  # BCTHW
     aspect_ratio = detect_aspect_ratio((control_input.shape[-1], control_input.shape[-2]))
+    w, h = VIDEO_RES_SIZE_INFO[aspect_ratio]
     control_input = resize_video(control_input, h, w, interpolation=interpolation)  # BCTHW, range [0, 255]
     control_input = torch.from_numpy(control_input[0])  # CTHW, range [0, 255]
     return control_input, fps, aspect_ratio
@@ -367,9 +376,9 @@ def get_ctrl_batch(
     num_total_frames = NUM_MAX_FRAMES
     if input_video_path:
         input_frames, fps, aspect_ratio = read_and_resize_input(
-            input_video_path, num_total_frames=num_total_frames, h=H, w=W, interpolation=cv2.INTER_AREA
+            input_video_path, num_total_frames=num_total_frames, interpolation=cv2.INTER_AREA
         )
-        num_total_frames = input_frames.shape[1]
+        _, num_total_frames, H, W = input_frames.shape
         control_input_dict["video"] = input_frames.numpy()  # CTHW
         data_batch["input_video"] = input_frames.bfloat16()[None] / 255 * 2 - 1  # BCTHW
     else:
@@ -383,9 +392,10 @@ def get_ctrl_batch(
             interpolation = cv2.INTER_NEAREST if hint_key == "seg" else cv2.INTER_LINEAR
             log.info(f"reading control input {in_file} for hint {hint_key}")
             control_input_dict[f"control_input_{hint_key}"], fps, aspect_ratio = read_and_resize_input(
-                in_file, num_total_frames=num_total_frames, h=H, w=W, interpolation=interpolation
+                in_file, num_total_frames=num_total_frames, interpolation=interpolation
             )  # CTHW
             num_total_frames = min(num_total_frames, control_input_dict[f"control_input_{hint_key}"].shape[1])
+            target_h, target_w = H, W = control_input_dict[f"control_input_{hint_key}"].shape[2:]
         if hint_key == "upscale":
             orig_size = (W, H)
             target_w, target_h = get_upscale_size(orig_size, aspect_ratio, upscale_factor=3)
@@ -413,8 +423,6 @@ def get_ctrl_batch(
         data_batch["input_video"] = data_batch["input_video"][:, :, :num_total_frames]
 
     hint_key = "control_input_" + "_".join(control_inputs.keys())
-
-    # Add augmentor for processing inputs based on blur strength
     add_control_input = get_augmentor_for_eval(
         input_key="video",
         output_key=hint_key,
@@ -441,8 +449,32 @@ def get_ctrl_batch(
             data_batch[hint_key] = control_input
 
     data_batch["target_h"], data_batch["target_w"] = target_h // 8, target_w // 8
+    data_batch["video"] = torch.zeros((1, 3, 121, H, W), dtype=torch.uint8).cuda()
+    data_batch["image_size"] = torch.tensor([[H, W, H, W]] * 1, dtype=torch.bfloat16).cuda()
+    data_batch["padding_mask"] = torch.zeros((1, 1, H, W), dtype=torch.bfloat16).cuda()
 
     return data_batch
+
+
+def generate_control_input(input_file_path, save_folder, hint_key, blur_strength, canny_threshold, num_total_frames=10):
+    log.info(
+        f"Generating control input for {hint_key} with blur strength {blur_strength} and canny threshold {canny_threshold}"
+    )
+    video_input = read_video_or_image_into_frames_BCTHW(input_file_path, normalize=False)[0, :, :num_total_frames]
+    control_input = get_augmentor_for_eval(
+        input_key="video",
+        output_key=hint_key,
+        preset_blur_strength=blur_strength,
+        preset_canny_threshold=canny_threshold,
+        blur_config=BilateralOnlyBlurAugmentorConfig[blur_strength],
+    )
+    control_input = control_input({"video": video_input})[hint_key]
+    control_input = control_input.numpy().transpose((1, 2, 3, 0))
+
+    output_file_path = f"{save_folder}/{hint_key}_upsampler.mp4"
+    log.info(f"Saving control input to {output_file_path}")
+    save_video(frames=control_input, fps=24, filepath=output_file_path)
+    return output_file_path
 
 
 def generate_world_from_control(
@@ -492,7 +524,7 @@ def generate_world_from_control(
     sample = model.generate_samples_from_batch(
         data_batch,
         guidance=guidance,
-        state_shape=state_shape,
+        state_shape=[c, t, h, w],
         num_steps=num_steps,
         is_negative_prompt=is_negative_prompt,
         seed=seed,
@@ -643,7 +675,7 @@ def create_condition_latent_from_input_frames(
         num_frames_encode >= num_frames_condition
     ), f"num_frames_encode should be larger than num_frames_condition, get {num_frames_encode}, {num_frames_condition}"
 
-    # Put the conditioal frames to the beginning of the video, and pad the end with zero
+    # Put the conditioal frames to the begining of the video, and pad the end with zero
     condition_frames = input_frames[:, :, -num_frames_condition:]
     padding_frames = condition_frames.new_zeros(B, C, num_frames_encode - num_frames_condition, H, W)
     encode_input_frames = torch.cat([condition_frames, padding_frames], dim=2)
@@ -895,16 +927,13 @@ def validate_controlnet_specs(cfg, controlnet_specs) -> Dict[str, Any]:
         if hint_key not in valid_hint_keys:
             raise ValueError(f"Invalid hint_key: {hint_key}. Must be one of {valid_hint_keys}")
 
-        if hint_key in {"seg", "depth"} and not input_video_path and sigma_max < 80:
-            raise ValueError(f"{hint_key} controlnet must have 'input_video' specified if sigma_max < 80")
+        if not input_video_path and sigma_max < 80:
+            raise ValueError("Must have 'input_video' specified if sigma_max < 80")
 
-        if hint_key in {"vis", "edge"}:
-            if "input_control" in config:
-                raise ValueError(
-                    f"Invalid parameter input_control specified for {hint_key}. {hint_key} controlnet does not require input_control."
-                )
-            if not input_video_path:
-                raise ValueError(f"{hint_key} controlnet must have 'input_video' specified.")
+        if not input_video_path and "input_control" not in config:
+            raise ValueError(
+                f"{hint_key} controlnet must have 'input_control' video specified if no 'input_video' specified."
+            )
 
         if "ckpt_path" not in config:
             log.info(f"No checkpoint path specified for {hint_key}. Using default.")

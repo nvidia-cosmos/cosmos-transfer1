@@ -15,20 +15,47 @@
 
 from __future__ import annotations
 
+import base64
 import collections
 import collections.abc
 import functools
 import json
+import os
 import random
+import tempfile
 import time
 from contextlib import ContextDecorator
 from typing import Any, Callable, TypeVar
 
+import cv2
 import numpy as np
 import termcolor
 import torch
 
 from cosmos_transfer1.utils import distributed, log
+
+
+def extract_video_frames(video_path, number_of_frames=2):
+    cap = cv2.VideoCapture(video_path)
+    frame_paths = []
+
+    temp_dir = tempfile.gettempdir()
+    for i in range(number_of_frames):  # Extract first two frames
+        ret, frame = cap.read()
+        if not ret:
+            break  # Stop if no more frames
+
+        temp_path = os.path.join(temp_dir, f"frame_{i+1}.png")
+        cv2.imwrite(temp_path, frame)
+        frame_paths.append(temp_path)
+
+    cap.release()
+    return frame_paths
+
+
+def image_to_base64(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
 
 
 def to(

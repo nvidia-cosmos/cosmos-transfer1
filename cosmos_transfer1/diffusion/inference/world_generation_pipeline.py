@@ -13,12 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from typing import Optional
 
 import numpy as np
 import torch
 from tqdm import tqdm
 
+from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUpsampler
 from cosmos_transfer1.checkpoints import (
     BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
     BASE_7B_CHECKPOINT_PATH,
@@ -33,6 +35,7 @@ from cosmos_transfer1.checkpoints import (
 )
 from cosmos_transfer1.diffusion.inference.inference_utils import (
     detect_aspect_ratio,
+    generate_control_input,
     generate_world_from_control,
     get_ctrl_batch,
     get_upscale_size,
@@ -94,6 +97,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         sigma_max: float = 70.0,
         blur_strength: str = "medium",
         canny_threshold: str = "medium",
+        upsample_prompt: bool = False,
+        offload_prompt_upsampler: bool = False,
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -113,12 +118,23 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             num_video_frames: Number of frames to generate
             seed: Random seed for sampling
             num_input_frames: Number of latent conditions
+            control_inputs: Dictionary of control inputs for guided generation
+            sigma_max: Sigma max for partial denoising
+            blur_strength: Strength of blur applied to input
+            canny_threshold: Threshold for edge detection
+            upsample_prompt: Whether to upsample prompts using prompt upsampler model
+            offload_prompt_upsampler: Whether to offload prompt upsampler after use
         """
         self.num_input_frames = num_input_frames
         self.control_inputs = control_inputs
         self.sigma_max = sigma_max
         self.blur_strength = blur_strength
         self.canny_threshold = canny_threshold
+        self.upsample_prompt = upsample_prompt
+        self.offload_prompt_upsampler = offload_prompt_upsampler
+        self.prompt_upsampler = None
+        self.upsampler_hint_key = None
+        self.hint_details = None
 
         self.model_name = MODEL_NAME_DICT[checkpoint_name]
         self.model_class = MODEL_CLASS_DICT[checkpoint_name]
@@ -139,6 +155,111 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             offload_text_encoder_model=offload_text_encoder_model,
             offload_guardrail_models=offload_guardrail_models,
         )
+
+        # Initialize prompt upsampler if needed
+        if self.upsample_prompt:
+            if int(os.environ["RANK"]) == 0:
+                self._push_torchrun_environ_variables()
+                self._init_prompt_upsampler()
+                self._pop_torchrun_environ_variables()
+
+    def _push_torchrun_environ_variables(self):
+        dist_keys = [
+            "RANK",
+            "LOCAL_RANK",
+            "WORLD_SIZE",
+            "LOCAL_WORLD_SIZE",
+            "GROUP_RANK",
+            "ROLE_RANK",
+            "ROLE_NAME",
+            "OMP_NUM_THREADS",
+            "MASTER_ADDR",
+            "MASTER_PORT",
+            "TORCHELASTIC_USE_AGENT_STORE",
+            "TORCHELASTIC_MAX_RESTARTS",
+            "TORCHELASTIC_RUN_ID",
+            "TORCH_NCCL_ASYNC_ERROR_HANDLING",
+            "TORCHELASTIC_ERROR_FILE",
+        ]
+
+        self.torchrun_environ_variables = {}
+        for dist_key in dist_keys:
+            if dist_key in os.environ:
+                self.torchrun_environ_variables[dist_key] = os.environ[dist_key]
+                del os.environ[dist_key]
+
+    def _pop_torchrun_environ_variables(self):
+        for dist_key in self.torchrun_environ_variables.keys():
+            os.environ[dist_key] = self.torchrun_environ_variables[dist_key]
+
+    def _init_prompt_upsampler(self):
+        """
+        Initializes the prompt upsampler based on the provided control inputs.
+
+        Returns:
+            None: Sets instance variables for prompt upsampler, hint key, and hint details
+        """
+        vis_hint_keys = ["vis", "edge"]
+        other_hint_keys = ["seg", "depth"]
+        self.hint_details = None
+
+        log.info("Initializing prompt upsampler...")
+
+        if any(key in vis_hint_keys for key in self.control_inputs):
+            self.upsampler_hint_key = "vis"
+            self.hint_details = "vis" if "vis" in self.control_inputs else "edge"
+        elif any(key in other_hint_keys for key in self.control_inputs):
+            selected_hint_keys = [key for key in self.control_inputs if key in other_hint_keys]
+            self.upsampler_hint_key = selected_hint_keys[0]
+        else:
+            self.upsampler_hint_key = None
+
+        if self.upsampler_hint_key:
+            self.prompt_upsampler = PixtralPromptUpsampler(
+                checkpoint_dir=self.checkpoint_dir,
+                offload_prompt_upsampler=self.offload_prompt_upsampler,
+            )
+
+        log.info(
+            f"Prompt upsampler initialized with hint key: {self.upsampler_hint_key} and hint details: {self.hint_details}"
+        )
+
+    def _process_prompt_upsampler(self, prompt, video_path, save_folder):
+        """
+        Processes and upscales a given prompt using the prompt upsampler.
+
+        Args:
+            prompt: The text prompt to upsample
+            video_path: Path to the input video
+            save_folder: Folder to save intermediate files
+
+        Returns:
+            str: The upsampled prompt
+        """
+        if not self.prompt_upsampler:
+            return prompt
+
+        log.info(f"Upsampling prompt with controlnet: {self.upsampler_hint_key}")
+
+        if self.upsampler_hint_key in ["vis"]:  # input video or control input, one of them is required
+            # prompt upsampler for viscontrol(vis, edge)
+            if self.control_inputs[self.hint_details].get("input_control", None) is not None:
+                input_control_path = self.control_inputs[self.hint_details].get("input_control", None)
+            else:
+                hint_key = f"control_input_{self.hint_details}"
+                input_control_path = generate_control_input(
+                    input_file_path=video_path,
+                    save_folder=save_folder,
+                    hint_key=hint_key,
+                    blur_strength=self.blur_strength,
+                    canny_threshold=self.canny_threshold,
+                )
+        else:
+            # prompt upsampler for seg, depth
+            input_control_path = self.control_inputs[self.upsampler_hint_key].get("input_control", None)
+
+        prompt = self.prompt_upsampler._prompt_upsample_with_offload(prompt=prompt, video_path=input_control_path)
+        return prompt
 
     def _load_model(self):
         self.model = load_model_by_config(
@@ -398,6 +519,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         video_path: str,
         negative_prompt: Optional[str] = None,
         control_inputs: dict = None,
+        save_folder: str = "outputs/",
     ) -> tuple[np.ndarray, str] | None:
         """Generate video from text prompt and control video.
 
@@ -411,6 +533,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             prompt: Text description of desired video
             video_path: Path to input video
             negative_prompt: Optional text to guide what not to generate
+            control_inputs: Control inputs for guided generation
+            save_folder: Folder to save intermediate files
 
         Returns:
             tuple: (
@@ -421,6 +545,14 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         log.info(f"Run with prompt: {prompt}")
         log.info(f"Run with video path: {video_path}")
         log.info(f"Run with negative prompt: {negative_prompt}")
+
+        # Upsample prompt if enabled
+        if self.prompt_upsampler:
+            if int(os.environ["RANK"]) == 0:
+                self._push_torchrun_environ_variables()
+                prompt = self._process_prompt_upsampler(prompt, video_path, save_folder)
+                self._pop_torchrun_environ_variables()
+                log.info(f"Upsampled prompt: {prompt}")
 
         log.info("Run guardrail on prompt")
         is_safe = self._run_guardrail_on_prompt_with_offload(prompt)

@@ -233,12 +233,13 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
         to_cp = self.net.is_context_parallel_enabled
         # For inference, check if parallel_state is initialized
         if parallel_state.is_initialized():
-            condition = broadcast_condition(condition, to_tp=True, to_cp=to_cp)
-            uncondition = broadcast_condition(uncondition, to_tp=True, to_cp=to_cp)
+            condition = broadcast_condition(condition, to_tp=False, to_cp=to_cp)
+            uncondition = broadcast_condition(uncondition, to_tp=False, to_cp=to_cp)
 
             cp_group = parallel_state.get_context_parallel_group()
             latent_hint = getattr(condition, hint_key)
-            latent_hint = split_inputs_cp(latent_hint, seq_dim=2, cp_group=cp_group)
+            seq_dim = 3 if latent_hint.ndim == 6 else 2
+            latent_hint = split_inputs_cp(latent_hint, seq_dim=seq_dim, cp_group=cp_group)
             setattr(condition, hint_key, latent_hint)
             if getattr(uncondition, hint_key) is not None:
                 setattr(uncondition, hint_key, latent_hint)
