@@ -135,6 +135,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         self.prompt_upsampler = None
         self.upsampler_hint_key = None
         self.hint_details = None
+        self.process_group = None
 
         self.model_name = MODEL_NAME_DICT[checkpoint_name]
         self.model_class = MODEL_CLASS_DICT[checkpoint_name]
@@ -292,6 +293,13 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                     spec["ckpt_path"], map_location="cpu", weights_only=False
                 )  # , weights_only=True)
                 non_strict_load_model(self.model.model, net_state_dict)
+
+        # Enable context parallelism if using multiple GPUs
+        if self.process_group is not None:
+            self.model.model.net.enable_context_parallel(self.process_group)
+            self.model.model.base_model.net.enable_context_parallel(self.process_group)
+            if hasattr(self.model.model, "hint_encoders"):
+                self.model.model.hint_encoders.net.enable_context_parallel(self.process_group)
 
     def _load_tokenizer(self):
         load_tokenizer_model(self.model, f"{self.checkpoint_dir}/{COSMOS_TOKENIZER_CHECKPOINT}")

@@ -228,12 +228,10 @@ def demo(cfg, control_inputs):
         offload_prompt_upsampler=cfg.offload_prompt_upsampler,
     )
 
+    # Set process group for context parallelism if using multiple GPUs
     if cfg.num_gpus > 1:
-        pipeline.model.model.net.enable_context_parallel(process_group)
-        pipeline.model.model.base_model.net.enable_context_parallel(process_group)
-        if hasattr(pipeline.model.model, "hint_encoders"):
-            pipeline.model.model.hint_encoders.net.enable_context_parallel(process_group)
-
+        pipeline.process_group = process_group
+        
     # Handle multiple prompts if prompt file is provided
     if cfg.batch_input_path:
         log.info(f"Reading batch inputs from path: {cfg.batch_input_path}")
