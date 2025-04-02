@@ -22,7 +22,7 @@ import numpy as np
 import torch
 
 from cosmos_transfer1.auxiliary.guardrail.common import presets as guardrail_presets
-from cosmos_transfer1.checkpoints import GUARDRAIL_CHECKPOINT_PATH, T5_MODEL_CHECKPOINT
+from cosmos_transfer1.checkpoints import T5_MODEL_CHECKPOINT
 from cosmos_transfer1.utils.t5_text_encoder import CosmosT5TextEncoder
 
 
@@ -59,7 +59,6 @@ class BaseWorldGenerationPipeline(ABC):
         self.inference_type = inference_type
         self.checkpoint_dir = checkpoint_dir
         self.checkpoint_name = checkpoint_name
-        self.guardrail_dir = GUARDRAIL_CHECKPOINT_PATH
         self.has_text_input = has_text_input
 
         # Add offloading flags
@@ -128,7 +127,7 @@ class BaseWorldGenerationPipeline(ABC):
         Models are loaded from the specified guardrail directory.
         """
         self.text_guardrail = guardrail_presets.create_text_guardrail_runner(
-            checkpoint_dir=os.path.join(self.checkpoint_dir, self.guardrail_dir)
+            checkpoint_dir=self.checkpoint_dir
         )
 
     def _load_video_guardrail(self):
@@ -138,7 +137,7 @@ class BaseWorldGenerationPipeline(ABC):
         safety policies. Models are loaded from the specified guardrail directory.
         """
         self.video_guardrail = guardrail_presets.create_video_guardrail_runner(
-            checkpoint_dir=os.path.join(self.checkpoint_dir, self.guardrail_dir)
+            checkpoint_dir=self.checkpoint_dir
         )
 
     def _offload_network(self):

@@ -25,10 +25,7 @@ from cosmos_transfer1.auxiliary.guardrail.common.core import ContentSafetyGuardr
 from cosmos_transfer1.auxiliary.guardrail.common.io_utils import get_video_filepaths, read_video
 from cosmos_transfer1.auxiliary.guardrail.video_content_safety_filter.model import ModelConfig, VideoSafetyModel
 from cosmos_transfer1.auxiliary.guardrail.video_content_safety_filter.vision_encoder import SigLIPEncoder
-from cosmos_transfer1.checkpoints import GUARDRAIL_CHECKPOINT_PATH
 from cosmos_transfer1.utils import log, misc
-
-DEFAULT_CHECKPOINT_DIR = f"{GUARDRAIL_CHECKPOINT_PATH}/video_content_safety_filter"
 
 # Define the class index to class name mapping for multi-class classification
 CLASS_IDX_TO_NAME = {
@@ -44,9 +41,10 @@ CLASS_IDX_TO_NAME = {
 class VideoContentSafetyFilter(ContentSafetyGuardrail):
     def __init__(
         self,
-        checkpoint_dir: str = DEFAULT_CHECKPOINT_DIR,
+        checkpoint_dir: str,
         device="cuda" if torch.cuda.is_available() else "cpu",
     ) -> None:
+        self.checkpoint_dir = os.path.join(checkpoint_dir, "nvidia/Cosmos-Guardrail1/video_content_safety_filter")
         self.device = device
         self.dtype = torch.float32
 
@@ -58,7 +56,7 @@ class VideoContentSafetyFilter(ContentSafetyGuardrail):
 
         # Load the multi-class classifier
         self.model = VideoSafetyModel(model_config)
-        safety_filter_local_path = os.path.join(checkpoint_dir, "safety_filter.pt")
+        safety_filter_local_path = os.path.join(self.checkpoint_dir, "safety_filter.pt")
         checkpoint = torch.load(safety_filter_local_path, map_location=torch.device("cpu"), weights_only=True)
         self.model.load_state_dict(checkpoint["model"])
         self.model.to(self.device, dtype=self.dtype).eval()
@@ -164,7 +162,6 @@ def parse_args():
         "--checkpoint_dir",
         type=str,
         help="Path to the Video Content Safety Filter checkpoint folder",
-        default=DEFAULT_CHECKPOINT_DIR,
     )
     return parser.parse_args()
 
