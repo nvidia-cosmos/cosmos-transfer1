@@ -18,6 +18,7 @@ import os
 
 from cosmos_transfer1.auxiliary.depth_anything.model.depth_anything import DepthAnythingModel
 from cosmos_transfer1.auxiliary.sam2.sam2_model import VideoSegmentationModel
+from cosmos_transfer1.auxiliary.human_keypoint.human_keypoint import HumanKeypointModel
 from cosmos_transfer1.utils import log
 
 
@@ -25,10 +26,11 @@ class Preprocessors:
     def __init__(self):
         self.depth_model = None
         self.seg_model = None
+        self.keypoint_model = None
 
     def __call__(self, input_video, input_prompt, control_inputs, output_folder):
         for hint_key in control_inputs:
-            if hint_key in ["depth", "seg"]:
+            if hint_key in ["depth", "seg", "keypoint"]:
                 self.gen_input_control(input_video, input_prompt, hint_key, control_inputs[hint_key], output_folder)
 
             # for all hints we need to create weight tensor if not present
@@ -73,11 +75,19 @@ class Preprocessors:
                     out_video=out_video,
                     prompt=prompt,
                 )
-            else:
+            elif hint_key == "depth":
                 log.info(
                     f"no input_control provided for {hint_key}. generating input control video with DepthAnythingModel"
                 )
                 self.depth(
+                    in_video=in_video,
+                    out_video=out_video,
+                )
+            else:
+                log.info(
+                    f"no input_control provided for {hint_key}. generating input control video with Openpose"
+                )
+                self.keypoint(
                     in_video=in_video,
                     out_video=out_video,
                 )
@@ -87,6 +97,12 @@ class Preprocessors:
             self.depth_model = DepthAnythingModel()
 
         self.depth_model(in_video, out_video)
+
+    def keypoint(self, in_video, out_video):
+        if self.keypoint_model is None:
+            self.keypoint_model = HumanKeypointModel()
+
+        self.keypoint_model(in_video, out_video)
 
     def segmentation(
         self,

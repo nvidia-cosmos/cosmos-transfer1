@@ -76,16 +76,15 @@ MD5_CHECKSUM_LOOKUP = {
     checkpoints.LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "184beee5414bcb6c0c5c0f09d8f8b481",
     checkpoints.UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH: "b28378d13f323b49445dc469dfbbc317",
     checkpoints.BASE_7B_CHECKPOINT_PATH: "356497b415f3b0697f8bb034d22b6807",
-    checkpoints.VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "b31219fe6ea24f91e3ce38e6f18fdbc9",
-    checkpoints.EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "b428b4bdddb33514dee3bf81a9d7bf94",
-    checkpoints.DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "b2207b809513075137c9992b38a3e2f9",
-    checkpoints.SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "310481fafdc1d8f3cafcfc52143a266e",
+    checkpoints.VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "69fdffc5006bc5d6acb29449bb3ffdca",
+    checkpoints.EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "a0642e300e9e184077d875e1b5920a61",
+    checkpoints.DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "80999ed60d89a8dfee785c544e0ccd54",
+    checkpoints.SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "3e4077a80c836bf102c7b2ac2cd5da8c",
+    checkpoints.KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "26619fb1686cff0e69606a9c97cac68e",
     "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/autoencoder.jit": "7f658580d5cf617ee1a1da85b1f51f0d",
     "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/decoder.jit": "ff21a63ed817ffdbe4b6841111ec79a8",
     "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/encoder.jit": "f5834d03645c379bc0f8ad14b9bc0299",
-    f"{checkpoints.COSMOS_UPSAMPLER_CHECKPOINT}/viscontrol/consolidated.safetensors": "d05197354ba886509c91445f00176f99",
-    f"{checkpoints.COSMOS_UPSAMPLER_CHECKPOINT}/segmentation/consolidated.safetensors": "8529fb4064ff75cb87a855709fb15c2e",
-    f"{checkpoints.COSMOS_UPSAMPLER_CHECKPOINT}/depth/consolidated.safetensors": "6ce6b8520fd12a3219cdfe7cc387b666",
+    f"{checkpoints.COSMOS_UPSAMPLER_CHECKPOINT}/consolidated.safetensors": "d06e6366e003126dcb351ce9b8bf3701",
 }
 
 

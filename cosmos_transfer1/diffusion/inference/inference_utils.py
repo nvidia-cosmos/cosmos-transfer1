@@ -32,6 +32,7 @@ from cosmos_transfer1.checkpoints import (
     DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
@@ -876,7 +877,7 @@ def merge_patches_into_video(imgs, overlap_size_h, overlap_size_w, n_img_h, n_im
     return img_sum / (mask_sum[None, None, None, :, :] + 1e-6)
 
 
-valid_hint_keys = {"vis", "seg", "edge", "depth", "upscale", "hdmap", "lidar"}
+valid_hint_keys = {"vis", "seg", "edge", "depth", "keypoint", "upscale", "hdmap", "lidar"}
 
 
 def load_controlnet_specs(cfg) -> Dict[str, Any]:
@@ -918,6 +919,7 @@ def validate_controlnet_specs(cfg, controlnet_specs) -> Dict[str, Any]:
         "seg": SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
         "edge": EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
         "depth": DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+        "keypoint": KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
         "upscale": UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
         "hdmap": HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
         "lidar": LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,

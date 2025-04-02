@@ -1,1 +1,0 @@
-assets/inference_upscaler_output.mp4 filter=lfs diff=lfs merge=lfs -text

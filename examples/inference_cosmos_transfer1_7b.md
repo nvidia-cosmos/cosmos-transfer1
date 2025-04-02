@@ -4,33 +4,7 @@
 
 ### Environment setup
 
-Cosmos runs only on Linux systems. We have tested the installation with Ubuntu 24.04, 22.04, and 20.04.
-Cosmos requires the Python version to be `3.10.x`. Please also make sure you have `conda` installed ([instructions](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html)).
-
-```bash
-# Clone the repo
-git clone git@github.com:nvidia-cosmos/cosmos-transfer1.git
-cd cosmos-transfer1
-git submodule update --init --recursive
-# Create the cosmos-transfer1 conda environment.
-conda env create --file cosmos-transfer1.yaml
-# Activate the cosmos-transfer1 conda environment.
-conda activate cosmos-transfer1
-# Install the dependencies.
-pip install -r requirements.txt
-# Patch Transformer engine linking issues in conda environments.
-ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
-ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.10
-# Install Transformer engine.
-pip install transformer-engine[pytorch]==1.12.0
-# Install vLLM for prompt upsampler
-pip install vllm==0.8.0
-```
-
-You can test the environment setup with
-```bash
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/test_environment.py
-```
+Please refer to the Inference section of [INSTALL.md](/INSTALL.md#inference) for instructions on environment setup.
 
 ### Download Checkpoints
 
@@ -162,13 +136,13 @@ This launches `transfer.py` and configures the controlnets for inference accordi
 #### The input and output videos
 The input video is a low-resolution 640 × 480 video.
 
-<video src="https://github.com/user-attachments/assets/1f14fa87-61f3-417a-bfe6-b5d715d7375e">
+<video src="https://github.com/user-attachments/assets/e63b9e9c-fee1-4105-a480-bb525bde1115">
   Your browser does not support the video tag.
 </video>
 
 We generate a 960 x 704 video.
 
-<video src="https://github.com/user-attachments/assets/b36de8b5-80f4-4479-9f1c-79933e2892f2">
+<video src="https://github.com/user-attachments/assets/83ab7724-335a-46cf-b96e-34860ab735d1">
   Your browser does not support the video tag.
 </video>
 
@@ -194,7 +168,7 @@ Upsampled prompt: *The video opens with a close-up of a robotic arm holding a co
 
 Here is the generated video using the upsampled prompt.
 
-<video src="https://github.com/user-attachments/assets/58488644-5fa6-449f-a51c-22f84db6f1bf">
+<video src="https://github.com/user-attachments/assets/bf20ac09-7a8e-448c-8961-db2adfe11e69">
   Your browser does not support the video tag.
 </video>
 
@@ -237,7 +211,7 @@ This launches `transfer.py` and configures the controlnets for inference accordi
 ```
 
 The output video can be found at `assets/example1_uniform_weights.mp4`.
-<video src="https://github.com/user-attachments/assets/00511feb-7309-4a25-afd9-922b9b6902f9">
+<video src="https://github.com/user-attachments/assets/d1c59d92-fa8c-4248-8960-13bd20444bb5">
   Your browser does not support the video tag.
 </video>
 
@@ -295,13 +269,17 @@ This launches `transfer.py` and configures the controlnets for inference accordi
 }
 ```
 
-The output video can be found at `assets/example1_spatiotemporal_weights.mp4`. The first frame of the generated video is shown below.
+The output video can be found at `assets/example1_spatiotemporal_weights.mp4` and is shown below.
 
-<img src="../assets/example1_spatiotemporal_weights.png" width="640" alt="example1_spatiotemporal_weights">
+<video src="https://github.com/user-attachments/assets/2cc57c4c-b59f-4b25-8911-66d4bd0646aa">
+  Your browser does not support the video tag.
+</video>
 
-The first frame of the spatiotemporal mask extracted by the prompt `robotic arms . gloves` is show below.
+The spatiotemporal mask extracted by the prompt `robotic arms . gloves` is show below.
 
-<img src="../assets/example1_spatiotemporal_weights_mask.png" width="640" alt="example1_spatiotemporal_weights_mask">
+<video src="https://github.com/user-attachments/assets/98a2e4a1-cd92-469d-8e57-ba376aca4e7e">
+  Your browser does not support the video tag.
+</video>
 
 #### Explanation of the controlnet spec
 
