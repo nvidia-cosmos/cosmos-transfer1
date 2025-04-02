@@ -102,7 +102,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/infe
 
 Cosmos-Transfer1 supports a variety of configurations. You can pass your configuration in a JSON file via the argument `--controlnet_specs`. Let's go over a few examples:
 
-#### Example 1: single control
+### Example: single control (Edge)
 
 The following `controlnet_specs` only activates the edge controlnet.
 
@@ -142,7 +142,6 @@ This launches `transfer.py` and configures the controlnets for inference accordi
 }
 ```
 
-#### The input and output videos
 The input video is a low-resolution 640 × 480 video.
 
 <video src="https://github.com/user-attachments/assets/e63b9e9c-fee1-4105-a480-bb525bde1115">
@@ -181,8 +180,23 @@ Here is the generated video using the upsampled prompt.
   Your browser does not support the video tag.
 </video>
 
+### Example: single control (Depth)
 
-### Examples 2: multimodal control
+Here is another simple example of using the Depth control. Many steps are similar to the [Edge example](#example-single-control-edge). The main difference is to use `assets/inference_cosmos_transfer1_single_control_depth.json` as the `--controlnet_specs`:
+
+```bash
+export CUDA_VISIBLE_DEVICES=0
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+    --checkpoint_dir $CHECKPOINT_DIR \
+    --video_save_folder outputs/example1_single_control_depth \
+    --controlnet_specs assets/inference_cosmos_transfer1_single_control_depth.json \
+    --offload_text_encoder_model
+```
+
+This will generate a 960 x 704 video that is ??TODO??
+
+### Example: multimodal control
 
 The following `controlnet_specs` activates vis, edge, depth, seg controls at the same time and apply uniform spatial weights.
 

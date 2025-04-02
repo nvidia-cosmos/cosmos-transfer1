@@ -45,7 +45,7 @@ Please refer to [INSTALL.md](INSTALL.md) for general instructions on environment
 * [Inference with pre-trained Cosmos-Transfer1-7B](/examples/inference_cosmos_transfer1_7b.md) **[with multi-GPU support]**
 * [Inference with pre-trained Cosmos-Transfer1-7B-Sample-AV](/examples/inference_cosmos_transfer1_7b_sample_av.md) **[with multi-GPU support]**
 * [Inference with pre-trained Cosmos-Transfer1-7B-4KUpscaler](/examples/inference_cosmos_transfer1_7b_4kupscaler.md) **[with multi-GPU support]**
-* Inference with pre-trained Cosmos-Transfer1-7B [Depth]: Coming soon
+* [Inference with pre-trained Cosmos-Transfer1-7B [Depth]](examples/inference_cosmos_transfer1_7b.md#example-single-control-depth)
 * Inference with pre-trained Cosmos-Transfer1-7B [Segmentation]: Coming soon
 * Inference with pre-trained Cosmos-Transfer1-7B [Edge]: Coming soon
 * Inference with pre-trained Cosmos-Transfer1-7B [Vis]: Coming soon
@@ -94,3 +94,5 @@ This project will download and install additional third-party open source softwa
 NVIDIA Cosmos source code is released under the [Apache 2 License](https://www.apache.org/licenses/LICENSE-2.0).
 
 NVIDIA Cosmos models are released under the [NVIDIA Open Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license). For a custom license, please contact [cosmos-license@nvidia.com](mailto:cosmos-license@nvidia.com).
+
+For video transformation with depth-based control, see our [Depth control example in the inference guide](examples/inference_cosmos_transfer1_7b.md#example-single-control-depth).
