@@ -329,6 +329,7 @@ class BaseWithCtrlCondition(VideoExtendCondition):
     control_input_vis: Optional[torch.Tensor] = None
     control_input_depth: Optional[torch.Tensor] = None
     control_input_seg: Optional[torch.Tensor] = None
+    control_input_keypoint: Optional[torch.Tensor] = None
     control_input_upscale: Optional[torch.Tensor] = None
     control_input_hdmap: Optional[torch.Tensor] = None
     control_input_lidar: Optional[torch.Tensor] = None

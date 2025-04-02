@@ -1,0 +1,7 @@
+{
+    "prompt": "The video takes place in a kitchen setting with a red refrigerator and a variety of kitchen utensils and ingredients visible in the background. The chef, dressed in a black chef's jacket with the word 'BORDEAUX' embroidered on the left chest, is holding a jar of red jam and appears to be explaining or demonstrating something to the other person. The other person is wearing a red and black plaid shirt. The chef gestures with his hands, possibly emphasizing points about the jam or the cooking process. The kitchen counter has a bowl of red jam and a white bowl, suggesting that the jam is a key ingredient or the subject of the demonstration.",
+    "input_video_path": "assets/inference_keypoint_input_video.mp4",
+    "keypoint": {
+        "control_weight": 1.0
+    }
+}

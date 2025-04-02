@@ -28,6 +28,7 @@ from cosmos_transfer1.diffusion.datasets.augmentors.control_input import (
     AddControlInputEdge,
     AddControlInputHDMAP,
     AddControlInputLIDAR,
+    AddControlInputKeypoint,
     AddControlInputSeg,
     AddControlInputUpscale,
 )
@@ -39,6 +40,7 @@ CTRL_HINT_KEYS = [
     "control_input_vis",
     "control_input_depth",
     "control_input_seg",
+    "control_input_keypoint",
     "control_input_upscale",
     "control_input_hdmap",
     "control_input_lidar",
@@ -49,6 +51,7 @@ CTRL_HINT_KEYS_COMB = {
     "control_input_edge": [AddControlInputEdge],
     "control_input_depth": [AddControlInputDepth],
     "control_input_seg": [AddControlInputSeg],
+    "control_input_keypoint": [AddControlInputKeypoint],
     "control_input_upscale": [AddControlInputUpscale],
     "control_input_hdmap": [AddControlInputHDMAP],
     "control_input_lidar": [AddControlInputLIDAR],

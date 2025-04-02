@@ -4,31 +4,7 @@
 
 ### Environment setup
 
-Cosmos runs only on Linux systems. We have tested the installation with Ubuntu 24.04, 22.04, and 20.04.
-Cosmos requires the Python version to be `3.10.x`. Please also make sure you have `conda` installed ([instructions](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html)).
-
-```bash
-# Clone the repo
-git clone git@github.com:nvidia-cosmos/cosmos-transfer1.git
-cd cosmos-transfer1
-git submodule update --init --recursive
-# Create the cosmos-transfer1 conda environment.
-conda env create --file cosmos-transfer1.yaml
-# Activate the cosmos-transfer1 conda environment.
-conda activate cosmos-transfer1
-# Install the dependencies.
-pip install -r requirements.txt
-# Patch Transformer engine linking issues in conda environments.
-ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
-ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.10
-# Install Transformer engine.
-pip install transformer-engine[pytorch]==1.12.0
-```
-
-You can test the environment setup with
-```bash
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/test_environment.py
-```
+Please refer to the Inference section of [INSTALL.md](/INSTALL.md#inference) for instructions on environment setup.
 
 ### Download Checkpoints
 
@@ -88,7 +64,7 @@ checkpoints/
 
 ## Run Example
 
-For a general overview of how to use the model see [this guide](inference_cosmos_transfer1_7b.md).
+For a general overview of how to use the model see [this guide](/examples/inference_cosmos_transfer1_7b.md).
 
 This is an example of post-training Cosmos-Transfer1 using autonomous vehicle (AV) data. Here we provide two controlnets, `hdmap` and `lidar`, that allow transfering from those domains to the real world.
 
@@ -155,21 +131,21 @@ This toolkit includes:
 
 HDMap input control:
 
-<video src="https://github.com/user-attachments/assets/f105c843-811a-4b6b-99f6-9136a8e1b601">
+<video src="https://github.com/user-attachments/assets/5518273f-5dd6-42a2-99b1-9af683da6c9d">
   Your browser does not support the video tag.
 </video>
 
 
 LiDAR input control:
 
-<video src="https://github.com/user-attachments/assets/a1beed14-9ade-4e47-a94e-1f9ca41b59a7">
+<video src="https://github.com/user-attachments/assets/2a9c1bf7-f239-4ac0-adde-5521311785b8">
   Your browser does not support the video tag.
 </video>
 
 
 Output video using HDMap and LiDAR:
 
-<video src="https://github.com/user-attachments/assets/82ce1d89-63c7-402d-aae4-a7f1c6358cae">
+<video src="https://github.com/user-attachments/assets/36292685-044f-4d04-98e9-bb3187a615e5">
   Your browser does not support the video tag.
 </video>
 

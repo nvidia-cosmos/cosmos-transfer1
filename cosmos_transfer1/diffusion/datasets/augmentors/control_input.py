@@ -661,6 +661,8 @@ def get_augmentor_for_eval(
             comb.append(partial(AddControlInputSeg, output_keys=["control_input_seg"]))
         elif "vis" in key:
             comb.append(AddControlInput)
+        elif "keypoint" in key:
+            comb.append(partial(AddControlInputKeypoint, output_keys=["control_input_keypoint"]))
         elif "hdmap" in key:
             comb.append(partial(AddControlInputHDMAP, output_keys=["control_input_hdmap"]))
         elif "lidar" in key:
@@ -1024,6 +1026,53 @@ class AddControlInputSeg(Augmentor):
         del all_masks  # free memory
         return data_dict
 
+class AddControlInputKeypoint(Augmentor):
+    """
+    Add control input to the data dictionary. control input are expanded to 3-channels
+    steps to add new items: modify this file, configs/conditioner.py, conditioner.py
+    """
+
+    def __init__(
+        self,
+        input_keys: list,
+        output_keys: Optional[list] = ["control_input_keypoint"],
+        args: Optional[dict] = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(input_keys, output_keys, args)
+        self.control_key_names = ["body-keypoints", "hand-keypoints"]
+        self.use_openpose_format = args.get("use_openpose_format", True)
+        self.hand_as_separate_channel = args.get("hand_as_separate_channel", False)
+        self.kpt_thr = args.get("kpt_thr", 0.6)
+        self.line_width = args.get("human_kpt_line_width", 4)
+
+    def __call__(self, data_dict: dict) -> dict:
+        """
+        human_annotations: loaded human annotation data pickle. One annotation per N frames.
+        In the past we did N=4; for ControlNet data annotations we will do N=1.
+        The pickle is a dict of annotated frames.
+        The key is the frame number. For each frame, as there can be multiple people, we maintain a list of per-person
+        dicts. Example:
+        {
+          0: [
+                {'body-keypoints': <data_of_person1>, 'hand-keypoints': <data_of_person1>},
+                {'body-keypoints': <data_of_person2>, 'hand-keypoints': <data_of_person2>},
+           ], # frame 0, 2 people
+          4: [
+                 {'body-keypoints': <data_of_person1>, 'hand-keypoints': <data_of_person1>},
+                 {'body-keypoints': <data_of_person2>, 'hand-keypoints': <data_of_person2>},
+                 {'body-keypoints': <data_of_person3>, 'hand-keypoints': <data_of_person3>},
+           ], # frame 4, 3 people
+        ...
+        }
+        Note that for the same person, their idx in the per-frame list isn't guaranteed to be consistent.
+        """
+        if "control_input_keypoint" in data_dict:
+            # already processed
+            log.info(
+                f"control_input_keypoint already processed, shape={data_dict['control_input_keypoint'].shape}, dtype={data_dict['control_input_keypoint'].dtype}, value range: {data_dict['control_input_keypoint'].min()}, {data_dict['control_input_keypoint'].max()}"
+            )
+            return data_dict
 
 class AddControlInputUpscale(Augmentor):
     """
