@@ -194,7 +194,11 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/infe
     --offload_text_encoder_model
 ```
 
-This will generate a 960 x 704 video that is ??TODO??
+This will generate a 960 x 704 video that preserves the 3D spatial structure and scene depth from the input video while enhancing visual quality, detail, and realism.
+
+<video src="https://github.com/user-attachments/assets/7c4dde29-befd-45ee-899a-b17b0cb98df2">
+  Your browser does not support the video tag.
+</video>
 
 ### Example: multimodal control
 
