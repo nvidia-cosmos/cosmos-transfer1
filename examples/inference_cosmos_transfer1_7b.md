@@ -196,7 +196,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/infe
 
 This will generate a 960 x 704 video that preserves the 3D spatial structure and scene depth from the input video while enhancing visual quality, detail, and realism.
 
-<video src="https://github.com/user-attachments/assets/7c4dde29-befd-45ee-899a-b17b0cb98df2">
+<video src="https://github.com/user-attachments/assets/bf20ac09-7a8e-448c-8961-db2adfe11e69">
   Your browser does not support the video tag.
 </video>
 
