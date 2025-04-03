@@ -196,7 +196,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/infe
 
 This will generate a 960 x 704 video that preserves the 3D spatial structure and scene depth from the input video while enhancing visual quality, detail, and realism.
 
-<video src="../assets/inference_depth_output.mp4" controls>
+<video src="https://github.com/user-attachments/assets/0e09caba-3550-45c4-95ce-28ca0af22d25">
   Your browser does not support the video tag.
 </video>
 
