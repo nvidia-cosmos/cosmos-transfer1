@@ -24,24 +24,23 @@ from better_profanity import profanity
 
 from cosmos_transfer1.auxiliary.guardrail.blocklist.utils import read_keyword_list_from_dir, to_ascii
 from cosmos_transfer1.auxiliary.guardrail.common.core import ContentSafetyGuardrail, GuardrailRunner
-from cosmos_transfer1.checkpoints import GUARDRAIL_CHECKPOINT_PATH
 from cosmos_transfer1.utils import log, misc
 
-DEFAULT_CHECKPOINT_DIR = f"{GUARDRAIL_CHECKPOINT_PATH}/blocklist"
 CENSOR = misc.Color.red("*")
 
 
 class Blocklist(ContentSafetyGuardrail):
     def __init__(
         self,
-        checkpoint_dir: str = DEFAULT_CHECKPOINT_DIR,
+        checkpoint_dir: str,
         guardrail_partial_match_min_chars: int = 6,
         guardrail_partial_match_letter_count: float = 0.4,
     ) -> None:
-        nltk.data.path.append(os.path.join(checkpoint_dir, "nltk_data"))
+
+        self.checkpoint_dir = os.path.join(checkpoint_dir, "nvidia/Cosmos-Guardrail1/blocklist")
+        nltk.data.path.append(os.path.join(self.checkpoint_dir, "nltk_data"))
         self.lemmatizer = nltk.WordNetLemmatizer()
         self.profanity = profanity
-        self.checkpoint_dir = checkpoint_dir
         self.guardrail_partial_match_min_chars = guardrail_partial_match_min_chars
         self.guardrail_partial_match_letter_count = guardrail_partial_match_letter_count
 
@@ -200,7 +199,6 @@ def parse_args():
         "--checkpoint_dir",
         type=str,
         help="Path to the Blocklist checkpoint folder",
-        default=DEFAULT_CHECKPOINT_DIR,
     )
     return parser.parse_args()
 

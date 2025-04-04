@@ -15,25 +15,23 @@
 
 import argparse
 
+import os
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from cosmos_transfer1.auxiliary.guardrail.aegis.categories import UNSAFE_CATEGORIES
 from cosmos_transfer1.auxiliary.guardrail.common.core import ContentSafetyGuardrail, GuardrailRunner
-from cosmos_transfer1.checkpoints import GUARDRAIL_CHECKPOINT_PATH
+from cosmos_transfer1.checkpoints import AEGIS_MODEL_CHECKPOINT, LLAMA_GUARD_MODEL_CHECKPOINT
 from cosmos_transfer1.utils import log, misc
 
 SAFE = misc.Color.green("SAFE")
 UNSAFE = misc.Color.red("UNSAFE")
 
-DEFAULT_CHECKPOINT_DIR = f"{GUARDRAIL_CHECKPOINT_PATH}/aegis"
-
-
 class Aegis(ContentSafetyGuardrail):
     def __init__(
         self,
-        checkpoint_dir: str = DEFAULT_CHECKPOINT_DIR,
+        checkpoint_dir: str,
         device="cuda" if torch.cuda.is_available() else "cpu",
     ) -> None:
         self.checkpoint_dir = checkpoint_dir
@@ -41,9 +39,14 @@ class Aegis(ContentSafetyGuardrail):
         self.dtype = torch.bfloat16
         base_model_id = "meta-llama/LlamaGuard-7b"
         aegis_adapter = "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0"
-        base_model = AutoModelForCausalLM.from_pretrained(base_model_id, cache_dir=self.checkpoint_dir)
-        self.tokenizer = AutoTokenizer.from_pretrained(base_model_id, cache_dir=self.checkpoint_dir)
-        self.model = PeftModel.from_pretrained(base_model, aegis_adapter, cache_dir=self.checkpoint_dir)
+
+        base_model_dir = os.path.join(self.checkpoint_dir, base_model_id)
+        aegis_adapter_dir = os.path.join(self.checkpoint_dir, aegis_adapter)
+
+        base_model = AutoModelForCausalLM.from_pretrained(base_model_id, cache_dir=base_model_dir)
+        self.tokenizer = AutoTokenizer.from_pretrained(base_model_id, cache_dir=base_model_dir)
+        self.model = PeftModel.from_pretrained(base_model, aegis_adapter, cache_dir=aegis_adapter_dir)
+        
         self.model.to(self.device, dtype=self.dtype).eval()
 
     def get_moderation_prompt(self, user_prompt: str) -> str:

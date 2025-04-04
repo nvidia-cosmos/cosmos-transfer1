@@ -40,6 +40,7 @@ def download_checkpoint(checkpoint: str, output_dir: str) -> None:
     """Download a single checkpoint from HuggingFace Hub."""
     try:
         # Parse the checkpoint path to get repo_id and filename
+        checkpoint, revision = checkpoint.split(":") if ":" in checkpoint else (checkpoint, None)
         checkpoint_dir = os.path.join(output_dir, checkpoint)
         if get_md5_checksum(output_dir, checkpoint):
             log.warning(f"Checkpoint {checkpoint_dir} EXISTS, skipping download... ")
@@ -50,7 +51,7 @@ def download_checkpoint(checkpoint: str, output_dir: str) -> None:
         os.makedirs(checkpoint_dir, exist_ok=True)
         print(f"Downloading {checkpoint}...")
         # Download the files
-        snapshot_download(repo_id=checkpoint, local_dir=checkpoint_dir)
+        snapshot_download(repo_id=checkpoint, local_dir=checkpoint_dir, revision=revision)
         print(f"Successfully downloaded {checkpoint}")
 
     except Exception as e:
@@ -64,13 +65,6 @@ MD5_CHECKSUM_LOOKUP = {
     f"{checkpoints.T5_MODEL_CHECKPOINT}/tf_model.h5": "e081fc8bd5de5a6a9540568241ab8973",
     f"{checkpoints.SAM2_MODEL_CHECKPOINT}/sam2_hiera_large.pt": "08083462423be3260cd6a5eef94dc01c",
     f"{checkpoints.DEPTH_ANYTHING_MODEL_CHECKPOINT}/model.safetensors": "14e97d7ed2146d548c873623cdc965de",
-    f"{checkpoints.GUARDRAIL_CHECKPOINT_PATH}/aegis/models--meta-llama--LlamaGuard-7b/snapshots/dfcfa3409b9994a4722d44e05f82e81ea73c5106/model-00001-of-00003.safetensors": "e17e5dd8d9528de0fc5a5e1ce962b5ca",
-    f"{checkpoints.GUARDRAIL_CHECKPOINT_PATH}/aegis/models--meta-llama--LlamaGuard-7b/snapshots/dfcfa3409b9994a4722d44e05f82e81ea73c5106/model-00002-of-00003.safetensors": "2f7e1a047ac2f86a99730cc56e596560",
-    f"{checkpoints.GUARDRAIL_CHECKPOINT_PATH}/aegis/models--meta-llama--LlamaGuard-7b/snapshots/dfcfa3409b9994a4722d44e05f82e81ea73c5106/model-00003-of-00003.safetensors": "967a5443c27300a6285a2bbd38280426",
-    f"{checkpoints.GUARDRAIL_CHECKPOINT_PATH}/aegis/models--nvidia--Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0/snapshots/62006ace73a69838083a31831126146048694b25/adapter_model.safetensors": "0cc64768cc49c67853a6f65276dc67cd",
-    f"{checkpoints.GUARDRAIL_CHECKPOINT_PATH}/aegis/models--nvidia--Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0/snapshots/f54cb2302ee876705dc0f7df2288f442c034b2f3/adapter_model.safetensors": "0cc64768cc49c67853a6f65276dc67cd",
-    f"{checkpoints.GUARDRAIL_CHECKPOINT_PATH}/video_content_safety_filter/models--google--siglip-so400m-patch14-384/snapshots/9fdffc58afc957d1a03a25b10dba0329ab15c2a3/model.safetensors": "f4c887e55e159f96453e18a1d6ca984f",
-    f"{checkpoints.GUARDRAIL_CHECKPOINT_PATH}/video_content_safety_filter/safety_filter.pt": "b46dc2ad821fc3b0d946549d7ade19cf",
     checkpoints.BASE_7B_CHECKPOINT_AV_SAMPLE_PATH: "2006e158f8a17a3b801c661f0c01e9f2",
     checkpoints.HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "2ddd781560d221418c2ed9258b6ca829",
     checkpoints.LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "184beee5414bcb6c0c5c0f09d8f8b481",
@@ -85,6 +79,9 @@ MD5_CHECKSUM_LOOKUP = {
     "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/decoder.jit": "ff21a63ed817ffdbe4b6841111ec79a8",
     "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/encoder.jit": "f5834d03645c379bc0f8ad14b9bc0299",
     f"{checkpoints.COSMOS_UPSAMPLER_CHECKPOINT}/consolidated.safetensors": "d06e6366e003126dcb351ce9b8bf3701",
+    f"{checkpoints.COSMOS_GUARDRAIL_CHECKPOINT}/video_content_safety_filter/safety_filter.pt": "b46dc2ad821fc3b0d946549d7ade19cf",
+    f"{checkpoints.AEGIS_MODEL_CHECKPOINT}/adapter_model.safetensors": "0cc64768cc49c67853a6f65276dc67cd",
+    f"{checkpoints.LLAMA_GUARD_MODEL_CHECKPOINT}/model-00001-of-00003.safetensors": "e17e5dd8d9528de0fc5a5e1ce962b5ca",
 }
 
 

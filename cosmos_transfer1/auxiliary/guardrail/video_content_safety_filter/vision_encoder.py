@@ -13,20 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import torch
 from PIL import Image
 from transformers import SiglipModel, SiglipProcessor
-
-from cosmos_transfer1.checkpoints import GUARDRAIL_CHECKPOINT_PATH
-
-DEFAULT_CHECKPOINT_DIR = f"{GUARDRAIL_CHECKPOINT_PATH}/video_content_safety_filter"
 
 
 class SigLIPEncoder(torch.nn.Module):
     def __init__(
         self,
+        checkpoint_dir: str,
         model_name: str = "google/siglip-so400m-patch14-384",
-        checkpoint_dir: str = DEFAULT_CHECKPOINT_DIR,
         device="cuda" if torch.cuda.is_available() else "cpu",
         dtype=torch.float32,
     ) -> None:
