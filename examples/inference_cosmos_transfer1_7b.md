@@ -289,6 +289,26 @@ The controlnet spec is similar to Example 2 above, with the following exceptions
 
 In effect, for the configuration given in `assets/inference_cosmos_transfer1_spatiotemporal_weights_auto.json`, `seg` and `depth` modalities will be applied everywhere uniformly, and `vis` and `edge` will be applied exclusively in the spatiotemporal mask given by the union of `robotic arms` and `gloves` mask detections. In those areas, the weight of each modality will be normalized to one, therefore `vis`, `edge`, `seg` and `depth` will be applied evenly there.
 
+
+#### Example 4: batch generation
+This example runs inference on a batch of prompts, provided through the `--batch_input_path` argument (path to a JSONL file). This enables running multiple generations with different prompts based on the same controlnet configurations.
+Each line in the JSONL file must contain a `visual_input` field equivalent to the `--input_video_path` argument in the case of single control generation. It can also contain the a `prompt` field:
+```json
+{"visual_input": "path/to/video1.mp4"}
+{"visual_input": "path/to/video2.mp4"}
+```
+Inference command (with 9 input frames):
+```bash
+export CUDA_VISIBLE_DEVICES=0
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+    --checkpoint_dir $CHECKPOINT_DIR \
+    --video_save_folder outputs/example2_uniform_weights \
+    --controlnet_specs assets/inference_cosmos_transfer1_uniform_weights.json \
+    --offload_text_encoder_model  --batch_input_path path/to/batch_input_path.json 
+```
+
+
 ## Arguments
 
 | Parameter | Description | Default |
