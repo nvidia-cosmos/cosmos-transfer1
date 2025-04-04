@@ -102,6 +102,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         canny_threshold: str = "medium",
         upsample_prompt: bool = False,
         offload_prompt_upsampler: bool = False,
+        process_group: torch.distributed.ProcessGroup | None = None,
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -127,6 +128,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             canny_threshold: Threshold for edge detection
             upsample_prompt: Whether to upsample prompts using prompt upsampler model
             offload_prompt_upsampler: Whether to offload prompt upsampler after use
+            process_group: Process group for distributed training
         """
         self.num_input_frames = num_input_frames
         self.control_inputs = control_inputs
@@ -138,6 +140,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         self.prompt_upsampler = None
         self.upsampler_hint_key = None
         self.hint_details = None
+        self.process_group = process_group
 
         self.model_name = MODEL_NAME_DICT[checkpoint_name]
         self.model_class = MODEL_CLASS_DICT[checkpoint_name]
@@ -295,6 +298,13 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                     spec["ckpt_path"], map_location="cpu", weights_only=False
                 )  # , weights_only=True)
                 non_strict_load_model(self.model.model, net_state_dict)
+
+        if self.process_group is not None: 
+            self.model.model.net.enable_context_parallel(self.process_group)
+            self.model.model.base_model.net.enable_context_parallel(self.process_group)
+            if hasattr(self.model.model, "hint_encoders"):
+                self.model.model.hint_encoders.net.enable_context_parallel(self.process_group)
+
 
     def _load_tokenizer(self):
         load_tokenizer_model(self.model, f"{self.checkpoint_dir}/{COSMOS_TOKENIZER_CHECKPOINT}")
