@@ -50,14 +50,33 @@ Please refer to [INSTALL.md](INSTALL.md) for general instructions on environment
 * Inference with pre-trained Cosmos-Transfer1-7B [Edge]: Coming soon
 * Inference with pre-trained Cosmos-Transfer1-7B [Vis]: Coming soon
 * [Inference with pre-trained Cosmos-Transfer1pt1-7B [Keypoint]](/examples/inference_cosmos_transfer1pt1_7b_keypoint.md)
+* Inference with pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
 
 ### Post-train pre-trained Cosmos-Transfer1 models
 
-* Coming soon
+* Post-train diffusion-based Text2World models using custom datasets [with multi-node support]Coming soon
+* Post-train pre-trained Cosmos-Transfer1-7B [Depth]: Coming soon
+* Post-train pre-trained Cosmos-Transfer1-7B [Segmentation]: Coming soon
+* Post-train pre-trained Cosmos-Transfer1-7B [Edge]: Coming soon
+* Post-train pre-trained Cosmos-Transfer1-7B [Vis]: Coming soon
+* Post-train pre-trained Cosmos-Transfer1-7B [Keypoint]: Coming soon
+* Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV [LiDAR]: Coming soon
+* Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV [HDMap]: Coming soon
+* Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
 
 ### Build your own Cosmos-Transfer1 models from scratch
 
-* Coming soon
+* Pre-train Cosmos-Transfer1-7B [Depth]: Coming soon
+* Pre-train Cosmos-Transfer1-7B [Segmentation]: Coming soon
+* Pre-train Cosmos-Transfer1-7B [Edge]: Coming soon
+* Pre-train Cosmos-Transfer1-7B [Vis]: Coming soon
+* Pre-train Cosmos-Transfer1-7B [Keypoint]: Coming soon
+* Pre-train Cosmos-Transfer1-7B-Sample-AV [LiDAR]: Coming soon
+* Pre-train Cosmos-Transfer1-7B-Sample-AV [HDMap]: Coming soon
+
+### Workflow
+
+* Scene augmentation for robotic manipulation: Coming soon
 
 ## Cosmos-Transfer1 Models
 
