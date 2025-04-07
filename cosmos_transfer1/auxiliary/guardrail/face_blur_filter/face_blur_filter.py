@@ -32,10 +32,8 @@ from cosmos_transfer1.auxiliary.guardrail.face_blur_filter.retinaface_utils impo
     filter_detected_boxes,
     load_model,
 )
-from cosmos_transfer1.checkpoints import GUARDRAIL_CHECKPOINT_PATH
 from cosmos_transfer1.utils import log, misc
 
-DEFAULT_RETINAFACE_CHECKPOINT = f"{GUARDRAIL_CHECKPOINT_PATH}/face_blur_filter/Resnet50_Final.pth"
 
 # RetinaFace model constants from https://github.com/biubug6/Pytorch_Retinaface/blob/master/detect.py
 TOP_K = 5_000
@@ -46,7 +44,7 @@ NMS_THRESHOLD = 0.4
 class RetinaFaceFilter(PostprocessingGuardrail):
     def __init__(
         self,
-        checkpoint: str = DEFAULT_RETINAFACE_CHECKPOINT,
+        checkpoint_dir: str,
         batch_size: int = 1,
         confidence_threshold: float = 0.7,
         device="cuda" if torch.cuda.is_available() else "cpu",
@@ -59,6 +57,7 @@ class RetinaFaceFilter(PostprocessingGuardrail):
             batch_size: Batch size for RetinaFace inference and processing
             confidence_threshold: Minimum confidence score to consider a face detection
         """
+        self.checkpoint = f"{checkpoint_dir}/nvidia/Cosmos-Guardrail1/face_blur_filter/Resnet50_Final.pth"
         self.cfg = cfg_re50
         self.batch_size = batch_size
         self.confidence_threshold = confidence_threshold
@@ -71,7 +70,7 @@ class RetinaFaceFilter(PostprocessingGuardrail):
         cpu = self.device == "cpu"
 
         # Load from RetinaFace pretrained checkpoint
-        self.net = load_model(self.net, checkpoint, cpu)
+        self.net = load_model(self.net, self.checkpoint, cpu)
         self.net.to(self.device, dtype=self.dtype).eval()
 
     def preprocess_frames(self, frames: np.ndarray) -> torch.Tensor:
@@ -199,7 +198,6 @@ def parse_args():
         "--checkpoint",
         type=str,
         help="Path to the RetinaFace checkpoint file",
-        default=DEFAULT_RETINAFACE_CHECKPOINT,
     )
     return parser.parse_args()
 
