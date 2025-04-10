@@ -827,6 +827,32 @@ def load_spatial_temporal_weights(weight_paths, B, T, H, W, patch_h, patch_w):
     return weights
 
 
+def resize_control_weight_map(control_weight_map, size):
+    assert control_weight_map.shape[2] == 1  # [num_control, B, 1, T, H, W]
+    weight_map = control_weight_map.squeeze(2)  # [num_control, B, T, H, W]
+    T, H, W = size
+    if weight_map.shape[2:5] != (T, H, W):
+        assert (weight_map.shape[2] == T) or (weight_map.shape[2] == 8 * (T - 1) + 1)
+        weight_map_i = [
+            torch.nn.functional.interpolate(
+                weight_map[:, :, :1],
+                size=(1, H, W),
+                mode="trilinear",
+                align_corners=False,
+            )
+        ]
+        weight_map_i += [
+            torch.nn.functional.interpolate(
+                weight_map[:, :, 1:],
+                size=(T - 1, H, W),
+                mode="trilinear",
+                align_corners=False,
+            )
+        ]
+        weight_map = torch.cat(weight_map_i, dim=2)
+    return weight_map.unsqueeze(2)
+
+
 def split_video_into_patches(tensor, patch_h, patch_w):
     h, w = tensor.shape[-2:]
     n_img_w = (w - 1) // patch_w + 1

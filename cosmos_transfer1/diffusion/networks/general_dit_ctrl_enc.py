@@ -233,6 +233,10 @@ class GeneralDITEncoder(GeneralDIT):
             elif control_weight.ndim == 1:  # List of scalar weights
                 control_weight = [float(w) for w in control_weight]
             else:  # Spatial-temporal weight maps
+                if self.cp_group is not None:
+                    control_weight = split_inputs_cp(
+                        control_weight, seq_dim=3, cp_group=self.cp_group
+                    )
                 control_weight = [w for w in control_weight]  # Keep as tensor
         else:
             control_weight = [control_weight] * len(guided_hints)
@@ -301,30 +305,8 @@ class GeneralDITEncoder(GeneralDIT):
                     hint_val = zero_blocks[name](x) * control_weight[i] * gate
                 else:  # Spatial-temporal weights [num_controls, B, 1, T, H, W]
                     control_feat = zero_blocks[name](x)
-                    T, H, W, _, _ = control_feat.shape
-
                     # Get current feature dimensions
                     weight_map = control_weight[i]  # [B, 1, T, H, W]
-                    if weight_map.shape[2:5] != (T, H, W):
-                        assert weight_map.shape[2] == 8 * (T - 1) + 1
-                        weight_map_i = [
-                            torch.nn.functional.interpolate(
-                                weight_map[:, :, :1, :, :],
-                                size=(1, H, W),
-                                mode="trilinear",
-                                align_corners=False,
-                            )
-                        ]
-                        for wi in range(1, weight_map.shape[2], 8):
-                            weight_map_i += [
-                                torch.nn.functional.interpolate(
-                                    weight_map[:, :, wi : wi + 8],
-                                    size=(1, H, W),
-                                    mode="trilinear",
-                                    align_corners=False,
-                                )
-                            ]
-                        weight_map = torch.cat(weight_map_i, dim=2)
                     # Reshape to match THWBD format
                     weight_map = weight_map.permute(2, 3, 4, 0, 1)  # [T, H, W, B, 1]
                     hint_val = control_feat * weight_map * gate
