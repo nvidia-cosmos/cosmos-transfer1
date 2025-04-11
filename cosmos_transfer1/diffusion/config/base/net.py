@@ -34,7 +34,9 @@ FADITV2Config: LazyDict = L(GeneralDIT)(
     pos_emb_learnable=False,
     pos_emb_interpolation="crop",
     block_x_format="THWBD",
+    additional_timestamp_channels=None,
     affline_emb_norm=True,
     use_adaln_lora=True,
     adaln_lora_dim=256,
+    legacy_patch_emb=False,
 )

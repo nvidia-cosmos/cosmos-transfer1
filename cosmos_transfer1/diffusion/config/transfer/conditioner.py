@@ -57,6 +57,14 @@ CTRL_HINT_KEYS_COMB = {
     "control_input_lidar": [AddControlInputLIDAR],
 }
 
+# SS=self-supervised
+SS_CTRL_HINT_KEYS = [
+    "control_input_canny",
+    "control_input_canny_blur",
+    "control_input_blur",
+    "control_input_upscale",
+]
+
 
 BaseVideoConditionerWithCtrlConfig: LazyDict = L(VideoConditionerWithCtrl)(
     text=TextConfig(),

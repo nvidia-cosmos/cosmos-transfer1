@@ -18,10 +18,13 @@ import builtins
 import collections.abc as abc
 import importlib
 import inspect
+import logging
 import os
+import pickle
 import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import is_dataclass
 from typing import Any, Dict, List, Tuple, Union
 
@@ -31,6 +34,15 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from cosmos_transfer1.utils.lazy_config.file_io import PathManager
 from cosmos_transfer1.utils.lazy_config.registry import _convert_target_to_string
+
+try:
+    import dill as dill_pickle
+except ImportError:
+    dill_pickle = None
+try:
+    import cloudpickle
+except ImportError:
+    cloudpickle = None
 
 __all__ = ["LazyCall", "LazyConfig"]
 
@@ -222,6 +234,22 @@ class LazyConfig:
     """
 
     @staticmethod
+    def load_rel(filename: str, keys: Union[None, str, Tuple[str, ...]] = None):
+        """
+        Similar to :meth:`load()`, but load path relative to the caller's
+        source file.
+
+        This has the same functionality as a relative import, except that this method
+        accepts filename as a string, so more characters are allowed in the filename.
+        """
+        caller_frame = inspect.stack()[1]
+        caller_fname = caller_frame[0].f_code.co_filename
+        assert caller_fname != "<string>", "load_rel Unable to find caller"
+        caller_dir = os.path.dirname(caller_fname)
+        filename = os.path.join(caller_dir, filename)
+        return LazyConfig.load(filename, keys)
+
+    @staticmethod
     def load(filename: str, keys: Union[None, str, Tuple[str, ...]] = None):
         """
         Load a config file.
@@ -274,3 +302,129 @@ class LazyConfig:
                     flags={"allow_objects": True},
                 )
             return ret
+
+    @staticmethod
+    def save_pkl(cfg, filename: str) -> str:
+        """
+        Saves a Config object to a file using pickle serialization. This method is typically used
+        when the configuration object contains complex objects, such as lambdas, that are not supported by
+        simpler serialization methods like YAML. The function attempts to create a deep copy of the configuration
+        object before serialization to ensure that the original object remains unmodified.
+
+        Args:
+            cfg: A Config object to be serialized and saved.
+            filename: The path and name of the file where the configuration should be saved. The function
+                      assumes the file extension indicates a pickle format (e.g., .pkl).
+
+        Returns:
+            str: The filename to which the configuration was saved. This can be used to verify the file location
+                 or log the outcome.
+
+        Notes:
+            - The function logs a warning if the configuration is successfully saved using pickle.
+            - If saving fails, an error is logged with the exception details.
+        """
+        logger = logging.getLogger(__name__)
+        try:
+            cfg = deepcopy(cfg)
+        except Exception:
+            pass
+
+        try:
+            with PathManager.open(filename, "wb") as f:
+                pickle.dump(cfg, f)
+            logger.warning(f"Config is saved using pickle at {filename}.")
+        except Exception as e:
+            logger.error(f"Failed to save config to {filename}: {e}. Trying dill or cloudpickle instead")
+            if dill_pickle:
+                try:
+                    with PathManager.open(filename, "wb") as f:
+                        pickle.dump(dill_pickle.dumps(cfg, recurse=True), f)
+                        logger.warning(f"Config is saved using dill at {filename}.")
+                except Exception as e:
+                    logger.error(f"Failed to save config to {filename}: {e}.")
+                    if cloudpickle:
+                        try:
+                            with PathManager.open(filename, "wb") as f:
+                                pickle.dump(cloudpickle.dumps(cfg), f)
+                            logger.warning(f"Config is saved using cloudpickle at {filename}.")
+                        except Exception as e:
+                            logger.error(f"Failed to save config to {filename}: {e}.")
+                    else:
+                        logger.error("cloudpickle is not available. Cannot save the config.")
+                        raise e
+
+        return filename
+
+    @staticmethod
+    def save_yaml(cfg, filename: str) -> str:
+        """
+        Saves a Config object to a file using YAML serialization. This method is beneficial when the configuration object's content needs to be human-readable and easily editable. YAML is suitable for configurations that do not contain complex types like lambdas, which must be handled differently. The function converts unserializable items to strings before saving to ensure compatibility with YAML serialization.
+
+        Args:
+            cfg: A Config object to be serialized and saved. It handles both DictConfig and ListConfig types.
+            filename: The path and name of the file where the configuration should be saved. The function does not require a specific file extension but typically uses '.yaml'.
+
+        Returns:
+            str: The filename to which the configuration was saved. This can be used to verify the file location or log the outcome.
+
+        Notes:
+            - The function logs a warning if the configuration is successfully saved using YAML.
+            - If saving fails, an error is logged with the exception details.
+        """
+        logger = logging.getLogger(__name__)
+        try:
+            cfg = deepcopy(cfg)
+        except Exception:
+            pass
+
+        # Define a function to check if an item is serializable to YAML
+        def is_serializable(item):
+            try:
+                OmegaConf.to_yaml(item)
+                return True
+            except Exception as e:
+                return False
+
+        # Function to convert unserializable items to strings
+        def serialize_config(config):
+            if isinstance(config, DictConfig):
+                for key, value in config.items():
+                    if isinstance(value, (DictConfig, ListConfig)):
+                        try:
+                            if "_target_" in value:
+                                default_params = get_default_params(value["_target_"])
+                                for default_key, default_v in default_params.items():
+                                    if default_key not in value:
+                                        value[default_key] = default_v
+                        except Exception as e:
+                            logger.error(f"Failed to add default argument values: {e}")
+
+                        serialize_config(value)
+                    else:
+                        if not is_serializable(value) and value is not None:
+                            config[key] = str(value)
+            elif isinstance(config, ListConfig):
+                for i, item in enumerate(config):
+                    if isinstance(item, (DictConfig, ListConfig)):
+                        serialize_config(item)
+                    else:
+                        if not is_serializable(item) and item is not None:
+                            config[i] = str(item)
+            else:
+                raise NotImplementedError("Input config must be a DictConfig or ListConfig.")
+            return config
+
+        # Convert Config object to a DictConfig object.
+        config_dict = attrs.asdict(cfg)
+        config_omegaconf = DictConfig(content=config_dict, flags={"allow_objects": True})
+
+        # Serialize the DictConfig object by converting non-serializable objects to strings.
+        config_omegaconf = serialize_config(config_omegaconf)
+
+        config_dict: Dict[str, Any] = OmegaConf.to_container(config_omegaconf, resolve=True)
+        sorted_config: OrderedDict[str, Any] = sort_recursive(config_dict)
+        with open(filename, "w") as f:
+            yaml.dump(sorted_config, f, default_flow_style=False)
+        logger.warning(f"Config is saved using omegaconf at {filename}.")
+        return filename

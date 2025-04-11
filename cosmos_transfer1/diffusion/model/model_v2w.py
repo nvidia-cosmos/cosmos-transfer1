@@ -17,16 +17,16 @@ from dataclasses import dataclass
 from typing import Callable, Dict, Optional, Tuple, Union
 
 import torch
+from einops import rearrange
 from megatron.core import parallel_state
 from torch import Tensor
 
 from cosmos_transfer1.diffusion.conditioner import VideoExtendCondition
 from cosmos_transfer1.diffusion.config.base.conditioner import VideoCondBoolConfig
 from cosmos_transfer1.diffusion.diffusion.functional.batch_ops import batch_mul
-from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel
-from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
+from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel, broadcast_condition
+from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp, broadcast
 from cosmos_transfer1.utils import log, misc
-
 
 @dataclass
 class VideoDenoisePrediction:
@@ -328,15 +328,37 @@ class DiffusionV2WModel(DiffusionT2WModel):
         condition_video_indicator = torch.zeros(1, 1, T, 1, 1, device=latent_state.device).type(
             latent_dtype
         )  # 1 for condition region
+        if self.config.conditioner.video_cond_bool.condition_location == "first_n":
+            # Only in inference to decide the condition region
+            assert num_condition_t is not None, "num_condition_t should be provided"
+            assert num_condition_t <= T, f"num_condition_t should be less than T, get {num_condition_t}, {T}"
+            log.info(
+                f"condition_location first_n, num_condition_t {num_condition_t}, condition.video_cond_bool {condition.video_cond_bool}"
+            )
+            condition_video_indicator[:, :, :num_condition_t] += 1.0
+        elif self.config.conditioner.video_cond_bool.condition_location == "first_random_n":
+            # Only in training
+            num_condition_t_max = self.config.conditioner.video_cond_bool.first_random_n_num_condition_t_max
+            assert (
+                num_condition_t_max <= T
+            ), f"num_condition_t_max should be less than T, get {num_condition_t_max}, {T}"
+            assert num_condition_t_max >= self.config.conditioner.video_cond_bool.first_random_n_num_condition_t_min
+            num_condition_t = torch.randint(
+                self.config.conditioner.video_cond_bool.first_random_n_num_condition_t_min,
+                num_condition_t_max + 1,
+                (1,),
+            ).item()
+            condition_video_indicator[:, :, :num_condition_t] += 1.0
 
-        # Only in inference to decide the condition region
-        assert num_condition_t is not None, "num_condition_t should be provided"
-        assert num_condition_t <= T, f"num_condition_t should be less than T, get {num_condition_t}, {T}"
-        log.debug(
-            f"condition_location first_n, num_condition_t {num_condition_t}, condition.video_cond_bool {condition.video_cond_bool}"
-        )
-        condition_video_indicator[:, :, :num_condition_t] += 1.0
-
+        elif self.config.conditioner.video_cond_bool.condition_location == "random":
+            # Only in training
+            condition_rate = self.config.conditioner.video_cond_bool.random_conditon_rate
+            flag = torch.ones(1, 1, T, 1, 1, device=latent_state.device).type(latent_dtype) * condition_rate
+            condition_video_indicator = torch.bernoulli(flag).type(latent_dtype).to(latent_state.device)
+        else:
+            raise NotImplementedError(
+                f"condition_location {self.config.conditioner.video_cond_bool.condition_location} not implemented; training={self.training}"
+            )
         condition.gt_latent = latent_state
         condition.condition_video_indicator = condition_video_indicator
 
@@ -355,4 +377,59 @@ class DiffusionV2WModel(DiffusionT2WModel):
         else:  # Unconditional case, use for cfg
             condition.condition_video_input_mask = zeros_padding
 
+        to_cp = self.net.is_context_parallel_enabled
+        # For inference, check if parallel_state is initialized
+        if parallel_state.is_initialized():
+            condition = broadcast_condition(condition, to_tp=True, to_cp=to_cp)
+        else:
+            assert not to_cp, "parallel_state is not initialized, context parallel should be turned off."
+
         return condition
+
+
+    def add_condition_pose(self, data_batch: Dict, condition: VideoExtendCondition) -> VideoExtendCondition:
+        """Add pose condition to the condition object. For camera control model
+        Args:
+            data_batch (Dict): data batch, with key "plucker_embeddings", in shape B,T,C,H,W
+            latent_state (torch.Tensor): latent state tensor in shape B,C,T,H,W
+            condition (VideoExtendCondition): condition object
+            num_condition_t (int): number of condition latent T, used in inference to decide the condition region and config.conditioner.video_cond_bool.condition_location == "first_n"
+        Returns:
+            VideoExtendCondition: updated condition object
+        """
+        assert (
+            "plucker_embeddings" in data_batch or "plucker_embeddings_downsample" in data_batch.keys()
+        ), f"plucker_embeddings should be in data_batch. only find {data_batch.keys()}"
+        plucker_embeddings = (
+            data_batch["plucker_embeddings"]
+            if "plucker_embeddings_downsample" not in data_batch.keys()
+            else data_batch["plucker_embeddings_downsample"]
+        )
+        condition.condition_video_pose = rearrange(plucker_embeddings, "b t c h w -> b c t h w").contiguous()
+        to_cp = self.net.is_context_parallel_enabled
+        # For inference, check if parallel_state is initialized
+        if parallel_state.is_initialized():
+            condition = broadcast_condition(condition, to_tp=True, to_cp=to_cp)
+        else:
+            assert not to_cp, "parallel_state is not initialized, context parallel should be turned off."
+
+        return condition
+
+    def sample_tokens_start_from_p_or_i(self, latent_state: torch.Tensor) -> torch.Tensor:
+        """Sample the PPP... from the IPPP... sequence, only for video sequence
+        Args:
+            latent_state (torch.Tensor): latent state tensor in shape B,C,T,H,W
+        Returns:
+            torch.Tensor: sampled PPP tensor in shape B,C,T,H,W
+        """
+        B, C, T, H, W = latent_state.shape
+        latent_dtype = latent_state.dtype
+        T_target = self.state_shape[1]
+        latent_state_sample = torch.zeros((B, C, T_target, H, W), dtype=latent_dtype, device=latent_state.device)
+        t_start = torch.randint(0, T - T_target + 1, (1,))
+        # broadcast to other device
+        latent_state_sample = latent_state[:, :, t_start : t_start + T_target].contiguous()
+        if parallel_state.is_initialized():
+            latent_state_sample = broadcast(latent_state_sample, to_tp=True, to_cp=True)
+
+        return latent_state_sample

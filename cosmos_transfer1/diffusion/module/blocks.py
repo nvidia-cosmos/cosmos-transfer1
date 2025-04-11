@@ -30,6 +30,55 @@ def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
 
+class SDXLTimesteps(nn.Module):
+    def __init__(self, num_channels: int = 320):
+        super().__init__()
+        self.num_channels = num_channels
+
+    def forward(self, timesteps):
+        in_dype = timesteps.dtype
+        half_dim = self.num_channels // 2
+        exponent = -math.log(10000) * torch.arange(half_dim, dtype=torch.float32, device=timesteps.device)
+        exponent = exponent / (half_dim - 0.0)
+
+        emb = torch.exp(exponent)
+        emb = timesteps[:, None].float() * emb[None, :]
+
+        sin_emb = torch.sin(emb)
+        cos_emb = torch.cos(emb)
+        emb = torch.cat([cos_emb, sin_emb], dim=-1)
+
+        return emb.to(in_dype)
+
+
+class SDXLTimestepEmbedding(nn.Module):
+    def __init__(self, in_features: int, out_features: int, use_adaln_lora: bool = False):
+        super().__init__()
+        log.critical(
+            f"Using AdaLN LoRA Flag: {use_adaln_lora}. We enable bias if no AdaLN LoRA for backward compatibility."
+        )
+        self.linear_1 = nn.Linear(in_features, out_features, bias=not use_adaln_lora)
+        self.activation = nn.SiLU()
+        self.use_adaln_lora = use_adaln_lora
+        if use_adaln_lora:
+            self.linear_2 = nn.Linear(out_features, 3 * out_features, bias=False)
+        else:
+            self.linear_2 = nn.Linear(out_features, out_features, bias=True)
+
+    def forward(self, sample: torch.Tensor) -> torch.Tensor:
+        emb = self.linear_1(sample)
+        emb = self.activation(emb)
+        emb = self.linear_2(emb)
+
+        if self.use_adaln_lora:
+            adaln_lora_B_3D = emb
+            emb_B_D = sample
+        else:
+            emb_B_D = emb
+            adaln_lora_B_3D = None
+
+        return emb_B_D, adaln_lora_B_3D
+
 class Timesteps(nn.Module):
     def __init__(self, num_channels):
         super().__init__()

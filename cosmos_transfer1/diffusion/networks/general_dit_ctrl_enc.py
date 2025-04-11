@@ -19,10 +19,11 @@ ControlNet Encoder based on GeneralDIT
 
 from typing import List, Optional, Tuple
 
+import numpy as np
 import torch
 from einops import rearrange
 
-# from megatron.core import parallel_state
+from megatron.core import parallel_state
 from torch import nn
 from torchvision import transforms
 
@@ -30,6 +31,7 @@ from cosmos_transfer1.diffusion.conditioner import DataType
 from cosmos_transfer1.diffusion.module.blocks import PatchEmbed, zero_module
 from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
 from cosmos_transfer1.diffusion.networks.general_dit_video_conditioned import VideoExtendGeneralDIT as GeneralDIT
+from cosmos_transfer1.diffusion.training.tensor_parallel import scatter_along_first_dim
 
 
 class GeneralDITEncoder(GeneralDIT):
@@ -60,13 +62,18 @@ class GeneralDITEncoder(GeneralDIT):
             input_hint_block += [nn.Linear(hint_nf[i], hint_nf[i + 1]), nonlinearity]
         self.input_hint_block = nn.Sequential(*input_hint_block)
         # Initialize weights
-        self.initialize_weights()
+        self.init_weights()
         self.zero_blocks = nn.ModuleDict()
         for idx in range(num_blocks):
             if layer_mask[idx]:
                 continue
             self.zero_blocks[f"block{idx}"] = zero_module(nn.Linear(model_channels, model_channels))
         self.input_hint_block.append(zero_module(nn.Linear(hint_nf[-1], model_channels)))
+
+    def _set_sequence_parallel(self, status: bool):
+        self.zero_blocks.sequence_parallel = status
+        self.input_hint_block.sequence_parallel = status
+        super()._set_sequence_parallel(status)
 
     def build_hint_patch_embed(self):
         concat_padding_mask, in_channels, patch_spatial, patch_temporal, model_channels = (
@@ -83,7 +90,14 @@ class GeneralDITEncoder(GeneralDIT):
             in_channels=in_channels,
             out_channels=model_channels,
             bias=False,
+            keep_spatio=True,
+            legacy_patch_emb=self.legacy_patch_emb,
         )
+
+        if self.legacy_patch_emb:
+            # Initialize patch_embed like nn.Linear (instead of nn.Conv2d)
+            w = self.x_embedder2.proj.weight.data
+            nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
 
     def prepare_hint_embedded_sequence(
         self, x_B_C_T_H_W: torch.Tensor, fps: Optional[torch.Tensor] = None, padding_mask: Optional[torch.Tensor] = None
@@ -125,7 +139,18 @@ class GeneralDITEncoder(GeneralDIT):
         ), f"Expected DataType, got {type(data_type)}. We need discuss this flag later."
 
         hint_B_T_H_W_D, _ = self.prepare_hint_embedded_sequence(hint, fps=fps, padding_mask=padding_mask)
-        hint = rearrange(hint_B_T_H_W_D, "B T H W D -> T H W B D")
+
+        if self.blocks["block0"].x_format == "THWBD":
+            hint = rearrange(hint_B_T_H_W_D, "B T H W D -> T H W B D")
+            if self.sequence_parallel:
+                tp_group = parallel_state.get_tensor_model_parallel_group()
+                T, H, W, B, D = hint.shape
+                hint = hint.view(T * H * W, 1, 1, B, -1)
+                hint = scatter_along_first_dim(hint, tp_group)
+        elif self.blocks["block0"].x_format == "BTHWD":
+            hint = hint_B_T_H_W_D
+        else:
+            raise ValueError(f"Unknown x_format {self.blocks[0].x_format}")
 
         guided_hint = self.input_hint_block(hint)
         return guided_hint
@@ -137,6 +162,7 @@ class GeneralDITEncoder(GeneralDIT):
         crossattn_emb: torch.Tensor,
         crossattn_mask: Optional[torch.Tensor] = None,
         fps: Optional[torch.Tensor] = None,
+        image_size: Optional[torch.Tensor] = None,
         padding_mask: Optional[torch.Tensor] = None,
         scalar_feature: Optional[torch.Tensor] = None,
         data_type: Optional[DataType] = DataType.VIDEO,
@@ -169,6 +195,7 @@ class GeneralDITEncoder(GeneralDIT):
                 crossattn_emb=crossattn_emb_input,
                 crossattn_mask=crossattn_mask_input,
                 fps=fps,
+                image_size=image_size,
                 padding_mask=padding_mask,
                 scalar_feature=scalar_feature,
                 data_type=data_type,
@@ -201,6 +228,7 @@ class GeneralDITEncoder(GeneralDIT):
                     )
                 input_list = [x, condition_video_input_mask]
                 x = torch.cat(input_list, dim=1)
+
         elif data_type == DataType.IMAGE:
             # For image, we dont have condition_video_input_mask, or condition_video_pose
             # We need to add the extra channel for video condition mask
@@ -217,19 +245,41 @@ class GeneralDITEncoder(GeneralDIT):
         else:
             crossattn_mask = None
 
-        crossattn_emb = rearrange(crossattn_emb, "B M D -> M B D")
-        if crossattn_mask:
-            crossattn_mask = rearrange(crossattn_mask, "B M -> M B")
+        if self.blocks["block0"].x_format == "THWBD":
+            crossattn_emb = rearrange(crossattn_emb, "B M D -> M B D")
+            if crossattn_mask:
+                crossattn_mask = rearrange(crossattn_mask, "B M -> M B")
 
         outs = {}
 
+        # If also training base model, sometimes drop the controlnet branch to only train base branch.
+        # This is to prevent the network become dependent on controlnet branch and make control weight useless.
+        is_training = torch.is_grad_enabled()
+        is_training_base_model = any(p.requires_grad for p in base_model.parameters())
+        if is_training and is_training_base_model:
+            coin_flip = torch.rand(B).to(x.device) > self.dropout_ctrl_branch  # prob for only training base model
+            if self.blocks["block0"].x_format == "THWBD":
+                coin_flip = coin_flip[None, None, None, :, None]
+            elif self.blocks["block0"].x_format == "BTHWD":
+                coin_flip = coin_flip[:, None, None, None, None]
+        else:
+            coin_flip = 1
+
         num_control_blocks = self.layer_mask.index(True)
-        num_layers_to_use = num_control_blocks
+        if self.random_drop_control_blocks:
+            if is_training:  # Use a random number of layers during training.
+                num_layers_to_use = np.random.randint(num_control_blocks) + 1
+            elif num_layers_to_use == -1:  # Evaluate using all the layers.
+                num_layers_to_use = num_control_blocks
+            else:  # Use the specified number of layers during inference.
+                pass
+        else:  # Use all of the layers.
+            num_layers_to_use = num_control_blocks
         control_gate_per_layer = [i < num_layers_to_use for i in range(num_control_blocks)]
 
         if isinstance(control_weight, torch.Tensor):
             if control_weight.ndim == 0:  # Single scalar tensor
-                control_weight = [float(control_weight)]
+                control_weight = [float(control_weight)] * len(guided_hints)
             elif control_weight.ndim == 1:  # List of scalar weights
                 control_weight = [float(w) for w in control_weight]
             else:  # Spatial-temporal weight maps
@@ -237,6 +287,7 @@ class GeneralDITEncoder(GeneralDIT):
         else:
             control_weight = [control_weight] * len(guided_hints)
 
+        # max_norm = {}
         x_before_blocks = x.clone()
         for i, guided_hint in enumerate(guided_hints):
             x = x_before_blocks
@@ -266,6 +317,19 @@ class GeneralDITEncoder(GeneralDIT):
             if scalar_feature is not None:
                 raise NotImplementedError("Scalar feature is not implemented yet.")
 
+            if self.additional_timestamp_channels:
+                additional_cond_B_D = self.prepare_additional_timestamp_embedder(
+                    bs=x.shape[0],
+                    fps=fps,
+                    h=image_size[:, 0],
+                    w=image_size[:, 1],
+                    org_h=image_size[:, 2],
+                    org_w=image_size[:, 3],
+                )
+
+                affline_emb_B_D += additional_cond_B_D
+                affline_scale_log_info["additional_cond_B_D"] = additional_cond_B_D.detach()
+
             affline_scale_log_info["affline_emb_B_D"] = affline_emb_B_D.detach()
             affline_emb_B_D = affline_norm(affline_emb_B_D)
 
@@ -273,11 +337,34 @@ class GeneralDITEncoder(GeneralDIT):
             self.affline_scale_log_info = affline_scale_log_info
             self.affline_emb = affline_emb_B_D
 
-            x = rearrange(x_B_T_H_W_D, "B T H W D -> T H W B D")
-            if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
-                extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = rearrange(
-                    extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D, "B T H W D -> T H W B D"
-                )
+            if self.blocks["block0"].x_format == "THWBD":
+                x = rearrange(x_B_T_H_W_D, "B T H W D -> T H W B D")
+                if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
+                    extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = rearrange(
+                        extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D, "B T H W D -> T H W B D"
+                    )
+
+                if self.sequence_parallel:
+                    tp_group = parallel_state.get_tensor_model_parallel_group()
+                    # Sequence parallel requires the input tensor to be scattered along the first dimension.
+                    assert self.block_config == "FA-CA-MLP"  # Only support this block config for now
+                    T, H, W, B, D = x.shape
+                    # variable name x_T_H_W_B_D is no longer valid. x is reshaped to THW*1*1*b*D and will be reshaped back in FinalLayer
+                    x = x.view(T * H * W, 1, 1, B, D)
+                    assert x.shape[0] % parallel_state.get_tensor_model_parallel_world_size() == 0
+                    x = scatter_along_first_dim(x, tp_group)
+                    if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
+                        extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D.view(
+                            T * H * W, 1, 1, B, D
+                        )
+                        extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = scatter_along_first_dim(
+                            extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D, tp_group
+                        )
+
+            elif self.blocks["block0"].x_format == "BTHWD":
+                x = x_B_T_H_W_D
+            else:
+                raise ValueError(f"Unknown x_format {self.blocks[0].x_format}")
 
             for idx, (name, block) in enumerate(blocks.items()):
                 assert (
@@ -298,36 +385,45 @@ class GeneralDITEncoder(GeneralDIT):
 
                 gate = control_gate_per_layer[idx]
                 if isinstance(control_weight[i], (float, int)) or control_weight[i].ndim < 2:
-                    hint_val = zero_blocks[name](x) * control_weight[i] * gate
+                    hint_val = zero_blocks[name](x) * control_weight[i] * coin_flip * gate
                 else:  # Spatial-temporal weights [num_controls, B, 1, T, H, W]
                     control_feat = zero_blocks[name](x)
-                    T, H, W, _, _ = control_feat.shape
 
                     # Get current feature dimensions
-                    weight_map = control_weight[i]  # [B, 1, T, H, W]
-                    if weight_map.shape[2:5] != (T, H, W):
-                        assert weight_map.shape[2] == 8 * (T - 1) + 1
-                        weight_map_i = [
-                            torch.nn.functional.interpolate(
-                                weight_map[:, :, :1, :, :],
-                                size=(1, H, W),
-                                mode="trilinear",
-                                align_corners=False,
-                            )
-                        ]
-                        for wi in range(1, weight_map.shape[2], 8):
-                            weight_map_i += [
+                    if self.blocks["block0"].x_format == "THWBD":
+                        weight_map = control_weight[i]  # [B, 1, T, H, W]
+
+                        if weight_map.shape[2:5] != (T, H, W):
+                            assert weight_map.shape[2] == 8 * (T - 1) + 1
+                            weight_map_i = [
                                 torch.nn.functional.interpolate(
-                                    weight_map[:, :, wi : wi + 8],
+                                    weight_map[:, :, :1, :, :],
                                     size=(1, H, W),
                                     mode="trilinear",
                                     align_corners=False,
                                 )
                             ]
-                        weight_map = torch.cat(weight_map_i, dim=2)
-                    # Reshape to match THWBD format
-                    weight_map = weight_map.permute(2, 3, 4, 0, 1)  # [T, H, W, B, 1]
-                    hint_val = control_feat * weight_map * gate
+                            for wi in range(1, weight_map.shape[2], 8):
+                                weight_map_i += [
+                                    torch.nn.functional.interpolate(
+                                        weight_map[:, :, wi : wi + 8],
+                                        size=(1, H, W),
+                                        mode="trilinear",
+                                        align_corners=False,
+                                    )
+                                ]
+                            weight_map = torch.cat(weight_map_i, dim=2)
+
+                        # Reshape to match THWBD format
+                        weight_map = weight_map.permute(2, 3, 4, 0, 1)  # [T, H, W, B, 1]
+                        weight_map = weight_map.view(T * H * W, 1, 1, B, 1)
+                        if self.sequence_parallel:
+                            weight_map = scatter_along_first_dim(weight_map, tp_group)
+
+                    else:  # BTHWD format
+                        raise NotImplementedError("BTHWD format for weight map is not implemented yet.")
+                    hint_val = control_feat * weight_map * coin_flip * gate
+
                 if name not in outs:
                     outs[name] = hint_val
                 else:
@@ -339,6 +435,7 @@ class GeneralDITEncoder(GeneralDIT):
             crossattn_emb=crossattn_emb_input,
             crossattn_mask=crossattn_mask_input,
             fps=fps,
+            image_size=image_size,
             padding_mask=padding_mask,
             scalar_feature=scalar_feature,
             data_type=data_type,

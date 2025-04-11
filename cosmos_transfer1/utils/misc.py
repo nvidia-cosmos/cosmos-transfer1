@@ -32,6 +32,9 @@ import numpy as np
 import termcolor
 import torch
 
+from torch.distributed._functional_collectives import AsyncCollectiveTensor
+from torch.distributed._tensor.api import DTensor
+
 from cosmos_transfer1.utils import distributed, log
 
 
@@ -98,6 +101,18 @@ def to(
         return type(data)([to(elem, device=device, dtype=dtype, memory_format=memory_format) for elem in data])
     else:
         return data
+
+
+def get_local_tensor_if_DTensor(tensor: torch.Tensor | DTensor) -> torch.tensor:
+    if isinstance(tensor, DTensor):
+        local = tensor.to_local()
+        # As per PyTorch documentation, if the communication is not finished yet, we need to wait for it to finish
+        # https://pytorch.org/docs/stable/distributed.tensor.html#torch.distributed.tensor.DTensor.to_local
+        if isinstance(local, AsyncCollectiveTensor):
+            return local.wait()
+        else:
+            return local
+    return tensor
 
 
 def serialize(data: Any) -> Any:

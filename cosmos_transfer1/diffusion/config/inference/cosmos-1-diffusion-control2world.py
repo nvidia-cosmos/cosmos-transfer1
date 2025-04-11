@@ -66,7 +66,7 @@ def make_ctrlnet_config_7b(
             job=dict(
                 group="CTRL_7Bv1_lvg",
                 name=f"CTRL_7Bv1pt3_lvg_tp_121frames_{hint_key}_block{num_control_blocks}",
-                project="cosmos_ctrlnet1",
+                project="cosmos_transfer1",
             ),
             model=dict(
                 hint_mask=hint_mask,

@@ -46,5 +46,8 @@ def make_config():
     c.job.group = "inference"
 
     register_configs()
+
+    # experiment config are defined in the experiment folder
+    # call import_all_modules_from_package to register them
     import_all_modules_from_package("cosmos_transfer1.diffusion.config.inference", reload=True)
     return c

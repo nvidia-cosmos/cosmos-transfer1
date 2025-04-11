@@ -15,12 +15,30 @@
 
 """
 A general implementation of adaln-modulated VIT-like~(DiT) transformer for video processing.
+It allows us easy to switch building blocks used and their order. Its instantiation includes
+* transformer on fully flattened tokens
+* factored spatial and temporal attention
+* factored non-overlap spatial and temporal attention
+* mixing of above attention types
+
+Limitations:
+
+* In favor of simplicity and cleanness, many ops are not fused and we can do better
+* such as combining mutiple adaln MLPs into one inside one transformer block.
+* we use reshape heavily, which may be not efficient when its occurs unnecessary CUDA memory copy
+
+Purpose:
+* A prototype for testing different attention types and their combinations
+* Idealy, we want to know where we should allocate our resources / FLOPS / memory via extensive empirical studies
 """
 
+
+from collections.abc import Container
 from typing import List, Optional, Tuple
 
 import torch
 from einops import rearrange
+from megatron.core import parallel_state
 from torch import nn
 from torch.distributed import ProcessGroup, get_process_group_ranks
 from torchvision import transforms
@@ -28,57 +46,96 @@ from torchvision import transforms
 from cosmos_transfer1.diffusion.conditioner import DataType
 from cosmos_transfer1.diffusion.module.attention import get_normalization
 from cosmos_transfer1.diffusion.module.blocks import (
+    DITBuildingBlock,
     FinalLayer,
     GeneralDITTransformerBlock,
     PatchEmbed,
-    TimestepEmbedding,
-    Timesteps,
+    SDXLTimestepEmbedding,
+    SDXLTimesteps,
 )
-from cosmos_transfer1.diffusion.module.position_embedding import LearnablePosEmbAxis, VideoRopePosition3DEmb
+from cosmos_transfer1.diffusion.module.position_embedding import (
+    LearnableEmb3D,
+    LearnableEmb3D_FPS_Aware,
+    LearnablePosEmbAxis,
+    SinCosPosEmb,
+    SinCosPosEmb_FPS_Aware,
+    SinCosPosEmbAxis,
+    VideoRopePosition3DEmb,
+    VideoRopePositionEmb,
+)
+from cosmos_transfer1.diffusion.training.tensor_parallel import gather_along_first_dim, scatter_along_first_dim
 from cosmos_transfer1.utils import log
 
 
 class GeneralDIT(nn.Module):
     """
     A general implementation of adaln-modulated VIT-like~(DiT) transformer for video processing.
-
-    Args:
+        Attributes:
         max_img_h (int): Maximum height of the input images.
         max_img_w (int): Maximum width of the input images.
         max_frames (int): Maximum number of frames in the video sequence.
         in_channels (int): Number of input channels (e.g., RGB channels for color images).
         out_channels (int): Number of output channels.
-        patch_spatial (tuple): Spatial resolution of patches for input processing.
+        patch_spatial (tuple of int): Spatial resolution of patches for input processing.
         patch_temporal (int): Temporal resolution of patches for input processing.
         concat_padding_mask (bool): If True, includes a mask channel in the input to handle padding.
-        block_config (str): Configuration of the transformer block. See Notes for supported block types.
+        block_config (str): Configuration of the transformer block, e.g., 'FA-CA-MLP', means
+            full attention, cross attention, and MLP in sequence in one transformer block.
         model_channels (int): Base number of channels used throughout the model.
-        num_blocks (int): Number of transformer blocks.
-        num_heads (int): Number of heads in the multi-head attention layers.
-        mlp_ratio (float): Expansion ratio for MLP blocks.
-        block_x_format (str): Format of input tensor for transformer blocks ('BTHWD' or 'THWBD').
-        crossattn_emb_channels (int): Number of embedding channels for cross-attention.
-        use_cross_attn_mask (bool): Whether to use mask in cross-attention.
-        pos_emb_cls (str): Type of positional embeddings.
-        pos_emb_learnable (bool): Whether positional embeddings are learnable.
-        pos_emb_interpolation (str): Method for interpolating positional embeddings.
-        affline_emb_norm (bool): Whether to normalize affine embeddings.
-        use_adaln_lora (bool): Whether to use AdaLN-LoRA.
-        adaln_lora_dim (int): Dimension for AdaLN-LoRA.
-        rope_h_extrapolation_ratio (float): Height extrapolation ratio for RoPE.
-        rope_w_extrapolation_ratio (float): Width extrapolation ratio for RoPE.
-        rope_t_extrapolation_ratio (float): Temporal extrapolation ratio for RoPE.
-        extra_per_block_abs_pos_emb (bool): Whether to use extra per-block absolute positional embeddings.
-        extra_per_block_abs_pos_emb_type (str): Type of extra per-block positional embeddings.
-        extra_h_extrapolation_ratio (float): Height extrapolation ratio for extra embeddings.
-        extra_w_extrapolation_ratio (float): Width extrapolation ratio for extra embeddings.
-        extra_t_extrapolation_ratio (float): Temporal extrapolation ratio for extra embeddings.
+        num_blocks (int): Number of residual blocks per resolution in the transformer.
+        num_heads (int): Number of heads in the multi-head self-attention layers.
+        spatial_attn_win_size (int): Window size for the spatial attention mechanism.
+        temporal_attn_win_size (int): Window size for the temporal attention mechanism.
+        mlp_ratio (float): Expansion ratio for the MLP (multi-layer perceptron) blocks in the transformer.
+        use_memory_save (bool): If True, utilizes checkpointing to reduce memory usage during training. (Deprecated)
+        use_checkpoint (bool): If True, utilizes checkpointing to reduce memory usage during training for all blocks.
+        crossattn_emb_channels (int): Number of embedding channels used in the cross-attention layers.
+        use_cross_attn_mask (bool): If True, applies a mask during cross-attention operations to manage sequence alignment.
+        pos_emb_cls (str): Type of positional embeddings used ('sincos' for sinusoidal or other types).
+        pos_emb_learnable (bool): Specifies if positional embeddings are learnable.
+        pos_emb_interpolation (str): Method used for interpolating positional embeddings, e.g., 'crop' for cropping adjustments.
+        block_x_format (str, optional): The format of the input tensor for the transformer block. Defaults to "BTHWD". Only support 'BTHWD' and 'THWBD'.
+        legacy_patch_emb (bool): If True, applies 3D convolutional layers for video inputs, otherwise, use Linear! This is for backward compatibility.
+        rope_h_extrapolation_ratio (float): Ratio of the height extrapolation for the rope positional embedding.
+        rope_w_extrapolation_ratio (float): Ratio of the width extrapolation for the rope positional embedding.
+        rope_t_extrapolation_ratio (float): Ratio of the temporal extrapolation for the rope positional embedding.
+    Note:
+        block_config support block type:
+        * spatial_sa, ssa: spatial self attention
+        * temporal_sa, tsa: temporal self attention
+        * cross_attn, ca: cross attention
+        * full_attn: full attention on all flatten tokens
+        * mlp, ff: feed forward block
+        * use '-' to separate different building blocks, e.g., 'FA-CA-MLP' means full attention, cross attention, and MLP in sequence in one transformer block.
 
-    Notes:
-        Supported block types in block_config:
-        * cross_attn, ca: Cross attention
-        * full_attn: Full attention on all flattened tokens
-        * mlp, ff: Feed forward block
+    Example:
+        >>> # full attention, cross attention, and MLP
+        >>> option1_block_config = 'FA-CA-MLP'
+        >>> model_1 = GeneralDIT(
+                max_img_h=64, max_img_w=64, max_frames=32, in_channels=16, out_channels=16,
+                patch_spatial=2, patch_temporal=1, model_channels=768, num_blocks=10,
+                num_heads=16, mlp_ratio=4.0,
+                spatial_attn_win_size=1, temporal_attn_win_size=1,
+                block_config=option1_block_config
+            )
+        >>> option2_block_config = 'SSA-CA-MLP-TSA-CA-MLP'
+        >>> model_2 = GeneralDIT(
+                max_img_h=64, max_img_w=64, max_frames=32, in_channels=16, out_channels=16,
+                patch_spatial=2, patch_temporal=1, model_channels=768, num_blocks=10,
+                num_heads=16, mlp_ratio=4.0,
+                spatial_attn_win_size=1, temporal_attn_win_size=1,
+                block_config=option2_block_config
+            )
+        >>> # option3 model
+        >>> model_3 = GeneralDIT(
+                max_img_h=64, max_img_w=64, max_frames=32, in_channels=16, out_channels=16,
+                patch_spatial=2, patch_temporal=1, model_channels=768, num_blocks=10,
+                num_heads=16, mlp_ratio=4.0,
+                spatial_attn_win_size=1, temporal_attn_win_size=2,
+                block_config=option2_block_config
+            )
+        >>> # Process input tensor through the model
+        >>> output = model(input_tensor)
     """
 
     def __init__(
@@ -96,7 +153,13 @@ class GeneralDIT(nn.Module):
         model_channels: int = 768,
         num_blocks: int = 10,
         num_heads: int = 16,
+        window_block_indexes: list = [],  # index for window attention block
+        window_sizes: list = [],  # window size for window attention block in the order of T, H, W
+        spatial_attn_win_size: int = 1,
+        temporal_attn_win_size: int = 1,
         mlp_ratio: float = 4.0,
+        use_memory_save: bool = False,
+        use_checkpoint: bool = False,
         block_x_format: str = "BTHWD",
         # cross attention settings
         crossattn_emb_channels: int = 1024,
@@ -105,9 +168,14 @@ class GeneralDIT(nn.Module):
         pos_emb_cls: str = "sincos",
         pos_emb_learnable: bool = False,
         pos_emb_interpolation: str = "crop",
+        min_fps: int = 1,  # 1 for getty video
+        max_fps: int = 30,  # 120 for getty video but let's use 30
+        additional_timestamp_channels: dict = None,  # Follow SDXL, in format of {condition_name : dimension}
         affline_emb_norm: bool = False,  # whether or not to normalize the affine embedding
         use_adaln_lora: bool = False,
         adaln_lora_dim: int = 256,
+        layer_mask: list = None,  # whether or not a layer is used. For controlnet encoder
+        legacy_patch_emb: bool = True,
         rope_h_extrapolation_ratio: float = 1.0,
         rope_w_extrapolation_ratio: float = 1.0,
         rope_t_extrapolation_ratio: float = 1.0,
@@ -116,7 +184,6 @@ class GeneralDIT(nn.Module):
         extra_h_extrapolation_ratio: float = 1.0,
         extra_w_extrapolation_ratio: float = 1.0,
         extra_t_extrapolation_ratio: float = 1.0,
-        layer_mask: list = None,  # whether or not a layer is used. For controlnet encoder
     ) -> None:
         super().__init__()
         self.max_img_h = max_img_h
@@ -135,7 +202,11 @@ class GeneralDIT(nn.Module):
         self.pos_emb_cls = pos_emb_cls
         self.pos_emb_learnable = pos_emb_learnable
         self.pos_emb_interpolation = pos_emb_interpolation
+        self.min_fps = min_fps
+        self.max_fps = max_fps
+        self.additional_timestamp_channels = additional_timestamp_channels
         self.affline_emb_norm = affline_emb_norm
+        self.legacy_patch_emb = legacy_patch_emb
         self.rope_h_extrapolation_ratio = rope_h_extrapolation_ratio
         self.rope_w_extrapolation_ratio = rope_w_extrapolation_ratio
         self.rope_t_extrapolation_ratio = rope_t_extrapolation_ratio
@@ -148,15 +219,23 @@ class GeneralDIT(nn.Module):
         self.build_patch_embed()
         self.build_pos_embed()
         self.cp_group = None
+        self.sequence_parallel = getattr(parallel_state, "sequence_parallel", False)
         self.block_x_format = block_x_format
         self.use_adaln_lora = use_adaln_lora
         self.adaln_lora_dim = adaln_lora_dim
         self.t_embedder = nn.Sequential(
-            Timesteps(model_channels),
-            TimestepEmbedding(model_channels, model_channels, use_adaln_lora=use_adaln_lora),
+            SDXLTimesteps(model_channels),
+            SDXLTimestepEmbedding(model_channels, model_channels, use_adaln_lora=use_adaln_lora),
         )
 
         self.blocks = nn.ModuleDict()
+        self.block_config = block_config
+        self.use_memory_save = use_memory_save
+        self.use_checkpoint = use_checkpoint
+
+        assert (
+            len(window_block_indexes) == 0 or block_config == "FA-CA-MLP"
+        ), "Block config must be FA-CA-MLP if using a combination of window attention and global attention"
 
         layer_mask = [False] * num_blocks if layer_mask is None else layer_mask
         assert (
@@ -170,21 +249,33 @@ class GeneralDIT(nn.Module):
                 context_dim=crossattn_emb_channels,
                 num_heads=num_heads,
                 block_config=block_config,
+                window_sizes=(
+                    window_sizes if idx in window_block_indexes else []
+                ),  # There will be bug if using "WA-CA-MLP"
                 mlp_ratio=mlp_ratio,
+                spatial_attn_win_size=spatial_attn_win_size,
+                temporal_attn_win_size=temporal_attn_win_size,
                 x_format=self.block_x_format,
                 use_adaln_lora=use_adaln_lora,
                 adaln_lora_dim=adaln_lora_dim,
+                use_checkpoint=use_checkpoint,
             )
 
         self.build_decode_head()
+        self.build_additional_timestamp_embedder()
         if self.affline_emb_norm:
-            log.debug("Building affine embedding normalization layer")
+            log.critical("Building affine embedding normalization layer")
             self.affline_norm = get_normalization("R", model_channels)
         else:
             self.affline_norm = nn.Identity()
-        self.initialize_weights()
+        self.init_weights()
 
-    def initialize_weights(self):
+        if self.use_memory_save:
+            log.critical("Using checkpointing to save memory! only verified in 14B base model training!")
+            for block in self.blocks.values():
+                block.set_memory_save()
+
+    def init_weights(self):
         # Initialize transformer layers:
         def _basic_init(module):
             if isinstance(module, nn.Linear):
@@ -208,6 +299,50 @@ class GeneralDIT(nn.Module):
                 nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
                 if block.adaLN_modulation[-1].bias is not None:
                     nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
+
+        # Tensor parallel
+        if parallel_state.is_initialized() and parallel_state.get_tensor_model_parallel_world_size() > 1:
+            self.initialize_tensor_parallel_weights()
+
+    def initialize_tensor_parallel_weights(self):
+        """
+        Initialize weights for tensor parallel layers.
+
+        This function performs the following steps:
+        1. Retrieves the tensor parallel rank.
+        2. Saves the current random state.
+        3. Sets a new random seed based on the tensor parallel rank.
+        4. Initializes weights for attention and MLP layers in each block.
+        5. Restores the original random state.
+
+        The use of different random seeds for each rank ensures
+        unique initializations across parallel processes.
+        """
+        tp_rank = parallel_state.get_tensor_model_parallel_rank()
+
+        # Save the current random state
+        rng_state = torch.get_rng_state()
+
+        # Set a new random seed based on the tensor parallel rank
+        torch.manual_seed(tp_rank)
+
+        for block in self.blocks.values():
+            for layer in block.blocks:
+                if layer.block_type in ["full_attn", "fa", "cross_attn", "ca"]:
+                    # Initialize weights for attention layers
+                    torch.nn.init.xavier_uniform_(layer.block.attn.to_q[0].weight)
+                    torch.nn.init.xavier_uniform_(layer.block.attn.to_k[0].weight)
+                    torch.nn.init.xavier_uniform_(layer.block.attn.to_v[0].weight)
+                    torch.nn.init.xavier_uniform_(layer.block.attn.to_out[0].weight)
+                elif layer.block_type in ["mlp", "ff"]:
+                    # Initialize weights for MLP layers
+                    torch.nn.init.xavier_uniform_(layer.block.layer1.weight)
+                    torch.nn.init.xavier_uniform_(layer.block.layer2.weight)
+                else:
+                    raise ValueError(f"Unknown block type {layer.block_type}")
+
+        # Restore the original random state
+        torch.set_rng_state(rng_state)
 
     def build_decode_head(self):
         self.final_layer = FinalLayer(
@@ -240,20 +375,60 @@ class GeneralDIT(nn.Module):
             in_channels=in_channels,
             out_channels=model_channels,
             bias=False,
+            keep_spatio=True,
+            legacy_patch_emb=self.legacy_patch_emb,
         )
+        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d)
+        if self.legacy_patch_emb:
+            w = self.x_embedder.proj.weight.data
+            nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+
+    def build_additional_timestamp_embedder(self):
+        if self.additional_timestamp_channels:
+            self.additional_timestamp_embedder = nn.ModuleDict()
+            for cond_name, cond_emb_channels in self.additional_timestamp_channels.items():
+                log.critical(
+                    f"Building additional timestamp embedder for {cond_name} with {cond_emb_channels} channels"
+                )
+                self.additional_timestamp_embedder[cond_name] = nn.Sequential(
+                    SDXLTimesteps(cond_emb_channels),
+                    SDXLTimestepEmbedding(cond_emb_channels, cond_emb_channels),
+                )
+
+    def prepare_additional_timestamp_embedder(self, **kwargs):
+        condition_concat = []
+
+        for cond_name, embedder in self.additional_timestamp_embedder.items():
+            condition_concat.append(embedder(kwargs[cond_name])[0])
+        embedding = torch.cat(condition_concat, dim=1)
+        if embedding.shape[1] < self.model_channels:
+            embedding = nn.functional.pad(embedding, (0, self.model_channels - embedding.shape[1]))
+        return embedding
 
     def build_pos_embed(self):
-        if self.pos_emb_cls == "rope3d":
+        if self.pos_emb_cls == "sincos":
+            cls_type = SinCosPosEmb
+        elif self.pos_emb_cls == "learnable":
+            cls_type = LearnableEmb3D
+        elif self.pos_emb_cls == "sincos_fps_aware":
+            cls_type = SinCosPosEmb_FPS_Aware
+        elif self.pos_emb_cls == "learnable_fps_aware":
+            cls_type = LearnableEmb3D_FPS_Aware
+        elif self.pos_emb_cls == "rope":
+            cls_type = VideoRopePositionEmb
+        elif self.pos_emb_cls == "rope3d":
             cls_type = VideoRopePosition3DEmb
         else:
             raise ValueError(f"Unknown pos_emb_cls {self.pos_emb_cls}")
 
-        log.debug(f"Building positional embedding with {self.pos_emb_cls} class, impl {cls_type}")
+        log.critical(f"Building positional embedding with {self.pos_emb_cls} class, impl {cls_type}")
         kwargs = dict(
             model_channels=self.model_channels,
             len_h=self.max_img_h // self.patch_spatial,
             len_w=self.max_img_w // self.patch_spatial,
             len_t=self.max_frames // self.patch_temporal,
+            max_fps=self.max_fps,
+            min_fps=self.min_fps,
             is_learnable=self.pos_emb_learnable,
             interpolation=self.pos_emb_interpolation,
             head_dim=self.model_channels // self.num_heads,
@@ -267,14 +442,20 @@ class GeneralDIT(nn.Module):
 
         if self.extra_per_block_abs_pos_emb:
             assert self.extra_per_block_abs_pos_emb_type in [
+                "sincos",
                 "learnable",
             ], f"Unknown extra_per_block_abs_pos_emb_type {self.extra_per_block_abs_pos_emb_type}"
             kwargs["h_extrapolation_ratio"] = self.extra_h_extrapolation_ratio
             kwargs["w_extrapolation_ratio"] = self.extra_w_extrapolation_ratio
             kwargs["t_extrapolation_ratio"] = self.extra_t_extrapolation_ratio
-            self.extra_pos_embedder = LearnablePosEmbAxis(
-                **kwargs,
-            )
+            if self.extra_per_block_abs_pos_emb_type == "sincos":
+                self.extra_pos_embedder = SinCosPosEmbAxis(
+                    **kwargs,
+                )
+            elif self.extra_per_block_abs_pos_emb_type == "learnable":
+                self.extra_pos_embedder = LearnablePosEmbAxis(
+                    **kwargs,
+                )
 
     def prepare_embedded_sequence(
         self,
@@ -304,8 +485,8 @@ class GeneralDIT(nn.Module):
             - The method of applying positional embeddings depends on the value of `self.pos_emb_cls`.
             - If 'rope' is in `self.pos_emb_cls` (case insensitive), the positional embeddings are generated using
                 the `self.pos_embedder` with the shape [T, H, W].
-            - If "fps_aware" is in `self.pos_emb_cls`, the positional embeddings are generated using the
-            `self.pos_embedder` with the fps tensor.
+            - If "fps_aware" is in `self.pos_emb_cls`, the positional embeddings are generated using the `self.pos_embedder`
+                with the fps tensor.
             - Otherwise, the positional embeddings are generated without considering fps.
         """
         if self.concat_padding_mask:
@@ -329,7 +510,6 @@ class GeneralDIT(nn.Module):
             x_B_T_H_W_D = x_B_T_H_W_D + self.pos_embedder(x_B_T_H_W_D, fps=fps)  # [B, T, H, W, D]
         else:
             x_B_T_H_W_D = x_B_T_H_W_D + self.pos_embedder(x_B_T_H_W_D)  # [B, T, H, W, D]
-
         return x_B_T_H_W_D, None, extra_pos_emb
 
     def decoder_head(
@@ -407,9 +587,29 @@ class GeneralDIT(nn.Module):
 
         if scalar_feature is not None:
             raise NotImplementedError("Scalar feature is not implemented yet.")
+            timesteps_B_D = timesteps_B_D + scalar_feature.mean(dim=1)
+
+        if self.additional_timestamp_channels:
+            additional_cond_B_D = self.prepare_additional_timestamp_embedder(
+                bs=x.shape[0],
+                fps=fps,
+                h=image_size[:, 0],
+                w=image_size[:, 1],
+                org_h=image_size[:, 2],
+                org_w=image_size[:, 3],
+            )
+
+            affline_emb_B_D += additional_cond_B_D
+            affline_scale_log_info["additional_cond_B_D"] = additional_cond_B_D.detach()
 
         affline_scale_log_info["affline_emb_B_D"] = affline_emb_B_D.detach()
         affline_emb_B_D = self.affline_norm(affline_emb_B_D)
+
+        # for logging purpose
+        self.affline_scale_log_info = affline_scale_log_info
+        self.affline_emb = affline_emb_B_D
+        self.crossattn_emb = crossattn_emb
+        self.crossattn_mask = crossattn_mask
 
         if self.use_cross_attn_mask:
             crossattn_mask = crossattn_mask[:, None, None, :].to(dtype=torch.bool)  # [B, 1, 1, length]
@@ -427,6 +627,24 @@ class GeneralDIT(nn.Module):
             if crossattn_mask:
                 crossattn_mask = rearrange(crossattn_mask, "B M -> M B")
 
+            if self.sequence_parallel:
+                tp_group = parallel_state.get_tensor_model_parallel_group()
+                # Sequence parallel requires the input tensor to be scattered along the first dimension.
+                assert self.block_config == "FA-CA-MLP"  # Only support this block config for now
+                T, H, W, B, D = x.shape
+                # variable name x_T_H_W_B_D is no longer valid. x is reshaped to THW*1*1*b*D and will be reshaped back in FinalLayer
+                x = x.view(T * H * W, 1, 1, B, D)
+                assert x.shape[0] % parallel_state.get_tensor_model_parallel_world_size() == 0
+                x = scatter_along_first_dim(x, tp_group)
+
+                if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
+                    extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D.view(
+                        T * H * W, 1, 1, B, D
+                    )
+                    extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = scatter_along_first_dim(
+                        extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D, tp_group
+                    )
+
         elif self.blocks["block0"].x_format == "BTHWD":
             x = x_B_T_H_W_D
         else:
@@ -443,6 +661,199 @@ class GeneralDIT(nn.Module):
         }
         return output
 
+    def forward_blocks_regular(
+        self,
+        x,
+        affline_emb_B_D,
+        crossattn_emb,
+        crossattn_mask,
+        rope_emb_L_1_1_D,
+        adaln_lora_B_3D,
+        extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+        feature_indices,
+        original_shape,
+        x_ctrl,
+        return_features_early,
+    ):
+        features = []
+        for name, block in self.blocks.items():
+            assert (
+                self.blocks["block0"].x_format == block.x_format
+            ), f"First block has x_format {self.blocks[0].x_format}, got {block.x_format}"
+            x = block(
+                x,
+                affline_emb_B_D,
+                crossattn_emb,
+                crossattn_mask,
+                rope_emb_L_1_1_D=rope_emb_L_1_1_D,
+                adaln_lora_B_3D=adaln_lora_B_3D,
+                extra_per_block_pos_emb=extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+            )
+
+            # Extract features
+            block_idx = int(name.split("block")[-1])
+            if block_idx in feature_indices:
+                B, C, T, H, W = original_shape
+                H = H // self.patch_spatial
+                W = W // self.patch_spatial
+                T = T // self.patch_temporal
+                if self.sequence_parallel:
+                    x_feat = gather_along_first_dim(x, parallel_state.get_tensor_model_parallel_group())
+                    x_B_T_H_W_D = rearrange(x_feat, "(T H W) 1 1 B D -> B T H W D", T=T, H=H, W=W)
+                else:
+                    x_feat = x
+                    if self.blocks["block0"].x_format == "THWBD":
+                        x_B_T_H_W_D = rearrange(x_feat, "T H W B D -> B T H W D", T=T, H=H, W=W)
+                    elif self.blocks["block0"].x_format == "BTHWD":
+                        x_B_T_H_W_D = x_feat
+                    else:
+                        raise ValueError(f"Unknown x_format {self.blocks[-1].x_format}")
+
+                features.append(x_B_T_H_W_D)
+
+            if x_ctrl is not None and name in x_ctrl:
+                x = x + x_ctrl[name]
+            # If we have all of the features, we can exit early
+            if return_features_early and len(features) == len(feature_indices):
+                return features
+
+        if self.blocks["block0"].x_format == "THWBD":
+            x_B_T_H_W_D = rearrange(x, "T H W B D -> B T H W D")
+        elif self.blocks["block0"].x_format == "BTHWD":
+            x_B_T_H_W_D = x
+        else:
+            raise ValueError(f"Unknown x_format {self.blocks[-1].x_format}")
+
+        x_B_D_T_H_W = self.decoder_head(
+            x_B_T_H_W_D=x_B_T_H_W_D,
+            emb_B_D=affline_emb_B_D,
+            crossattn_emb=None,
+            origin_shape=original_shape,
+            crossattn_mask=None,
+            adaln_lora_B_3D=adaln_lora_B_3D,
+        )
+
+        if len(feature_indices) == 0:
+            # no features requested, return only the model output
+            return x_B_D_T_H_W
+        else:
+            # score and features； score, features
+            return x_B_D_T_H_W, features
+
+    def forward_blocks_memory_save(
+        self,
+        x,
+        affline_emb_B_D,
+        crossattn_emb,
+        crossattn_mask,
+        rope_emb_L_1_1_D,
+        adaln_lora_B_3D,
+        extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+        feature_indices,
+        original_shape,
+        x_ctrl,
+        return_features_early,
+    ):
+        x_before_gate = 0
+        x_skip = rearrange(x, "T H W B D -> (T H W) B D")
+        assert self.blocks["block0"].x_format == "THWBD"
+        if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
+            extra_per_block_pos_emb = rearrange(extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D, "T H W B D -> (T H W) B D")
+        else:
+            extra_per_block_pos_emb = None
+        gate_L_B_D = 1.0
+
+        features = []
+        for name, block in self.blocks.items():
+            gate_L_B_D, x_before_gate, x_skip = block(
+                x_before_gate,
+                x_skip,
+                gate_L_B_D,
+                affline_emb_B_D,
+                crossattn_emb,
+                crossattn_mask,
+                rope_emb_L_1_1_D=rope_emb_L_1_1_D,
+                adaln_lora_B_3D=adaln_lora_B_3D,
+                extra_per_block_pos_emb=extra_per_block_pos_emb,
+            )
+
+            # Extract features.
+            # Convert the block index in the memory save mode to the block index in the regular mode.
+            block_idx = int(name.split("block")[-1]) - 1
+            if block_idx in feature_indices:
+                B, C, T_before_patchify, H_before_patchify, W_before_patchify = original_shape
+                H = H_before_patchify // self.patch_spatial
+                W = W_before_patchify // self.patch_spatial
+                T = T_before_patchify // self.patch_temporal
+                if self.sequence_parallel:
+                    x_feat = gather_along_first_dim(x_skip, parallel_state.get_tensor_model_parallel_group())
+                    x_B_T_H_W_D = rearrange(x_feat, "(T H W) 1 1 B D -> B T H W D", T=T, H=H, W=W)
+                else:
+                    x_feat = x_skip
+                    x_B_T_H_W_D = rearrange(x_feat, "(T H W) B D -> B T H W D", T=T, H=H, W=W)
+
+                features.append(x_B_T_H_W_D)
+
+            new_name = f"block{block_idx}"
+            if x_ctrl is not None and new_name in x_ctrl:
+                x_ctrl_ = x_ctrl[new_name]
+                x_ctrl_ = rearrange(x_ctrl_, "T H W B D -> (T H W) B D")
+                x_skip = x_skip + x_ctrl_
+            # If we have all of the features, we can exit early
+            if return_features_early and len(features) == len(feature_indices):
+                return features
+
+        x_THW_B_D_before_gate = x_before_gate
+        x_THW_B_D_skip = x_skip
+
+        B, C, T_before_patchify, H_before_patchify, W_before_patchify = original_shape
+        x_BT_HW_D_before_gate = rearrange(
+            x_THW_B_D_before_gate,
+            "(T H W) B D -> (B T) (H W) D",
+            T=T_before_patchify // self.patch_temporal,
+            H=H_before_patchify // self.patch_spatial,
+            W=W_before_patchify // self.patch_spatial,
+        )
+        x_BT_HW_D_skip = rearrange(
+            x_THW_B_D_skip,
+            "(T H W) B D -> (B T) (H W) D",
+            T=T_before_patchify // self.patch_temporal,
+            H=H_before_patchify // self.patch_spatial,
+            W=W_before_patchify // self.patch_spatial,
+        )
+
+        x_BT_HW_D = self.final_layer.forward_with_memory_save(
+            x_BT_HW_D_before_gate=x_BT_HW_D_before_gate,
+            x_BT_HW_D_skip=x_BT_HW_D_skip,
+            gate_L_B_D=gate_L_B_D,
+            emb_B_D=affline_emb_B_D,
+            adaln_lora_B_3D=adaln_lora_B_3D,
+        )
+
+        # This is to ensure x_BT_HW_D has the correct shape because
+        # when we merge T, H, W into one dimension, x_BT_HW_D has shape (B * T * H * W, 1*1, D).
+        x_BT_HW_D = x_BT_HW_D.view(
+            B * T_before_patchify // self.patch_temporal,
+            H_before_patchify // self.patch_spatial * W_before_patchify // self.patch_spatial,
+            -1,
+        )
+        x_B_D_T_H_W = rearrange(
+            x_BT_HW_D,
+            "(B T) (H W) (p1 p2 t C) -> B C (T t) (H p1) (W p2)",
+            p1=self.patch_spatial,
+            p2=self.patch_spatial,
+            H=H_before_patchify // self.patch_spatial,
+            W=W_before_patchify // self.patch_spatial,
+            t=self.patch_temporal,
+            B=B,
+        )
+        if len(feature_indices) == 0:
+            # no features requested, return only the model output
+            return x_B_D_T_H_W
+        else:
+            # score and features； score, features
+            return x_B_D_T_H_W, features
+
     def forward(
         self,
         x: torch.Tensor,
@@ -450,13 +861,16 @@ class GeneralDIT(nn.Module):
         crossattn_emb: torch.Tensor,
         crossattn_mask: Optional[torch.Tensor] = None,
         fps: Optional[torch.Tensor] = None,
+        image_size: Optional[torch.Tensor] = None,
         padding_mask: Optional[torch.Tensor] = None,
         scalar_feature: Optional[torch.Tensor] = None,
         data_type: Optional[DataType] = DataType.VIDEO,
+        x_ctrl: Optional[dict] = None,
         latent_condition: Optional[torch.Tensor] = None,
         latent_condition_sigma: Optional[torch.Tensor] = None,
+        feature_indices: Optional[Container[int]] = None,
+        return_features_early: bool = False,
         condition_video_augment_sigma: Optional[torch.Tensor] = None,
-        x_ctrl: Optional[dict] = None,
         **kwargs,
     ) -> torch.Tensor | List[torch.Tensor] | Tuple[torch.Tensor, List[torch.Tensor]]:
         """
@@ -465,10 +879,19 @@ class GeneralDIT(nn.Module):
             timesteps: (B, ) tensor of timesteps
             crossattn_emb: (B, N, D) tensor of cross-attention embeddings
             crossattn_mask: (B, N) tensor of cross-attention masks
-            condition_video_augment_sigma: (B,) used in lvg(long video generation), we add noise with this sigma to
-                augment condition input, the lvg model will condition on the condition_video_augment_sigma value;
+            feature_indices: A set of feature indices (a set of integers) decides which blocks
+                to extract features from. If the set is non-empty, then features will be returned.
+                By default, feature_indices=None means extract no features.
+            return_features_early: If true, the forward pass returns the features once the set is complete.
+                This means the forward pass will not finish completely and no final output is returned.
+            condition_video_augment_sigma: (B,) used in lvg(long video generation), we add noise with this sigma to augment condition input, the lvg model will condition on the condition_video_augment_sigma value;
                 we need forward_before_blocks pass to the forward_before_blocks function.
         """
+        if feature_indices is None:
+            feature_indices = {}
+        if return_features_early and len(feature_indices) == 0:
+            # Exit immediately if user requested this.
+            return []
 
         inputs = self.forward_before_blocks(
             x=x,
@@ -476,6 +899,7 @@ class GeneralDIT(nn.Module):
             crossattn_emb=crossattn_emb,
             crossattn_mask=crossattn_mask,
             fps=fps,
+            image_size=image_size,
             padding_mask=padding_mask,
             scalar_feature=scalar_feature,
             data_type=data_type,
@@ -499,35 +923,38 @@ class GeneralDIT(nn.Module):
                 x.shape == extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D.shape
             ), f"{x.shape} != {extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D.shape} {original_shape}"
 
-        for name, block in self.blocks.items():
-            assert (
-                self.blocks["block0"].x_format == block.x_format
-            ), f"First block has x_format {self.blocks[0].x_format}, got {block.x_format}"
-
-            x = block(
+        if self.use_memory_save:
+            return self.forward_blocks_memory_save(
                 x,
                 affline_emb_B_D,
                 crossattn_emb,
                 crossattn_mask,
-                rope_emb_L_1_1_D=rope_emb_L_1_1_D,
-                adaln_lora_B_3D=adaln_lora_B_3D,
-                extra_per_block_pos_emb=extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+                rope_emb_L_1_1_D,
+                adaln_lora_B_3D,
+                extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+                feature_indices,
+                original_shape,
+                x_ctrl,
+                return_features_early,
             )
-            if x_ctrl is not None and name in x_ctrl:
-                x = x + x_ctrl[name]
 
-        x_B_T_H_W_D = rearrange(x, "T H W B D -> B T H W D")
-
-        x_B_D_T_H_W = self.decoder_head(
-            x_B_T_H_W_D=x_B_T_H_W_D,
-            emb_B_D=affline_emb_B_D,
-            crossattn_emb=None,
-            origin_shape=original_shape,
-            crossattn_mask=None,
-            adaln_lora_B_3D=adaln_lora_B_3D,
+        return self.forward_blocks_regular(
+            x,
+            affline_emb_B_D,
+            crossattn_emb,
+            crossattn_mask,
+            rope_emb_L_1_1_D,
+            adaln_lora_B_3D,
+            extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+            feature_indices,
+            original_shape,
+            x_ctrl,
+            return_features_early,
         )
 
-        return x_B_D_T_H_W
+    @property
+    def fsdp_wrap_block_cls(self):
+        return DITBuildingBlock
 
     def enable_context_parallel(self, cp_group: ProcessGroup):
         cp_ranks = get_process_group_ranks(cp_group)
@@ -573,6 +1000,29 @@ class GeneralDIT(nn.Module):
                     layer.block.attn.attn_op.cp_stream = None
 
         log.debug("[CP] Disable context parallelism.")
+
+    def enable_sequence_parallel(self):
+        self._set_sequence_parallel(True)
+
+    def disable_sequence_parallel(self):
+        self._set_sequence_parallel(False)
+
+    def _set_sequence_parallel(self, status: bool):
+        self.sequence_parallel = status
+        self.final_layer.sequence_parallel = status
+        for block in self.blocks.values():
+            for layer in block.blocks:
+                if layer.block_type in ["full_attn", "fa", "cross_attn", "ca"]:
+                    layer.block.attn.to_q[0].sequence_parallel = status
+                    layer.block.attn.to_k[0].sequence_parallel = status
+                    layer.block.attn.to_v[0].sequence_parallel = status
+                    layer.block.attn.to_out[0].sequence_parallel = status
+                    layer.block.attn.attn_op.sequence_parallel = status
+                elif layer.block_type in ["mlp", "ff"]:
+                    layer.block.layer1.sequence_parallel = status
+                    layer.block.layer2.sequence_parallel = status
+                else:
+                    raise ValueError(f"Unknown block type {layer.block_type}")
 
     @property
     def is_context_parallel_enabled(self):
