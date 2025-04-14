@@ -47,6 +47,7 @@ from cosmos_transfer1.diffusion.inference.inference_utils import (
     merge_patches_into_video,
     non_strict_load_model,
     split_video_into_patches,
+    resize_control_weight_map,
 )
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
 from cosmos_transfer1.utils import log
@@ -483,7 +484,9 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             data_batch_i["latent_hint"] = latent_hint = torch.cat(latent_hint)
 
             if isinstance(control_weight, torch.Tensor) and control_weight.ndim > 4:
-                data_batch_i["control_weight"] = control_weight[..., start_frame:end_frame, :, :].cuda()
+                control_weight_t = control_weight[..., start_frame:end_frame, :, :].cuda()
+                t, h, w = latent_hint.shape[-3:]
+                data_batch_i["control_weight"] = resize_control_weight_map(control_weight_t, (t, h // 2, w // 2))
 
             if i_clip == 0:
                 num_input_frames = 0
