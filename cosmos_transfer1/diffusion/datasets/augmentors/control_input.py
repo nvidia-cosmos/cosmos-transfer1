@@ -1026,6 +1026,7 @@ class AddControlInputSeg(Augmentor):
         del all_masks  # free memory
         return data_dict
 
+
 class AddControlInputKeypoint(Augmentor):
     """
     Add control input to the data dictionary. control input are expanded to 3-channels
@@ -1073,6 +1074,7 @@ class AddControlInputKeypoint(Augmentor):
                 f"control_input_keypoint already processed, shape={data_dict['control_input_keypoint'].shape}, dtype={data_dict['control_input_keypoint'].dtype}, value range: {data_dict['control_input_keypoint'].min()}, {data_dict['control_input_keypoint'].max()}"
             )
             return data_dict
+
 
 class AddControlInputUpscale(Augmentor):
     """
