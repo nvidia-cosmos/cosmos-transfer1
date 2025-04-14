@@ -31,20 +31,28 @@ Note that this will require about 300GB of free storage. Not all these checkpoin
 ```
 checkpoints/
 ├── nvidia
+│   │
+│   ├── Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0
+│   │   ├── README.md
+│   │   ├── adapter_config.json
+│   │   ├── adapter_model.safetensors
+│   │   └── models--nvidia--Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0/...
+│   │
+│   ├── Cosmos-Guardrail1
+│   │   ├── README.md
+│   │   ├── blocklist/...
+│   │   ├── face_blur_filter/...
+│   │   └── video_content_safety_filter/...
+│   │
 │   ├── Cosmos-Transfer1-7B
 │   │   ├── base_model.pt
 │   │   ├── vis_control.pt
 │   │   ├── edge_control.pt
 │   │   ├── seg_control.pt
 │   │   ├── depth_control.pt
-│   │   ├── keypoint_control.pt
+│   │   ├── keypoint_control.ptg
 │   │   ├── 4kupscaler_control.pt
-│   │   ├── config.json
-│   │   └── guardrail
-│   │       ├── aegis/
-│   │       ├── blocklist/
-│   │       ├── face_blur_filter/
-│   │       └── video_content_safety_filter/
+│   │   └── config.json
 │   │
 │   ├── Cosmos-Transfer1-7B-Sample-AV/
 │   │   ├── base_model.pt
@@ -76,7 +84,8 @@ checkpoints/
 ├── depth-anything/...
 ├── facebook/...
 ├── google-t5/...
-└── IDEA-Research/
+├── IDEA-Research/...
+└── meta-llama/...
 ```
 
 ## Run Example
