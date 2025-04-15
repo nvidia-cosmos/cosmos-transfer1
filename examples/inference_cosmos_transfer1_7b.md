@@ -31,6 +31,19 @@ Note that this will require about 300GB of free storage. Not all these checkpoin
 ```
 checkpoints/
 ├── nvidia
+│   │
+│   ├── Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0
+│   │   ├── README.md
+│   │   ├── adapter_config.json
+│   │   ├── adapter_model.safetensors
+│   │   └── models--nvidia--Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0/...
+│   │
+│   ├── Cosmos-Guardrail1
+│   │   ├── README.md
+│   │   ├── blocklist/...
+│   │   ├── face_blur_filter/...
+│   │   └── video_content_safety_filter/...
+│   │
 │   ├── Cosmos-Transfer1-7B
 │   │   ├── base_model.pt
 │   │   ├── vis_control.pt
@@ -38,12 +51,7 @@ checkpoints/
 │   │   ├── seg_control.pt
 │   │   ├── depth_control.pt
 │   │   ├── 4kupscaler_control.pt
-│   │   ├── config.json
-│   │   └── guardrail
-│   │       ├── aegis/
-│   │       ├── blocklist/
-│   │       ├── face_blur_filter/
-│   │       └── video_content_safety_filter/
+│   │   └── config.json
 │   │
 │   ├── Cosmos-Transfer1-7B-Sample-AV/
 │   │   ├── base_model.pt
@@ -75,7 +83,8 @@ checkpoints/
 ├── depth-anything/...
 ├── facebook/...
 ├── google-t5/...
-└── IDEA-Research/
+├── IDEA-Research/...
+└── meta-llama/...
 ```
 
 ## Sample Commands
@@ -305,7 +314,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/infe
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example2_uniform_weights \
     --controlnet_specs assets/inference_cosmos_transfer1_uniform_weights.json \
-    --offload_text_encoder_model  --batch_input_path path/to/batch_input_path.json 
+    --offload_text_encoder_model  --batch_input_path path/to/batch_input_path.json
 ```
 
 
