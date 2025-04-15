@@ -32,4 +32,4 @@ jobs:
       - name: 'Lint'
         run: |
           sudo apt-get update
-          bash ./cosmos_transfer1/scripts/format.sh
+          bash ./scripts/format.sh
