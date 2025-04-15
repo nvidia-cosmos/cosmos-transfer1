@@ -1,6 +1,6 @@
 {
     "hdmap": {
         "control_weight": 1,
-        "input_control": "examples/sample_av_multi_control/input_hdmap.mp4"
+        "input_control": "assets/sample_av_multi_control_input_hdmap.mp4"
     }
 }
