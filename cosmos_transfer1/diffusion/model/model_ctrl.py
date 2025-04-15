@@ -544,6 +544,21 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
         else:
             setattr(uncondition, hint_key, latent_hint)
 
+
+        to_cp = self.net.is_context_parallel_enabled
+        # For inference, check if parallel_state is initialized
+        if parallel_state.is_initialized():
+            condition = broadcast_condition(condition, to_tp=False, to_cp=to_cp)
+            uncondition = broadcast_condition(uncondition, to_tp=False, to_cp=to_cp)
+
+            cp_group = parallel_state.get_context_parallel_group()
+            latent_hint = getattr(condition, hint_key)
+            seq_dim = 3 if latent_hint.ndim == 6 else 2
+            latent_hint = split_inputs_cp(latent_hint, seq_dim=seq_dim, cp_group=cp_group)
+            setattr(condition, hint_key, latent_hint)
+            if getattr(uncondition, hint_key) is not None:
+                setattr(uncondition, hint_key, latent_hint)
+
         setattr(condition, "base_model", self.model.base_model)
         setattr(uncondition, "base_model", self.model.base_model)
         if hasattr(self, "hint_encoders"):
@@ -619,6 +634,12 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
                 * sigma_max
             )
 
+        if self.net.is_context_parallel_enabled:
+            x_sigma_max = broadcast(x_sigma_max, to_tp=False, to_cp=True)
+            x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
+
         samples = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
 
+        if self.net.is_context_parallel_enabled:
+            samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
         return samples
