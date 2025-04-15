@@ -25,14 +25,3 @@ repos:
     rev: v0.3.1
     hooks:
     -   id: absolufy-imports
-
-  # - repo: https://github.com/pre-commit/pre-commit-hooks
-  #   rev: v4.0.1
-  #   hooks:
-  #     - id: trailing-whitespace
-  #       exclude: ^tests/.*/fixtures/.*|cosmos1/models/diffusion/nemo/post_training/multicamera/.*
-  #       args: [--markdown-linebreak-ext=md]
-  #     - id: end-of-file-fixer
-  #       exclude: ^tests/.*/fixtures/.*|cosmos1/models/diffusion/nemo/post_training/multicamera/.*
-  #     - id: check-added-large-files
-  #       args: ['--maxkb=2000']
