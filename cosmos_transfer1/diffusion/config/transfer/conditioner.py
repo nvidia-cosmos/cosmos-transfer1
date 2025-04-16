@@ -27,8 +27,8 @@ from cosmos_transfer1.diffusion.datasets.augmentors.control_input import (
     AddControlInputDepth,
     AddControlInputEdge,
     AddControlInputHDMAP,
-    AddControlInputLIDAR,
     AddControlInputKeypoint,
+    AddControlInputLIDAR,
     AddControlInputSeg,
     AddControlInputUpscale,
 )

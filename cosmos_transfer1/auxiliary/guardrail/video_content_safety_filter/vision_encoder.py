@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+
 import torch
 from PIL import Image
 from transformers import SiglipModel, SiglipProcessor

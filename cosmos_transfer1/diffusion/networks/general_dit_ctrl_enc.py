@@ -234,9 +234,7 @@ class GeneralDITEncoder(GeneralDIT):
                 control_weight = [float(w) for w in control_weight]
             else:  # Spatial-temporal weight maps
                 if self.cp_group is not None:
-                    control_weight = split_inputs_cp(
-                        control_weight, seq_dim=3, cp_group=self.cp_group
-                    )
+                    control_weight = split_inputs_cp(control_weight, seq_dim=3, cp_group=self.cp_group)
                 control_weight = [w for w in control_weight]  # Keep as tensor
         else:
             control_weight = [control_weight] * len(guided_hints)

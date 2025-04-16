@@ -29,6 +29,7 @@ def check_packages(package_list):
         else:
             print(f"\033[92m[SUCCESS]\033[0m {package} found")
 
+
 if not (sys.version_info.major == 3 and sys.version_info.minor >= 10):
     detected = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     print(f"\033[91m[ERROR]\033[0m Python 3.10+ is required. You have: \033[93m{detected}\033[0m")
