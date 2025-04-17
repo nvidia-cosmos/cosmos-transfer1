@@ -25,8 +25,7 @@ SAM2_MODEL_CHECKPOINT = "facebook/sam2-hiera-large"
 DEPTH_ANYTHING_MODEL_CHECKPOINT = "depth-anything/Depth-Anything-V2-Small-hf"
 GROUNDING_DINO_MODEL_CHECKPOINT = "IDEA-Research/grounding-dino-tiny"
 T5_MODEL_CHECKPOINT = "google-t5/t5-11b"
-AEGIS_MODEL_CHECKPOINT = "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0"
-LLAMA_GUARD_MODEL_CHECKPOINT = "meta-llama/LlamaGuard-7b:3e764390d6b39028ddea5b20603c89476107b41e"
+LLAMA_GUARD_3_MODEL_CHECKPOINT = "meta-llama/Llama-Guard-3-8B"
 
 # Internal Checkpoint Paths, please append _PATH to the end of the variable
 BASE_7B_CHECKPOINT_PATH = f"{COSMOS_TRANSFER1_7B_CHECKPOINT}/base_model.pt"
