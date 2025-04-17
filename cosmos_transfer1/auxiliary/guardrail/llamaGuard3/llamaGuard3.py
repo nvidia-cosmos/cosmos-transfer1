@@ -52,14 +52,15 @@ class LlamaGuard3(ContentSafetyGuardrail):
             lines = moderation_output.splitlines()
             categories_detected = []
             for line in lines[1:]:
-                line_stripped = line.strip().split("<|eot_id|>")[0]
-                if line_stripped.startswith("S"):
-                    if line_stripped not in UNSAFE_CATEGORIES:
-                        log.warning(f"Unrecognized category from moderation output: {line_stripped}")
+                line_stripped = line.split("<|eot_id|>")[0].strip()
+                for catagory in line_stripped.split(','):
+                    catagory = catagory.strip()
+                    if catagory not in UNSAFE_CATEGORIES:
+                        log.warning(f"Unrecognized category from moderation output: {catagory}")
                     else:
-                        categories_detected.append(line_stripped)
+                        categories_detected.append(catagory)
             if len(categories_detected) > 0:
-                blocked_catagories = ", ".join([UNSAFE_CATEGORIES[cat][:-1] for cat in categories_detected])
+                blocked_catagories = ", ".join([UNSAFE_CATEGORIES[catagory][:-1] for catagory in categories_detected])
                 block_msg = f"{block_msg} Violations: {blocked_catagories}."
         except Exception as e:
             log.warning(f"Unable to extract blocked category from Llama Guard 3 output: {e}")
