@@ -27,6 +27,6 @@ class CtrlModelConfig(DefaultModelConfig):
     finetune_base_model: bool = False
     hint_mask: list = [True]
     hint_dropout_rate: float = 0.0
-    num_control_blocks: int = 5
+    num_control_blocks: int = 3
     random_drop_control_blocks: bool = False
     pixel_corruptor: LazyDict = None

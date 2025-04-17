@@ -32,6 +32,9 @@ import numpy as np
 import termcolor
 import torch
 
+from torch.distributed._functional_collectives import AsyncCollectiveTensor
+from torch.distributed._tensor.api import DTensor
+
 from cosmos_transfer1.utils import distributed, log
 
 
@@ -100,6 +103,18 @@ def to(
         return data
 
 
+def get_local_tensor_if_DTensor(tensor: torch.Tensor | DTensor) -> torch.tensor:
+    if isinstance(tensor, DTensor):
+        local = tensor.to_local()
+        # As per PyTorch documentation, if the communication is not finished yet, we need to wait for it to finish
+        # https://pytorch.org/docs/stable/distributed.tensor.html#torch.distributed.tensor.DTensor.to_local
+        if isinstance(local, AsyncCollectiveTensor):
+            return local.wait()
+        else:
+            return local
+    return tensor
+
+
 def serialize(data: Any) -> Any:
     """Serialize data by hierarchically traversing through iterables.
 
@@ -119,6 +134,18 @@ def serialize(data: Any) -> Any:
         except TypeError:
             data = str(data)
         return data
+
+def print_environ_variables(env_vars: list[str]) -> None:
+    """Print a specific list of environment variables.
+
+    Args:
+        env_vars (list[str]): List of specified environment variables.
+    """
+    for env_var in env_vars:
+        if env_var in os.environ:
+            log.info(f"Environment variable {Color.green(env_var)}: {Color.yellow(os.environ[env_var])}")
+        else:
+            log.warning(f"Environment variable {Color.green(env_var)} not set!")
 
 
 def set_random_seed(seed: int, by_rank: bool = False) -> None:
@@ -207,6 +234,68 @@ class timer(ContextDecorator):  # noqa: N801
             return result
 
         return wrapper  # type: ignore
+
+
+class TrainingTimer:
+    """Timer for timing the execution of code, aggregating over multiple training iterations.
+
+    It is used as a context manager to measure the execution time of code and store the timing results
+    for each function. The context managers can be nested.
+
+    Attributes:
+        results (dict): A dictionary to store timing results for various code.
+
+    Example:
+        timer = Timer()
+        for i in range(100):
+            with timer("func_a"):
+                func_a()
+        avg_time = sum(timer.results["func_a"]) / len(timer.results["func_a"])
+        print(f"func_a() took {avg_time} seconds.")
+    """
+
+    def __init__(self) -> None:
+        self.results = dict()
+        self.average_results = dict()
+        self.start_time = []
+        self.func_stack = []
+        self.reset()
+
+    def reset(self) -> None:
+        self.results = {key: [] for key in self.results}
+
+    def __enter__(self) -> TrainingTimer:
+        self.start_time.append(time.time())
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:  # noqa: ANN001
+        end_time = time.time()
+        result = end_time - self.start_time.pop()
+        key = self.func_stack.pop()
+        self.results.setdefault(key, [])
+        self.results[key].append(result)
+
+    def __call__(self, func_name: str) -> TrainingTimer:
+        self.func_stack.append(func_name)
+        return self
+
+    def __getattr__(self, func_name: str) -> TrainingTimer:
+        return self.__call__(func_name)
+
+    def nested(self, func_name: str) -> TrainingTimer:
+        return self.__call__(func_name)
+
+    def compute_average_results(self) -> dict[str, float]:
+        results = dict()
+        for key, value_list in self.results.items():
+            results[key] = sum(value_list) / len(value_list)
+        return results
+
+
+def timeout_handler(timeout_period: float, signum: int, frame: int) -> None:
+    # What to do when the process gets stuck. For now, we simply end the process.
+    error_message = f"Timeout error: more than {timeout_period} seconds passed since the last iteration."
+    raise TimeoutError(error_message)
 
 
 class Color:

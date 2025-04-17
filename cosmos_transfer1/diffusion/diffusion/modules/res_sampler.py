@@ -30,7 +30,7 @@ import torch
 
 from cosmos_transfer1.diffusion.diffusion.functional.multi_step import get_multi_step_fn, is_multi_step_fn_supported
 from cosmos_transfer1.diffusion.diffusion.functional.runge_kutta import get_runge_kutta_fn, is_runge_kutta_fn_supported
-from cosmos_transfer1.utils.config import make_freezable
+from cosmos_transfer1.utils.ddp_config import make_freezable
 
 COMMON_SOLVER_OPTIONS = Literal["2ab", "2mid", "1euler"]
 

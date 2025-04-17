@@ -76,6 +76,20 @@ def get_machine_format() -> str:
     return machine_format
 
 
+def init_loguru_file(path: str) -> None:
+    machine_format = get_machine_format()
+    message_format = get_message_format()
+    logger.add(
+        path,
+        encoding="utf8",
+        level=LEVEL,
+        format="[<green>{time:MM-DD HH:mm:ss}</green>|" f"{machine_format}" f"{message_format}",
+        rotation="100 MB",
+        filter=lambda result: _rank0_only_filter(result) or not RANK0_ONLY,
+        enqueue=True,
+    )
+
+
 def get_message_format() -> str:
     message_format = "<level>{level}</level>|<cyan>{extra[relative_path]}:{line}:{function}</cyan>] {message}"
     return message_format

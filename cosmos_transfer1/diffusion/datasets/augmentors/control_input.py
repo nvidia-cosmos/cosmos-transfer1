@@ -20,7 +20,7 @@ from typing import Any, Optional
 import cv2
 import matplotlib.colors as mcolors
 import numpy as np
-import pycocotools
+import pycocotools.mask
 import torch
 import torchvision.transforms.functional as transforms_F
 
@@ -32,6 +32,11 @@ from cosmos_transfer1.diffusion.config.transfer.blurs import (
     GuidedFilterConfig,
     LaplacianOfGaussianConfig,
     MedianBlurConfig,
+)
+from cosmos_transfer1.diffusion.datasets.augmentors.human_keypoint_utils import (
+    convert_coco_to_openpose,
+    openpose134_skeleton,
+    coco_wholebody_133_skeleton,
 )
 from cosmos_transfer1.diffusion.datasets.augmentors.guided_filter import FastGuidedFilter
 from cosmos_transfer1.utils import log
@@ -66,8 +71,6 @@ VIDEO_RES_SIZE_INFO: dict[str, tuple[int, int]] = {
         "16,9": (1920, 1056),
         "9,16": (1056, 1920),
     },
-    # 1024; the video format does not support it, but here we match it with image resolution
-    "1024": {"1,1": (1024, 1024), "4,3": (1280, 1024), "3,4": (1024, 1280), "16,9": (1280, 768), "9,16": (768, 1280)},
     "720": {"1,1": (960, 960), "4,3": (960, 704), "3,4": (704, 960), "16,9": (1280, 704), "9,16": (704, 1280)},
     "512": {"1,1": (512, 512), "4,3": (640, 512), "3,4": (512, 640), "16,9": (640, 384), "9,16": (384, 640)},
     "480": {"1,1": (480, 480), "4,3": (640, 480), "3,4": (480, 640), "16,9": (768, 432), "9,16": (432, 768)},
@@ -704,7 +707,7 @@ class AddControlInputDepth(Augmentor):
             data_dict[self.output_keys[0]] = torch.from_numpy(np.zeros((3, h, w)).astype(np.uint8))
             return data_dict
 
-        assert data_dict["chunk_index"] == data_dict["depth"]["chunk_index"]
+        # assert data_dict["chunk_index"] == data_dict["depth"]["chunk_index"]
         key_out = self.output_keys[0]
         depth = data_dict["depth"]["video"]
         data_dict[key_out] = depth
@@ -1045,6 +1048,197 @@ class AddControlInputKeypoint(Augmentor):
         self.hand_as_separate_channel = args.get("hand_as_separate_channel", False)
         self.kpt_thr = args.get("kpt_thr", 0.6)
         self.line_width = args.get("human_kpt_line_width", 4)
+    
+    def denormalize_pose_kpts(self, pose_kps: np.ndarray, h: int, w: int):
+        """
+        pose_kps has shape = (#keypoints, 2)
+            or (#keypoints, 3) where the last dim is the confidence score.
+        """
+        if pose_kps is not None:
+            assert pose_kps.shape[-1] == 3, "pose_kps must have shape (#keypoints, 3)"
+            out = pose_kps * np.array([w, h, 1])
+            return out
+        else:
+            return None
+
+    def draw_skeleton(
+        self,
+        img: np.ndarray,
+        keypoints: np.ndarray,
+        scores: np.ndarray,
+        kpt_thr: float = 0.6,
+        openpose_format: bool = False,
+        radius: int = 2,
+        line_width: int = 4,
+    ):
+        skeleton_topology = openpose134_skeleton if openpose_format else coco_wholebody_133_skeleton
+        assert len(keypoints.shape) == 2
+        keypoint_info, skeleton_info = (
+            skeleton_topology["keypoint_info"],
+            skeleton_topology["skeleton_info"],
+        )
+        vis_kpt = [s >= kpt_thr for s in scores]
+
+        if self.hand_as_separate_channel:
+            img_hand = np.zeros_like(img)
+            hand_idx_start = 92 if openpose_format else 91  # all idx after this are hand keypoints
+
+        link_dict = {}
+        for i, kpt_info in keypoint_info.items():
+            kpt_color = tuple(kpt_info["color"])
+            link_dict[kpt_info["name"]] = kpt_info["id"]
+
+            kpt = keypoints[i]
+
+            if vis_kpt[i]:
+                img = cv2.circle(img, (int(kpt[0]), int(kpt[1])), int(radius), kpt_color, -1)
+
+                if self.hand_as_separate_channel:
+                    if i >= hand_idx_start:
+                        img_hand = cv2.circle(img_hand, (int(kpt[0]), int(kpt[1])), int(radius), kpt_color, -1)
+
+        for i, ske_info in skeleton_info.items():
+            link = ske_info["link"]
+            pt0, pt1 = link_dict[link[0]], link_dict[link[1]]
+
+            if vis_kpt[pt0] and vis_kpt[pt1]:
+                link_color = ske_info["color"]
+                kpt0 = keypoints[pt0]
+                kpt1 = keypoints[pt1]
+
+                img = cv2.line(
+                    img, (int(kpt0[0]), int(kpt0[1])), (int(kpt1[0]), int(kpt1[1])), link_color, thickness=line_width
+                )
+
+                if self.hand_as_separate_channel:
+                    if pt0 >= hand_idx_start and pt1 >= hand_idx_start:
+                        img_hand = cv2.line(
+                            img_hand,
+                            (int(kpt0[0]), int(kpt0[1])),
+                            (int(kpt1[0]), int(kpt1[1])),
+                            link_color,
+                            thickness=line_width,
+                        )
+
+        if self.hand_as_separate_channel:
+            img = np.concatenate([img, img_hand], axis=-1)  # [h,w,6]
+        return img
+
+    def plot_person_kpts(
+        self,
+        person_dict: dict,
+        pose_vis_img: np.ndarray,
+        h: int,
+        w: int,
+        kpt_thr: float = 0.6,
+        openpose_format: bool = True,
+        line_width: int = 4,
+    ) -> np.ndarray:
+        """
+        plot a single person
+        in-place update the pose image
+        """
+        try:
+            body_keypoints = self.denormalize_pose_kpts(person_dict.get("body-keypoints"), h, w)
+            hand_keypoints = self.denormalize_pose_kpts(person_dict.get("hand-keypoints"), h, w)
+        except Exception as e:
+            log.error(f"Error in denormalizing keypoints: {e}")
+
+        assert (
+            body_keypoints is not None and hand_keypoints is not None
+        ), "Both body and hand keypoints must be present."
+        # all_keypoints: shape=(133, 3). following coco-fullbody skeleton config. 3 channels are x, y, confidence
+        all_keypoints = np.vstack([body_keypoints, hand_keypoints])
+        kpts, scores = all_keypoints[..., :2], all_keypoints[..., -1]
+        if openpose_format:
+            kpts, scores = convert_coco_to_openpose(kpts, scores)
+
+        try:
+            # [h,w,3] or # [h,w,6] if hand_as_separate_channel
+            pose_vis_img = self.draw_skeleton(
+                pose_vis_img, kpts, scores, kpt_thr=kpt_thr, openpose_format=openpose_format, line_width=line_width
+            )
+        except ValueError as e:
+            log.error(f"Error in draw_skeleton func, {e}")
+
+        return pose_vis_img
+
+    def plot_kpt_video(
+        self,
+        kpts_np_dict: dict,
+        h: int,
+        w: int,
+        kpt_thr: float = 0.6,
+        openpose_format: bool = True,
+        line_width: int = 4,
+    ) -> np.ndarray:
+        """
+        Plots a single *frame* for all persons in the frame.
+
+        The raw human keypoint annotation are numpy arrays of pixel coordinates of the joints.
+        This function plots the keypoints on a black background to form a 3-channel image compatible with controlnet.
+
+        Args:
+            kpts_np_dict (dict): A dict of keypoint annotations. Each value is a frame's annotation (a list of per-person dict).
+            H (int): height of the image
+            W (int): width of the image
+            openpose_format (bool): whether the convert the coco-wholebody133 keypoints keypoints to openpose format and also
+                plot in the openpose format (basically add neck keypoint, remove toe keypoints).
+        Returns:
+            np.ndarray: keypoints of plotted on black background, shape = (C, T, H, W) C=3, or 6 if hand_as_separate_channel
+        """
+        T = len(kpts_np_dict)
+
+        out = np.empty((3, T, h, w), dtype=np.uint8)  # memory save op
+
+        for idx, (t, kpts_np_frame) in enumerate(kpts_np_dict.items()):
+            pose_vis_img = np.zeros([h, w, 3])
+
+            # add each person's keypoints to this frame's pose image
+            for person_dict in kpts_np_frame:
+                self.plot_person_kpts(
+                    person_dict,
+                    pose_vis_img,
+                    h,
+                    w,
+                    kpt_thr=kpt_thr,
+                    openpose_format=openpose_format,
+                    line_width=line_width,
+                )  # (h, w, 3)
+
+            out[:, idx, :, :] = pose_vis_img.astype(np.uint8).transpose(2, 0, 1)
+
+        return out
+
+    def get_kpts_from_annotations(self, annotation_dict: dict, total_frames: int, frame_indices: list) -> dict:
+        """
+        For legacy data the annotations are done for chunks of every N frames (N=4).
+        This function repeats each chunk's first frame annotation to the rest frames
+        so that they become 'per-frame' and are ControlNet compatible.
+
+        If the data is already per-frame annotated, then no need to call this.
+        Args:
+            annotation_dict (dict): Original annotations annotated every chunk_size frames.
+                                    Each value is a list of dicts, where each dict has many
+                                    human attributes. Here we only keep keypoint-relevant keys.
+            total_frames (int): Total number of frames in the video.
+            frame_indices (list[int]): Indices of the video frames sampled from the the original video.
+
+        Returns:
+            dict: extended annotations for all frames.
+        """
+        annotated_frame_idxs = sorted(list(annotation_dict.keys()))
+        chunk_size = annotated_frame_idxs[1] - annotated_frame_idxs[0]
+        assert chunk_size == 1, "Only support videos that have human annotations for every frame"
+
+        # each person's dict can contain many irrelevant annotations (e.g. seg masks), here we only keep pose kpts
+        annotation_dict_simpler = {
+            key: [{k: v for k, v in sub_dict.items() if k in self.control_key_names} for sub_dict in sub_list]
+            for key, sub_list in annotation_dict.items()
+        }
+        annotation_dict_simpler = {idx: annotation_dict_simpler[idx] for idx in frame_indices}
+
+        return annotation_dict_simpler
 
     def __call__(self, data_dict: dict) -> dict:
         """
@@ -1067,12 +1261,54 @@ class AddControlInputKeypoint(Augmentor):
         }
         Note that for the same person, their idx in the per-frame list isn't guaranteed to be consistent.
         """
-        if "control_input_keypoint" in data_dict:
+        if "control_input_human_kpts" in data_dict:
             # already processed
             log.info(
-                f"control_input_keypoint already processed, shape={data_dict['control_input_keypoint'].shape}, dtype={data_dict['control_input_keypoint'].dtype}, value range: {data_dict['control_input_keypoint'].min()}, {data_dict['control_input_keypoint'].max()}"
+                f"control_input_human_kpts already processed, shape={data_dict['control_input_human_kpts'].shape}, dtype={data_dict['control_input_human_kpts'].dtype}, value range: {data_dict['control_input_human_kpts'].min()}, {data_dict['control_input_human_kpts'].max()}"
             )
             return data_dict
+
+        human_annotations = data_dict.pop("keypoint")
+        frames = data_dict["video"]
+        _, T, H, W = frames.shape
+
+        # the frames here are a randomly sampled (e.g. 121-frame) chunk from the original video
+        # so we need to accordingly only use the human annotations of the sampled frames.
+        frame_start = data_dict["frame_start"]
+        frame_end = data_dict["frame_end"]
+        frame_indices = np.arange(frame_start, frame_end).tolist()
+        assert (
+            len(frame_indices) == T
+        ), f"frame_indices length {len(frame_indices)} != T {T}, likely due to video decoder using different fps, i.e. sample with stride. Need to return frame indices from video decoder."
+
+        try:
+            # same dict format as `human_annotations` but now every frame has an annotation
+            kpts_nparray_dict = self.get_kpts_from_annotations(human_annotations, T, frame_indices)
+        except ValueError as e:
+            log.error(f"Error in loading kpts from annotated data: {e}")
+            kpts_nparray_dict = {}
+            raise e
+
+        try:
+            # Colored human keypoints plotted on black background. All persons in the same frame are plotted together.
+            # np.array of shape: [C, T, H, W].
+            kpts_cond_video = self.plot_kpt_video(
+                kpts_nparray_dict,
+                H,
+                W,
+                kpt_thr=self.kpt_thr,
+                openpose_format=self.use_openpose_format,
+                line_width=self.line_width,
+            )
+        except ValueError as e:
+            log.error(f"Error in plot_kpt_video: {e}")
+            kpts_cond_video = np.zeros_like(frames)
+
+        key_out = self.output_keys[0]
+
+        data_dict[key_out] = torch.from_numpy(kpts_cond_video)
+        return data_dict
+
 
 class AddControlInputUpscale(Augmentor):
     """

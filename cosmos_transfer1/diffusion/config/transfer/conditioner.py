@@ -57,6 +57,21 @@ CTRL_HINT_KEYS_COMB = {
     "control_input_lidar": [AddControlInputLIDAR],
 }
 
+# SS=self-supervised
+SS_CTRL_HINT_KEYS = [
+    "control_input_canny",
+    "control_input_canny_blur",
+    "control_input_blur",
+    "control_input_upscale",
+]
+
+# for data loading. Defining corresponding sub-folders in the data folder
+CTRL_AUG_KEYS = {
+    "depth": "depth",
+    "seg": "segmentation",
+    "keypoint": "keypoint",
+}
+
 
 BaseVideoConditionerWithCtrlConfig: LazyDict = L(VideoConditionerWithCtrl)(
     text=TextConfig(),
