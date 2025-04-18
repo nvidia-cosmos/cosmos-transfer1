@@ -635,7 +635,6 @@ class AddControlInputComb(Augmentor):
             all_comb.append(data_dict.pop(k))
             if all_comb[-1].dim() == 4:
                 all_comb[-1] = all_comb[-1].squeeze(1)
-        
         all_comb = torch.cat(all_comb, dim=0)
         data_dict[self.output_keys[0]] = all_comb
         return data_dict
