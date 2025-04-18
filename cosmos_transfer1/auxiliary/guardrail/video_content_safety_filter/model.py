@@ -17,7 +17,7 @@ import attrs
 import torch
 import torch.nn as nn
 
-from cosmos_transfer1.utils.config import make_freezable
+from cosmos_transfer1.utils.ddp_config import make_freezable
 
 
 @make_freezable

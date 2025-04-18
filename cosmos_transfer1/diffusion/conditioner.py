@@ -116,6 +116,7 @@ class BaseVideoCondition:
     num_frames: Optional[torch.Tensor] = None
     image_size: Optional[torch.Tensor] = None
     scalar_feature: Optional[torch.Tensor] = None
+    frame_repeat: Optional[torch.Tensor] = None
 
     def to_dict(self) -> Dict[str, Optional[torch.Tensor]]:
         return {f.name: getattr(self, f.name) for f in fields(self)}
@@ -132,6 +133,8 @@ class VideoExtendCondition(BaseVideoCondition):
     condition_video_input_mask: Optional[torch.Tensor] = None
     # condition_video_augment_sigma: (B, T) tensor of sigma value for the conditional input augmentation, only valid when apply_corruption_to_condition_region is "noise_with_sigma" or "noise_with_sigma_fixed"
     condition_video_augment_sigma: Optional[torch.Tensor] = None
+    # pose conditional input, will be concat with the input tensor
+    condition_video_pose: Optional[torch.Tensor] = None
 
 
 class GeneralConditioner(nn.Module, ABC):
@@ -337,6 +340,7 @@ class BaseWithCtrlCondition(VideoExtendCondition):
     base_model: Optional[torch.nn.Module] = None
     hint_key: Optional[str] = None
     control_weight: Optional[float] = 1.0
+    num_layers_to_use: Optional[int] = -1
 
 
 class VideoConditionerWithCtrl(VideoExtendConditioner):
@@ -349,4 +353,6 @@ class VideoConditionerWithCtrl(VideoExtendConditioner):
         output["hint_key"] = batch["hint_key"]
         if "control_weight" in batch:
             output["control_weight"] = batch["control_weight"]
+        if "num_layers_to_use" in batch:
+            output["num_layers_to_use"] = batch["num_layers_to_use"]
         return BaseWithCtrlCondition(**output)

@@ -68,6 +68,17 @@ VIDEO_RES_SIZE_INFO = {
     "9,16": (704, 1280),
 }
 
+# Default model names for each control type
+default_model_names = {
+    "vis": VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    "seg": SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    "edge": EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    "depth": DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    "keypoint": KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    "upscale": UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
+    "hdmap": HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    "lidar": LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+}
 
 class _IncompatibleKeys(
     NamedTuple(
@@ -939,17 +950,6 @@ def validate_controlnet_specs(cfg, controlnet_specs) -> Dict[str, Any]:
     checkpoint_dir = cfg.checkpoint_dir
     sigma_max = cfg.sigma_max
     input_video_path = cfg.input_video_path
-
-    default_model_names = {
-        "vis": VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-        "seg": SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-        "edge": EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-        "depth": DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-        "keypoint": KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-        "upscale": UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
-        "hdmap": HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-        "lidar": LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    }
 
     for hint_key, config in controlnet_specs.items():
         if hint_key not in valid_hint_keys:
