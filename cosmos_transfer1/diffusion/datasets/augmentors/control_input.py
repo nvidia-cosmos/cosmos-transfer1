@@ -636,27 +636,6 @@ class AddControlInputComb(Augmentor):
             if all_comb[-1].dim() == 4:
                 all_comb[-1] = all_comb[-1].squeeze(1)
         
-        # Ensure all tensors have the same dimensions
-        if len(all_comb) > 1:
-            # Use the dimensions of the first tensor as the target size
-            target_height, target_width = all_comb[0].shape[-2], all_comb[0].shape[-1]
-            
-            # Resize all tensors to match the target dimensions
-            for i in range(1, len(all_comb)):
-                if all_comb[i].shape[-2] != target_height or all_comb[i].shape[-1] != target_width:
-                    # Get the current tensor's dimensions
-                    c, t, h, w = all_comb[i].shape
-                    
-                    # Resize to match the target dimensions
-                    all_comb[i] = torch.nn.functional.interpolate(
-                        all_comb[i].float(), 
-                        size=(target_height, target_width), 
-                        mode='bilinear', 
-                        align_corners=False
-                    ).to(all_comb[i].dtype)
-                    
-                    log.info(f"Resized control input from {h}x{w} to {target_height}x{target_width}")
-        
         all_comb = torch.cat(all_comb, dim=0)
         data_dict[self.output_keys[0]] = all_comb
         return data_dict
