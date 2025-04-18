@@ -92,12 +92,15 @@ checkpoints/
 Here's an example command:
 
 ```bash
-export CUDA_VISIBLE_DEVICES=0
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
+export NUM_GPU="${NUM_GPU:=1}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir checkpoints \
     --input_video_path path/to/input_video.mp4 \
     --video_save_name output_video \
-    --controlnet_specs spec.json
+    --controlnet_specs spec.json \
+    --offload_guardrail_models \
+    --num_gpus $NUM_GPU
 ```
 
 Cosmos-Transfer1 supports a variety of configurations. You can pass your configuration in a JSON file via the argument `--controlnet_specs`. Let's go over a few examples:
@@ -107,13 +110,16 @@ Cosmos-Transfer1 supports a variety of configurations. You can pass your configu
 The following `controlnet_specs` only activates the edge controlnet.
 
 ```bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+export NUM_GPU="${NUM_GPU:=1}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example1_single_control_edge \
     --controlnet_specs assets/inference_cosmos_transfer1_single_control_edge.json \
-    --offload_text_encoder_model
+    --offload_text_encoder_model \
+    --offload_guardrail_models \
+    --num_gpus $NUM_GPU
 ```
 
 You can also choose to run the inference on multiple GPUs as follows:
@@ -127,6 +133,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --n
     --video_save_folder outputs/example1_single_control_edge \
     --controlnet_specs assets/inference_cosmos_transfer1_single_control_edge.json \
     --offload_text_encoder_model \
+    --offload_guardrail_models \
     --num_gpus $NUM_GPU
 ```
 
@@ -159,15 +166,18 @@ You can use our prompt upsampler to convert your short prompt into a longer, mor
 
 
 ```bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+export NUM_GPU="${NUM_GPU:=1}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0  cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example1_single_control_edge_upsampled_prompt \
     --controlnet_specs assets/inference_cosmos_transfer1_single_control_edge_short_prompt.json \
     --offload_text_encoder_model \
     --upsample_prompt \
-    --offload_prompt_upsampler
+    --offload_prompt_upsampler \
+    --offload_guardrail_models \
+    --num_gpus $NUM_GPU
 ```
 
 
@@ -187,13 +197,16 @@ Here is the generated video using the upsampled prompt.
 The following `controlnet_specs` activates vis, edge, depth, seg controls at the same time and apply uniform spatial weights.
 
 ```bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+export NUM_GPU="${NUM_GPU:=1}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example2_uniform_weights \
     --controlnet_specs assets/inference_cosmos_transfer1_uniform_weights.json \
-    --offload_text_encoder_model
+    --offload_text_encoder_model \
+    --offload_guardrail_models \
+    --num_gpus $NUM_GPU
 ```
 
 This launches `transfer.py` and configures the controlnets for inference according to `assets/inference_cosmos_transfer1_uniform_weights.json`:
@@ -246,13 +259,16 @@ The output video can be found at `assets/example1_uniform_weights.mp4`.
 The following `controlnet_specs` activates vis, edge, depth, seg controls at the same time and apply spatiotemporal weights.
 
 ```bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+export NUM_GPU="${NUM_GPU:=1}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example3_spatiotemporal_weights \
     --controlnet_specs assets/inference_cosmos_transfer1_spatiotemporal_weights_auto.json \
-    --offload_text_encoder_model
+    --offload_text_encoder_model \
+    --offload_guardrail_models \
+    --num_gpus $NUM_GPU
 ```
 
 This launches `transfer.py` and configures the controlnets for inference according to `assets/inference_cosmos_transfer1_spatiotemporal_weights_auto.json`:
@@ -308,13 +324,16 @@ Each line in the JSONL file must contain a `visual_input` field equivalent to th
 ```
 Inference command (with 9 input frames):
 ```bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+export NUM_GPU="${NUM_GPU:=1}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example2_uniform_weights \
     --controlnet_specs assets/inference_cosmos_transfer1_uniform_weights.json \
-    --offload_text_encoder_model  --batch_input_path path/to/batch_input_path.json
+    --offload_text_encoder_model \
+    --batch_input_path path/to/batch_input_path.json \
+    --num_gpus $NUM_GPU
 ```
 
 
