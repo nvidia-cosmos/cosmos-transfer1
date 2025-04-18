@@ -528,10 +528,10 @@ if __name__ == "__main__":
                         choices=WeightSettings.list_settings(),
                         help='Weight setting to use (default: setting1)')
     parser.add_argument('--input-dir', type=str, 
-                        default='/project/cosmos/yunhaog/code/github/cosmos-transfer1/cosmos-transfer1/assets/robot_augmentation_example',
+                        default='assets/robot_augmentation_example',
                         help='Input directory containing example folders')
     parser.add_argument('--output-dir', type=str,
-                        default='/project/cosmos/yunhaog/code/github/cosmos-transfer1/cosmos-transfer1/outputs/robot_augmentation_example',
+                        default='outputs/robot_augmentation_example',
                         help='Output directory for weight matrices')
     parser.add_argument('--robot-keywords', type=str, nargs='+',
                         default=["world_robot", "gripper", "robot"],
