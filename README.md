@@ -85,5 +85,3 @@ This project will download and install additional third-party open source softwa
 NVIDIA Cosmos source code is released under the [Apache 2 License](https://www.apache.org/licenses/LICENSE-2.0).
 
 NVIDIA Cosmos models are released under the [NVIDIA Open Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license). For a custom license, please contact [cosmos-license@nvidia.com](mailto:cosmos-license@nvidia.com).
-
-For video transformation with depth-based control, see our [Depth control example in the inference guide](examples/inference_cosmos_transfer1_7b.md#example-single-control-depth).
