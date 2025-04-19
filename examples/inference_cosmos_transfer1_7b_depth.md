@@ -1,6 +1,6 @@
 # Transfer Inference Example: Single Control (Depth)
 
-Here is another simple example of using the Depth control. Many steps are similar to the [Edge example](/examples/inference_cosmos_transfer1_7b.md#example-single-control-edge). The main difference is to use `assets/inference_cosmos_transfer1_single_control_depth.json` as the `--controlnet_specs`:
+Here is another simple example of using the Depth control. Many steps are similar to the [Edge example](/examples/inference_cosmos_transfer1_7b.md#example-1-single-control-edge). The main difference is to use `assets/inference_cosmos_transfer1_single_control_depth.json` as the `--controlnet_specs`:
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0
@@ -11,7 +11,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/infe
     --controlnet_specs assets/inference_cosmos_transfer1_single_control_depth.json \
     --offload_text_encoder_model
 ```
-Same as the [Edge example](/examples/inference_cosmos_transfer1_7b.md#example-single-control-edge), the input video is a low-resolution 640 × 480 video.
+Same as the [Edge example](/examples/inference_cosmos_transfer1_7b.md#example-1-single-control-edge), the input video is a low-resolution 640 × 480 video.
 
 <video src="https://github.com/user-attachments/assets/e63b9e9c-fee1-4105-a480-bb525bde1115">
   Your browser does not support the video tag.
