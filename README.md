@@ -45,7 +45,7 @@ Please refer to [INSTALL.md](INSTALL.md) for general instructions on environment
 * [Inference with pre-trained Cosmos-Transfer1-7B](/examples/inference_cosmos_transfer1_7b.md) **[with multi-GPU support]**
 * [Inference with pre-trained Cosmos-Transfer1-7B-Sample-AV](/examples/inference_cosmos_transfer1_7b_sample_av.md) **[with multi-GPU support]**
 * [Inference with pre-trained Cosmos-Transfer1-7B-4KUpscaler](/examples/inference_cosmos_transfer1_7b_4kupscaler.md) **[with multi-GPU support]**
-* Inference with pre-trained Cosmos-Transfer1-7B [Depth]: Coming soon
+* [Inference with pre-trained Cosmos-Transfer1-7B [Depth]](examples/inference_cosmos_transfer1_7b_depth.md)
 * Inference with pre-trained Cosmos-Transfer1-7B [Segmentation]: Coming soon
 * Inference with pre-trained Cosmos-Transfer1-7B [Edge]: Coming soon
 * Inference with pre-trained Cosmos-Transfer1-7B [Vis]: Coming soon
