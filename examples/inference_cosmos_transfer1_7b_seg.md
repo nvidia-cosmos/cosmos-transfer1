@@ -1,6 +1,6 @@
 # Transfer Inference Example: Single Control (Segmentation)
 
-Here is another simple example of using the Segmentation control. Many steps are similar to the [Edge example](/examples/inference_cosmos_transfer1_7b.md#example-1-single-control-edge). The main difference is to use `assets/inference_cosmos_transfer1_single_control_depth.json` as the `--controlnet_specs`:
+Here is another simple example of using the Segmentation control. Many steps are similar to the [Edge example](/examples/inference_cosmos_transfer1_7b.md#example-1-single-control-edge). The main difference is to use `assets/inference_cosmos_transfer1_single_control_seg.json` as the `--controlnet_specs`:
 
 ```bash
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
