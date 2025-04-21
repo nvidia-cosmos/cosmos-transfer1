@@ -19,7 +19,7 @@ Cosmos-Transfer1 includes the following:
 - **Pre-training scripts** for helping Physical AI builders train their own Cosmos-Transfer1 models from scratch.
 
 ## News
-- [2025/03] [Post training](README.md#post-train-pre-trained-cosmos-transfer1-models) is available! Now you can customize Transfer1 models in your own way. Please try it out and we look forward to your feedback.
+- [2025/04] [Post training](README.md#post-train-pre-trained-cosmos-transfer1-models) is available! Now you can customize Transfer1 models in your own way. Please try it out and we look forward to your feedback.
 
 ## Example Model Behavior
 
