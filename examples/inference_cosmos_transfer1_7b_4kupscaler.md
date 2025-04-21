@@ -79,14 +79,16 @@ For a general overview of how to use the model see [this guide](/examples/infere
 Ensure you are at the root of the repository before executing the following:
 
 ```bash
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+export NUM_GPU="${NUM_GPU:=1}"
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/inference_upscaler \
     --controlnet_specs assets/inference_upscaler.json \
     --num_steps 10 \
-    --offload_text_encoder_model
+    --offload_text_encoder_model \
+    --num_gpus $NUM_GPU
 ```
 
 You can also choose to run the inference on multiple GPUs as follows:
