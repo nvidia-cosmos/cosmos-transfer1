@@ -18,7 +18,9 @@ huggingface-cli login
 
 3. Accept the [LlamaGuard-7b terms](https://huggingface.co/meta-llama/LlamaGuard-7b)
 
-4. Download the Cosmos model weights from [Hugging Face](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e):
+4. Accept terms and get access to [Cosmos-Guardrai1](https://huggingface.co/nvidia/Cosmos-Guardrail1)
+
+5. Download the Cosmos model weights from [Hugging Face](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e):
 
 ```bash
 CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
@@ -26,7 +28,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/download_checkpoints.py
 
 Note that this will require about 300GB of free storage. Not all these checkpoints will be used in every generation.
 
-5. The downloaded files should be in the following structure:
+6. The downloaded files should be in the following structure:
 
 ```
 checkpoints/
