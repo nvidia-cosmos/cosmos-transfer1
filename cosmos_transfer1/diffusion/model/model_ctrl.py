@@ -13,14 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Dict, Literal, Optional, Tuple, TypeVar, Union
+from typing import Callable, Dict, Optional, Tuple, TypeVar, Union
 
 import torch
 from einops import rearrange
 from megatron.core import parallel_state
 from torch import Tensor
 
-from cosmos_transfer1.diffusion.conditioner import CosmosCondition, VideoConditionerWithCtrl
+from cosmos_transfer1.diffusion.conditioner import VideoConditionerWithCtrl
 from cosmos_transfer1.diffusion.inference.inference_utils import merge_patches_into_video, split_video_into_patches
 from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel, broadcast_condition
 from cosmos_transfer1.diffusion.model.model_v2w import DiffusionV2WModel
@@ -30,7 +30,6 @@ from cosmos_transfer1.utils.lazy_config import instantiate as lazy_instantiate
 
 T = TypeVar("T")
 IS_PREPROCESSED_KEY = "is_preprocessed"
-COMMON_SOLVER_OPTIONS = Literal["2ab", "2mid", "1euler"]
 
 
 class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
@@ -163,34 +162,6 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             latent.append(self.encode(x_rgb))
         latent = torch.cat(latent, dim=1)
         return latent
-
-    def compute_loss_with_epsilon_and_sigma(
-        self,
-        data_batch: dict[str, Tensor],
-        x0_from_data_batch: Tensor,
-        x0: Tensor,
-        condition: CosmosCondition,
-        epsilon: Tensor,
-        sigma: Tensor,
-    ):
-        if self.is_image_batch(data_batch):
-            # Turn off CP
-            self.net.disable_context_parallel()
-            self.base_net.disable_context_parallel()
-        else:
-            if parallel_state.get_context_parallel_world_size() > 1:
-                # Turn on CP
-                cp_group = parallel_state.get_context_parallel_group()
-                self.net.enable_context_parallel(cp_group)
-                self.base_net.enable_context_parallel(cp_group)
-                log.debug("[CP] Split hint_input")
-                hint_key = self.config.hint_key["hint_key"]
-                x_hint_raw = getattr(condition, hint_key)
-                x_hint = split_inputs_cp(x=x_hint_raw, seq_dim=2, cp_group=self.net.cp_group)
-                setattr(condition, hint_key, x_hint)
-        return super().compute_loss_with_epsilon_and_sigma(
-            data_batch, x0_from_data_batch, x0, condition, epsilon, sigma
-        )
 
     def get_x0_fn_from_batch(
         self,
@@ -399,257 +370,6 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
 
         return samples
-
-    def get_patch_based_x0_fn(
-        self,
-        data_batch: Dict,
-        guidance: float = 1.5,
-        is_negative_prompt: bool = False,
-        condition_latent: torch.Tensor = None,
-        num_condition_t: Union[int, None] = None,
-        condition_video_augment_sigma_in_inference: float = None,
-        target_h: int = 2112,
-        target_w: int = 3840,
-        patch_h: int = 704,
-        patch_w: int = 1280,
-        seed_inference: int = 1,
-    ) -> Callable:
-        """
-        Generates a callable function `x0_fn` based on the provided data batch and guidance factor.
-        The function will split the input into patches, run inference on each patch, then stitch them together.
-
-        Additional args to original function:
-            target_h (int): final stitched video height
-            target_w (int): final stitched video width
-            patch_h (int): video patch height for each network inference
-            patch_w (int): video patch width for each network inference
-
-        Returns:
-        - Callable: A function `x0_fn(noise_x, sigma)` that takes two arguments, `noise_x` and `sigma`, and return x0 prediction
-        """
-        assert patch_h <= target_h and patch_w <= target_w
-        # data_batch should be the one processed by self.get_data_and_condition
-        if is_negative_prompt:
-            condition, uncondition = self.conditioner.get_condition_with_negative_prompt(data_batch)
-        else:
-            condition, uncondition = self.conditioner.get_condition_uncondition(data_batch)
-        if hasattr(self, "is_extend_model") and self.is_extend_model:
-            # Add conditions for long video generation.
-            if condition_latent is None:
-                condition_latent = torch.zeros(data_batch["latent_hint"].shape, **self.tensor_kwargs)
-                num_condition_t = 0
-                condition_video_augment_sigma_in_inference = 1000
-
-            condition.video_cond_bool = True
-            condition = self.add_condition_video_indicator_and_video_input_mask(
-                condition_latent[:1], condition, num_condition_t
-            )
-            uncondition.video_cond_bool = True  # Not do cfg on condition frames
-            uncondition = self.add_condition_video_indicator_and_video_input_mask(
-                condition_latent[:1], uncondition, num_condition_t
-            )
-        # Add extra conditions for ctrlnet.
-        latent_hint = data_batch["latent_hint"]
-        hint_key = data_batch["hint_key"]
-        setattr(condition, hint_key, latent_hint)
-        if "use_none_hint" in data_batch and data_batch["use_none_hint"]:
-            setattr(uncondition, hint_key, None)
-        else:
-            setattr(uncondition, hint_key, latent_hint)
-
-        to_cp = self.net.is_context_parallel_enabled
-        # For inference, check if parallel_state is initialized
-        if parallel_state.is_initialized() and not self.is_image_batch(data_batch):
-            condition = broadcast_condition(condition, to_tp=True, to_cp=to_cp)
-            uncondition = broadcast_condition(uncondition, to_tp=True, to_cp=to_cp)
-            cp_group = parallel_state.get_context_parallel_group()
-            latent_hint = getattr(condition, hint_key)
-            latent_hint = split_inputs_cp(latent_hint, seq_dim=2, cp_group=cp_group)
-
-        setattr(condition, "base_model", self.model.base_model)
-        setattr(uncondition, "base_model", self.model.base_model)
-        if hasattr(self, "hint_encoders"):
-            self.model.net.hint_encoders = self.hint_encoders
-
-        def x0_fn(noise_x: torch.Tensor, sigma: torch.Tensor):
-            w, h = target_w, target_h
-            n_img_w = (w - 1) // patch_w + 1
-            n_img_h = (h - 1) // patch_h + 1
-
-            overlap_size_w = overlap_size_h = 0
-            if n_img_w > 1:
-                overlap_size_w = (n_img_w * patch_w - w) // (n_img_w - 1)
-                assert n_img_w * patch_w - overlap_size_w * (n_img_w - 1) == w
-            if n_img_h > 1:
-                overlap_size_h = (n_img_h * patch_h - h) // (n_img_h - 1)
-                assert n_img_h * patch_h - overlap_size_h * (n_img_h - 1) == h
-
-            batch_images = noise_x
-            batch_sigma = sigma
-            output = []
-            for idx, cur_images in enumerate(batch_images):
-                noise_x = cur_images.unsqueeze(0)
-                sigma = batch_sigma[idx : idx + 1]
-                condition.gt_latent = condition_latent[idx : idx + 1]
-                uncondition.gt_latent = condition_latent[idx : idx + 1]
-                setattr(condition, hint_key, latent_hint[idx : idx + 1])
-                if getattr(uncondition, hint_key) is not None:
-                    setattr(uncondition, hint_key, latent_hint[idx : idx + 1])
-
-                if self.is_image_batch(data_batch):
-                    cond_x0 = self.denoise(noise_x, sigma, condition).x0
-                    uncond_x0 = self.denoise(noise_x, sigma, uncondition).x0
-                else:
-                    cond_x0 = self.denoise(
-                        noise_x,
-                        sigma,
-                        condition,
-                        condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                        seed_inference=seed_inference,
-                    ).x0_pred_replaced
-                    uncond_x0 = self.denoise(
-                        noise_x,
-                        sigma,
-                        uncondition,
-                        condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                        seed_inference=seed_inference,
-                    ).x0_pred_replaced
-                x0 = cond_x0 + guidance * (cond_x0 - uncond_x0)
-                output.append(x0)
-            output = rearrange(torch.stack(output), "(n t) b ... -> (b n t) ...", n=n_img_h, t=n_img_w)  # 8x3xhxw
-            final_output = merge_patches_into_video(output, overlap_size_h, overlap_size_w, n_img_h, n_img_w)
-            final_output = split_video_into_patches(final_output, patch_h, patch_w)
-            return final_output
-
-        return x0_fn
-
-    def generate_samples_from_patches(
-        self,
-        data_batch: Dict,
-        guidance: float = 1.5,
-        seed: int = 1,
-        state_shape: Tuple | None = None,
-        n_sample: int | None = None,
-        is_negative_prompt: bool = False,
-        num_steps: int = 35,
-        condition_latent: Union[torch.Tensor, None] = None,
-        num_condition_t: Union[int, None] = None,
-        condition_video_augment_sigma_in_inference: float = None,
-        solver_option: COMMON_SOLVER_OPTIONS = "2ab",
-        x_sigma_max: Optional[torch.Tensor] = None,
-        sigma_max: float | None = None,
-        target_h: int = 2112,
-        target_w: int = 3840,
-        patch_h: int = 704,
-        patch_w: int = 1280,
-    ) -> Tensor:
-        """
-        Generate samples from the batch using patch-based inference. During each denoising step, it will denoise each patch
-        separately then average the overlapping regions.
-
-        Additional args to original function:
-            target_h (int): final stitched video height
-            target_w (int): final stitched video width
-            patch_h (int): video patch height for each network inference
-            patch_w (int): video patch width for each network inference
-        """
-        assert patch_h <= target_h and patch_w <= target_w
-        self._normalize_video_databatch_inplace(data_batch)
-        self._augment_image_dim_inplace(data_batch)
-        is_image_batch = self.is_image_batch(data_batch)
-        if is_image_batch:
-            log.debug("image batch, call base model generate_samples_from_batch")
-            return super().generate_samples_from_batch(
-                data_batch,
-                guidance=guidance,
-                seed=seed,
-                state_shape=state_shape,
-                n_sample=n_sample,
-                is_negative_prompt=is_negative_prompt,
-                num_steps=num_steps,
-            )
-        if n_sample is None:
-            input_key = self.input_image_key if is_image_batch else self.input_data_key
-            n_sample = data_batch[input_key].shape[0]
-        if state_shape is None:
-            if is_image_batch:
-                state_shape = (self.state_shape[0], 1, *self.state_shape[2:])  # C,T,H,W
-            else:
-                log.debug(f"Default Video state shape is used. {self.state_shape}")
-                state_shape = self.state_shape
-
-        x0_fn = self.get_patch_based_x0_fn(
-            data_batch,
-            guidance,
-            is_negative_prompt=is_negative_prompt,
-            condition_latent=condition_latent,
-            num_condition_t=num_condition_t,
-            condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-            target_h=target_h,
-            target_w=target_w,
-            patch_h=patch_h,
-            patch_w=patch_w,
-            seed_inference=seed,
-        )
-
-        if sigma_max is None:
-            sigma_max = self.sde.sigma_max
-
-        if x_sigma_max is None:
-            x_sigma_max = (
-                misc.arch_invariant_rand(
-                    (n_sample,) + tuple(state_shape),
-                    torch.float32,
-                    self.tensor_kwargs["device"],
-                    seed,
-                )
-                * sigma_max
-            )
-
-        if self.net.is_context_parallel_enabled:
-            x_sigma_max = broadcast(x_sigma_max, to_tp=True, to_cp=True)
-            x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
-
-        samples = self.sampler(
-            x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max, solver_option=solver_option
-        )
-        if self.net.is_context_parallel_enabled:
-            samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
-
-        return samples
-
-    @torch.no_grad()
-    def validation_step(
-        self, data: dict[str, torch.Tensor], iteration: int
-    ) -> tuple[dict[str, torch.Tensor], torch.Tensor]:
-        """
-        save generated videos
-        """
-        raw_data, x0, condition = self.get_data_and_condition(data)
-        guidance = data["guidance"]
-        sigma_max = data["sigma_max"]
-        is_negative_prompt = data["is_negative_prompt"]
-        data = misc.to(data, **self.tensor_kwargs)
-        x_sigma_max = None
-        if sigma_max is not None:
-            x_sigma_max = self.get_x_from_clean(x0, sigma_max)
-        sample = self.generate_samples_from_batch(
-            data,
-            guidance=guidance,
-            # make sure no mismatch and also works for cp
-            state_shape=x0.shape[1:],
-            n_sample=x0.shape[0],
-            x_sigma_max=x_sigma_max,
-            sigma_max=sigma_max,
-            is_negative_prompt=is_negative_prompt,
-        )
-        sample = self.decode(sample)
-        gt = raw_data
-        hint = data[data["hint_key"]][:, :3]
-        result = torch.cat([hint, sample], dim=3)
-        gt = torch.cat([hint, gt], dim=3)
-        caption = data["ai_caption"]
-        return {"gt": gt, "result": result, "caption": caption}, torch.tensor([0]).to(**self.tensor_kwargs)
 
 
 class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
