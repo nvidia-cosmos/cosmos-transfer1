@@ -15,11 +15,12 @@
 
 from __future__ import annotations
 
-import attrs
-
 from typing import TypeVar
 
+import attrs
+
 T = TypeVar("T")
+
 
 def _is_attrs_instance(obj: object) -> bool:
     """
@@ -95,6 +96,7 @@ def make_freezable(cls: T) -> T:
 
     return cls
 
+
 @make_freezable
 @attrs.define(slots=False)
 class DDPConfig:
@@ -103,4 +105,4 @@ class DDPConfig:
     # Set to True if the computation graph does not change during the whole training loop.
     static_graph: bool = True
     # Set to True if we want to synchronize buffers. Set to False if the sync is going to be handled elsewhere.
-    broadcast_buffers: bool = True 
+    broadcast_buffers: bool = True

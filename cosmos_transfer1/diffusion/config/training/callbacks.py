@@ -13,13 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from cosmos_transfer1.utils.lazy_config import LazyCall as L
-from cosmos_transfer1.utils.lazy_config import PLACEHOLDER
-
+from cosmos_transfer1.diffusion.training.callbacks.grad_clip import GradClip
 from cosmos_transfer1.diffusion.training.callbacks.iter_speed import IterSpeed
 from cosmos_transfer1.diffusion.training.callbacks.low_precision import LowPrecisionCallback
-from cosmos_transfer1.diffusion.training.callbacks.grad_clip import GradClip
 from cosmos_transfer1.utils.callback import ProgressBarCallback
+from cosmos_transfer1.utils.lazy_config import PLACEHOLDER
+from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
 BASIC_CALLBACKS = dict(
     progress_bar=L(ProgressBarCallback)(),

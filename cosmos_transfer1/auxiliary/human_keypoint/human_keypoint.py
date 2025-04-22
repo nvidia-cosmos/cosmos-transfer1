@@ -14,15 +14,17 @@
 # limitations under the License.
 
 import os
+
 import cv2
 import numpy as np
 from rtmlib import Wholebody
 
-from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.datasets.augmentors.human_keypoint_utils import (
     coco_wholebody_133_skeleton,
     openpose134_skeleton,
 )
+from cosmos_transfer1.utils import log
+
 
 class HumanKeypointModel:
     def __init__(self, to_openpose=True, conf_thres=0.6):
@@ -37,9 +39,9 @@ class HumanKeypointModel:
 
     def __call__(self, input_video: str, output_video: str = "keypoint.mp4") -> str:
         """
-            Generate the human body keypoint plot for the keypointControlNet video2world model.
-            Input: mp4 video
-            Output: mp4 keypoint video, of the same spatial and temporal dimensions as the input video.
+        Generate the human body keypoint plot for the keypointControlNet video2world model.
+        Input: mp4 video
+        Output: mp4 keypoint video, of the same spatial and temporal dimensions as the input video.
         """
 
         log.info(f"Processing video: {input_video} to generate keypoint video: {output_video}")

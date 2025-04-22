@@ -17,8 +17,8 @@ import json
 import os
 
 from cosmos_transfer1.auxiliary.depth_anything.model.depth_anything import DepthAnythingModel
-from cosmos_transfer1.auxiliary.sam2.sam2_model import VideoSegmentationModel
 from cosmos_transfer1.auxiliary.human_keypoint.human_keypoint import HumanKeypointModel
+from cosmos_transfer1.auxiliary.sam2.sam2_model import VideoSegmentationModel
 from cosmos_transfer1.utils import log
 
 
@@ -85,9 +85,7 @@ class Preprocessors:
                     out_video=out_video,
                 )
             else:
-                log.info(
-                    f"no input_control provided for {hint_key}. generating input control video with Openpose"
-                )
+                log.info(f"no input_control provided for {hint_key}. generating input control video with Openpose")
                 self.keypoint(
                     in_video=in_video,
                     out_video=out_video,

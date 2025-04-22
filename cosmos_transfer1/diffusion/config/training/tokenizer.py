@@ -42,16 +42,16 @@ def get_cosmos_diffusion_tokenizer_comp8x8x8(resolution: str, chunk_duration: in
     spatial_compression_factor = 8
 
     return L(VideoJITTokenizer)(
-            name="cosmos_1_0_diffusion_tokenizer",
-            enc_fp="checkpoints/nvidia/Cosmos-Tokenize1-CV8x8x8-720p/encoder.jit",
-            dec_fp="checkpoints/nvidia/Cosmos-Tokenize1-CV8x8x8-720p/decoder.jit",
-            mean_std_fp="checkpoints/nvidia/Cosmos-Tokenize1-CV8x8x8-720p/mean_std.pt",
-            latent_ch=16,
-            is_bf16=True,
-            pixel_chunk_duration=pixel_chunk_duration,
-            temporal_compression_factor=temporal_compression_factor,
-            spatial_compression_factor=spatial_compression_factor,
-            spatial_resolution=resolution,
+        name="cosmos_1_0_diffusion_tokenizer",
+        enc_fp="checkpoints/nvidia/Cosmos-Tokenize1-CV8x8x8-720p/encoder.jit",
+        dec_fp="checkpoints/nvidia/Cosmos-Tokenize1-CV8x8x8-720p/decoder.jit",
+        mean_std_fp="checkpoints/nvidia/Cosmos-Tokenize1-CV8x8x8-720p/mean_std.pt",
+        latent_ch=16,
+        is_bf16=True,
+        pixel_chunk_duration=pixel_chunk_duration,
+        temporal_compression_factor=temporal_compression_factor,
+        spatial_compression_factor=spatial_compression_factor,
+        spatial_resolution=resolution,
     )
 
     # return L(JointImageVideoSharedJITTokenizer)(

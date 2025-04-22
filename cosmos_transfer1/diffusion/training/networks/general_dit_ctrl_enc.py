@@ -22,16 +22,17 @@ from typing import List, Optional, Tuple
 import numpy as np
 import torch
 from einops import rearrange
-
 from megatron.core import parallel_state
 from torch import nn
 from torchvision import transforms
 
 from cosmos_transfer1.diffusion.conditioner import DataType
-from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
 from cosmos_transfer1.diffusion.module.blocks import zero_module
+from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
 from cosmos_transfer1.diffusion.training.modules.blocks import PatchEmbed
-from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT as GeneralDIT
+from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import (
+    VideoExtendGeneralDIT as GeneralDIT,
+)
 from cosmos_transfer1.diffusion.training.tensor_parallel import scatter_along_first_dim
 
 
@@ -247,7 +248,7 @@ class GeneralDITEncoder(GeneralDIT):
 
         outs = {}
 
-        # (Experimental, not used in the released model) if also training base model, sometimes drop the 
+        # (Experimental, not used in the released model) if also training base model, sometimes drop the
         # controlnet branch to only train base branch. This is to prevent the network become dependent on
         # controlnet branch and make control weight useless.
         is_training = torch.is_grad_enabled()
@@ -264,7 +265,7 @@ class GeneralDITEncoder(GeneralDIT):
         num_control_blocks = self.layer_mask.index(True)
         num_layers_to_use = num_control_blocks
         control_gate_per_layer = [i < num_layers_to_use for i in range(num_control_blocks)]
-        
+
         if isinstance(control_weight, torch.Tensor):
             if control_weight.ndim == 0:  # Single scalar tensor
                 control_weight = [float(control_weight)] * len(guided_hints)

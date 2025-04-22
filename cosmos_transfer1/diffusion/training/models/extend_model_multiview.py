@@ -20,8 +20,9 @@ from einops import rearrange
 from megatron.core import parallel_state
 from torch import Tensor
 
-from cosmos_transfer1.diffusion.functional.batch_ops import batch_mul
 from cosmos_transfer1.diffusion.conditioner import DataType, VideoExtendCondition
+from cosmos_transfer1.diffusion.config.base.conditioner import VideoCondBoolConfig
+from cosmos_transfer1.diffusion.functional.batch_ops import batch_mul
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.diffusion.training.models.extend_model import (
     ExtendDiffusionModel,
@@ -31,8 +32,6 @@ from cosmos_transfer1.diffusion.training.models.extend_model import (
 from cosmos_transfer1.diffusion.training.models.model import DiffusionModel, broadcast_condition
 from cosmos_transfer1.diffusion.training.models.model_image import CosmosCondition, diffusion_fsdp_class_decorator
 from cosmos_transfer1.utils import log
-
-from cosmos_transfer1.diffusion.config.base.conditioner import VideoCondBoolConfig
 
 
 class MultiviewExtendDiffusionModel(ExtendDiffusionModel):

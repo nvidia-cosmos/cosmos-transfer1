@@ -79,7 +79,6 @@ class ReMapkey(BaseConditionEntry):
         return f"Output key: {key} \n\tDtype: {self.dtype}"
 
 
-
 @attrs.define(slots=False)
 class FPSConfig:
     """

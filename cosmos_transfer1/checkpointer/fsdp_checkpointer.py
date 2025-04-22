@@ -23,9 +23,9 @@ from torch.distributed.fsdp import FullOptimStateDictConfig, FullStateDictConfig
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import StateDictType
 
+from cosmos_transfer1.checkpointer.fsdp_optim_fix import scatter_full_optim_state_dict
 from cosmos_transfer1.utils import callback, distributed, log, misc
 from cosmos_transfer1.utils.config import CheckpointConfig, JobConfig
-from cosmos_transfer1.checkpointer.fsdp_optim_fix import scatter_full_optim_state_dict
 from cosmos_transfer1.utils.model import Model
 
 

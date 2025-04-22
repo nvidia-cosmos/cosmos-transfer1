@@ -13,31 +13,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Callable, Dict, Optional, Tuple, Type, TypeVar, Union
 
 import torch
 from einops import rearrange
 from megatron.core import parallel_state
 from torch import Tensor
-from typing import Callable, Dict, Optional, Tuple, Union, Type, TypeVar
 
-import torch
-from einops import rearrange
-from megatron.core import parallel_state
-from torch import Tensor
-
-from cosmos_transfer1.diffusion.conditioner import DataType, VideoConditionerWithCtrl, CosmosCondition
+from cosmos_transfer1.diffusion.conditioner import CosmosCondition, DataType, VideoConditionerWithCtrl
 from cosmos_transfer1.diffusion.diffusion.modules.res_sampler import COMMON_SOLVER_OPTIONS
+from cosmos_transfer1.diffusion.inference.inference_utils import (
+    merge_patches_into_video,
+    non_strict_load_model,
+    split_video_into_patches,
+)
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
+from cosmos_transfer1.diffusion.training.models.extend_model import ExtendDiffusionModel as ExtendVideoDiffusionModel
 from cosmos_transfer1.diffusion.training.models.model import _broadcast, broadcast_condition
 from cosmos_transfer1.diffusion.training.models.model_image import diffusion_fsdp_class_decorator
-from cosmos_transfer1.diffusion.training.models.extend_model import ExtendDiffusionModel as ExtendVideoDiffusionModel
-from cosmos_transfer1.diffusion.inference.inference_utils import non_strict_load_model, merge_patches_into_video, split_video_into_patches
 from cosmos_transfer1.utils import log, misc
 from cosmos_transfer1.utils.lazy_config import instantiate
 
-
 T = TypeVar("T")
 IS_PREPROCESSED_KEY = "is_preprocessed"
+
 
 def ctrlnet_decorator(base_class: Type[T]) -> Type[T]:
     class CtrlNetModel(base_class):

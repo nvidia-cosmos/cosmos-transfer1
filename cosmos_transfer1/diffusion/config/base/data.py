@@ -1,10 +1,23 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from megatron.core import parallel_state
 from torch.utils.data import DataLoader, DistributedSampler
 
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS
-from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import (
-    ExampleTransferDataset,
-)
+from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
 
@@ -32,8 +45,8 @@ def get_example_transfer_dataset(hint_key, is_train=True):
         sampler=L(get_sampler)(dataset=dataset),
         batch_size=1,
         drop_last=True,
-        num_workers=8, # adjust as needed
-        prefetch_factor=2, # adjust as needed
+        num_workers=8,  # adjust as needed
+        prefetch_factor=2,  # adjust as needed
         pin_memory=True,
     )
 

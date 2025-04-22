@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import time
 import warnings
-from typing import TYPE_CHECKING, Any, Callable, Optional, List
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 import omegaconf
 import torch
@@ -388,7 +388,6 @@ class GradClip(Callback):
             model.clip_grad_norm_(self.clip_norm)
         else:
             torch.nn.utils.clip_grad_norm_(model.parameters(), self.clip_norm, foreach=True)
-
 
 
 class GradClipCallback(Callback):

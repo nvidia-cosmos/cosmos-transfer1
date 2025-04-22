@@ -124,7 +124,10 @@ def main():
     for name in dir(checkpoints):
         obj = getattr(checkpoints, name)
         if isinstance(obj, str) and "CHECKPOINT" in name and "PATH" not in name:
-            if args.model != "all" and name in ["COSMOS_TRANSFER1_7B_CHECKPOINT", "COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT"]:
+            if args.model != "all" and name in [
+                "COSMOS_TRANSFER1_7B_CHECKPOINT",
+                "COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT",
+            ]:
                 if args.model == "7b" and name == "COSMOS_TRANSFER1_7B_CHECKPOINT":
                     checkpoint_vars.append(obj)
                 elif args.model == "7b_av" and name == "COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT":

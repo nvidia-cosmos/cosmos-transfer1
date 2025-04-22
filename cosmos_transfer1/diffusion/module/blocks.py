@@ -79,6 +79,7 @@ class SDXLTimestepEmbedding(nn.Module):
 
         return emb_B_D, adaln_lora_B_3D
 
+
 class Timesteps(nn.Module):
     def __init__(self, num_channels):
         super().__init__()

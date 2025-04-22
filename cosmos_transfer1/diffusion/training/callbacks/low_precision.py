@@ -15,10 +15,10 @@
 
 import torch
 
-from cosmos_transfer1.utils.trainer import Trainer
 from cosmos_transfer1.utils.callback import LowPrecisionCallback as BaseCallback
 from cosmos_transfer1.utils.config import Config
 from cosmos_transfer1.utils.model import Model
+from cosmos_transfer1.utils.trainer import Trainer
 
 
 class LowPrecisionCallback(BaseCallback):

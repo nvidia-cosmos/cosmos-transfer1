@@ -25,8 +25,9 @@ from cosmos_transfer1.diffusion.conditioner import VideoExtendCondition
 from cosmos_transfer1.diffusion.config.base.conditioner import VideoCondBoolConfig
 from cosmos_transfer1.diffusion.diffusion.functional.batch_ops import batch_mul
 from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel, broadcast_condition
-from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp, broadcast
+from cosmos_transfer1.diffusion.module.parallel import broadcast, cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.utils import log, misc
+
 
 @dataclass
 class VideoDenoisePrediction:
@@ -385,7 +386,6 @@ class DiffusionV2WModel(DiffusionT2WModel):
             assert not to_cp, "parallel_state is not initialized, context parallel should be turned off."
 
         return condition
-
 
     def add_condition_pose(self, data_batch: Dict, condition: VideoExtendCondition) -> VideoExtendCondition:
         """Add pose condition to the condition object. For camera control model

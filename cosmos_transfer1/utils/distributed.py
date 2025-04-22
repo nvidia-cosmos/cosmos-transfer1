@@ -30,8 +30,8 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from cosmos_transfer1.utils import log
-from cosmos_transfer1.utils.device import Device
 from cosmos_transfer1.utils.ddp_config import DDPConfig
+from cosmos_transfer1.utils.device import Device
 
 try:
     from megatron.core import parallel_state

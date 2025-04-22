@@ -13,21 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-'''
+"""
 Converting an FSDP checkpoint to a TP checkpoint.
-'''
-import sys
+"""
 import os
+import sys
+from collections import OrderedDict
+from typing import Any, Dict, List
+
 import torch
 from tqdm import tqdm
-from collections import OrderedDict
-from typing import Dict, Any, List
 
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.utils.easy_io import easy_io
 
-
 TP_SIZE = 8
+
 
 def is_column(key: str) -> bool:
     """Check if the given key corresponds to a column-parallel parameter."""
@@ -102,14 +103,14 @@ def convert_fsdp_to_tp(path_in: str, path_out: str) -> None:
 
     log.info("Saving TP checkpoints..")
     # Add a dummy grad_scaler and iteration to the checkpoint. Required by the training script.
-    easy_io.dump({'grad_scaler': {}, 'iteration': 0}, f"{path_out}.pt")
+    easy_io.dump({"grad_scaler": {}, "iteration": 0}, f"{path_out}.pt")
     for i in tqdm(range(TP_SIZE)):
         state_dict = {"model": state_dicts[i]}
         easy_io.dump(state_dict, f"{path_out}_model_mp_{i}.pt")
 
 
 if __name__ == "__main__":
-    '''
+    """
     Example usage: converting a viscontrol model to a TP checkpoint.
 
     Command:
@@ -119,20 +120,19 @@ if __name__ == "__main__":
         checkpoints/nvidia/Cosmos-Transfer1-7B/vis_control_model_mp_0.pt
         ...
         checkpoints/nvidia/Cosmos-Transfer1-7B/vis_control_model_mp_7.pt
-    '''
+    """
     if len(sys.argv) != 2:
         print("Usage: python convert_ckpt_fsdp_to_tp.py <path_to_checkpoint.pt>")
         print("Example: python convert_ckpt_fsdp_to_tp.py checkpoints/model.pt")
         sys.exit(1)
 
-    
     checkpoint_path = sys.argv[1]
 
     # Create checkpoints_tp directory in the same parent directory as the input checkpoint
     input_dir = os.path.dirname(checkpoint_path)
-    tp_ckpt_dir = os.path.join(input_dir, 'checkpoints_tp')
+    tp_ckpt_dir = os.path.join(input_dir, "checkpoints_tp")
     os.makedirs(tp_ckpt_dir, exist_ok=True)
-    
+
     # Use the same basename as input but in the checkpoints_tp directory
     out_tp_checkpoint_path = os.path.join(tp_ckpt_dir, os.path.basename(checkpoint_path).replace(".pt", ""))
     try:

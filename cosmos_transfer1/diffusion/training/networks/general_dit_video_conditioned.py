@@ -21,7 +21,7 @@ from megatron.core import parallel_state
 from torch import nn
 
 from cosmos_transfer1.diffusion.conditioner import DataType
-from cosmos_transfer1.diffusion.module.blocks import SDXLTimesteps, SDXLTimestepEmbedding
+from cosmos_transfer1.diffusion.module.blocks import SDXLTimestepEmbedding, SDXLTimesteps
 from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
 from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
 from cosmos_transfer1.diffusion.training.tensor_parallel import scatter_along_first_dim
@@ -191,7 +191,7 @@ class VideoExtendGeneralDIT(GeneralDIT):
         if self.add_augment_sigma_embedding:
             if condition_video_augment_sigma is None:
                 # Handling image case
-                # Note: for video case, when there is not condition frames, we also set it as zero, see 
+                # Note: for video case, when there is not condition frames, we also set it as zero, see
                 # the augment_conditional_latent_frames function in DiffusionV2WModel and ExtendDiffusionModel.
                 assert data_type == DataType.IMAGE, "condition_video_augment_sigma is required for video data type"
                 condition_video_augment_sigma = torch.zeros_like(timesteps.flatten())

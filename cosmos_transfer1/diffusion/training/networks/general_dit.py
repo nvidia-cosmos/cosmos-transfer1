@@ -45,14 +45,6 @@ from torchvision import transforms
 
 from cosmos_transfer1.diffusion.conditioner import DataType
 from cosmos_transfer1.diffusion.module.attention import get_normalization
-from cosmos_transfer1.diffusion.training.modules.blocks import (
-    DITBuildingBlock,
-    FinalLayer,
-    GeneralDITTransformerBlock,
-    PatchEmbed,
-    SDXLTimestepEmbedding,
-    SDXLTimesteps,
-)
 from cosmos_transfer1.diffusion.module.position_embedding import (
     LearnableEmb3D,
     LearnableEmb3D_FPS_Aware,
@@ -62,6 +54,14 @@ from cosmos_transfer1.diffusion.module.position_embedding import (
     SinCosPosEmbAxis,
     VideoRopePosition3DEmb,
     VideoRopePositionEmb,
+)
+from cosmos_transfer1.diffusion.training.modules.blocks import (
+    DITBuildingBlock,
+    FinalLayer,
+    GeneralDITTransformerBlock,
+    PatchEmbed,
+    SDXLTimestepEmbedding,
+    SDXLTimesteps,
 )
 from cosmos_transfer1.diffusion.training.tensor_parallel import gather_along_first_dim, scatter_along_first_dim
 from cosmos_transfer1.utils import log
