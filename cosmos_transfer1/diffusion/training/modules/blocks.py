@@ -23,7 +23,7 @@ from megatron.core import parallel_state
 from torch import nn
 from transformer_engine.pytorch.attention import apply_rotary_pos_emb
 
-from cosmos_transfer1.diffusion.module.attention import Attention, GPT2FeedForward
+from cosmos_transfer1.diffusion.training.modules.attention import Attention, GPT2FeedForward
 from cosmos_transfer1.diffusion.training.tensor_parallel import gather_along_first_dim
 from cosmos_transfer1.utils import log
 
@@ -1081,7 +1081,7 @@ class GeneralDITTransformerBlock(nn.Module):
         return x
 
     def set_memory_save(self, mode: bool = True):
-        # (qsh) to make fsdp happy!
+        # to make fsdp happy!
         #! IMPORTANT!
         if mode:
             self.forward = self.forward_with_memory_save

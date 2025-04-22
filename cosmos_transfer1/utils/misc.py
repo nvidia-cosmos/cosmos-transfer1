@@ -25,7 +25,7 @@ import random
 import tempfile
 import time
 from contextlib import ContextDecorator
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, List, Tuple, TypeVar
 
 import cv2
 import numpy as np

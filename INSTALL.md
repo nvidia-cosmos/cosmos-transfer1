@@ -32,9 +32,9 @@ You can test the environment setup for inference with
 CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/test_environment.py
 ```
 
-### Post-training
+### Training
 
-The below commands creates the `cosmos-transfer` conda environment and installs the dependencies for post-training. This is the same as required for inference but with an additional package `apex` for training with bfloat16.
+The below commands creates the `cosmos-transfer` conda environment and installs the dependencies for training. This is the same as required for inference but with an additional package `apex` for training with bfloat16.
 ```bash
 # Create the cosmos-transfer1 conda environment.
 conda env create --file cosmos-transfer1.yaml

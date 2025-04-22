@@ -588,7 +588,6 @@ class DiffusionModel(Model):
                                      or using customized loading procedures. Defaults to False.
         """
         if strict:
-            # the converted tpsp checkpoint has "ema" and it is None
             if self.config.ema.enabled and state_dict["ema"] is not None:
                 ema_results: _IncompatibleKeys = self.model_ema.load_state_dict(
                     state_dict["ema"], strict=strict, assign=assign
@@ -786,8 +785,7 @@ def diffusion_fsdp_class_decorator(base_class: Type[T]) -> Type[T]:
                 #! overwrite the forward method so that it will invoke the FSDP-specific pre- and post-forward sharding logic
                 model.forward = super().training_step
                 #! this is IMPORTANT, though following two lines are identical to sync_module_states=True in FSDP
-                #! we do it twice so that following line can warm up and avoid OOM in aws 128+ nodes settings
-                #! qsh hypothesize that it is due to overhead of initialization of nccl network communication;
+                #! we do it twice so that following line can warm up and avoid OOM in 128+ nodes settings
                 #! without it, peak mem : reg_model + ema_model + FSDP overhead + nccl communication initialization overhead
                 #! with it, peak men: reg_model + ema_model + FSDP overhead
                 #! it is tricky, but it works!

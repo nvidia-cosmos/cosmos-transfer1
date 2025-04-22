@@ -105,7 +105,7 @@ def convert_fsdp_to_tp(path_in: str, path_out: str) -> None:
     # Add a dummy grad_scaler and iteration to the checkpoint. Required by the training script.
     easy_io.dump({"grad_scaler": {}, "iteration": 0}, f"{path_out}.pt")
     for i in tqdm(range(TP_SIZE)):
-        state_dict = {"model": state_dicts[i]}
+        state_dict = {"model": state_dicts[i], "ema": None}
         easy_io.dump(state_dict, f"{path_out}_model_mp_{i}.pt")
 
 
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     out_tp_checkpoint_path = os.path.join(tp_ckpt_dir, os.path.basename(checkpoint_path).replace(".pt", ""))
     try:
         convert_fsdp_to_tp(checkpoint_path, out_tp_checkpoint_path)
-        print("Conversion completed successfully!")
+        print(f"Conversion completed successfully! See {tp_ckpt_dir}.")
     except Exception as e:
         print(f"Error during conversion: {str(e)}")
         sys.exit(1)

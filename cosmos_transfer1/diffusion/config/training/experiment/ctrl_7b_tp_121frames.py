@@ -92,7 +92,7 @@ def make_ctrlnet_config_7b_training(
                 broadcast_via_filesystem=True,
                 save_iter=1000,  # 1000 iterations per checkpoint. Update as needed.
                 load_training_state=False,
-                strict_resume=True,
+                strict_resume=False,  # TODO (qianlim): temporary hack: We have excluded the base model ckpt from each full controlnet. The base model weights are loaded below, see 'base_load_from'.
                 keys_not_to_resume=[],
             ),
             trainer=dict(

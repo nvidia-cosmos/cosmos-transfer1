@@ -196,7 +196,9 @@ class Trainer:
             self.checkpointer.save(model, optimizer, scheduler, grad_scaler, iteration=iteration)
         self.callbacks.on_train_end(model, iteration=iteration)
         self.checkpointer.finalize()
+        log.info("Cleaning up distributed environment..")
         distributed.barrier()
+        log.info("Cleaning up distributed environment.. Done!")
         self.callbacks.on_app_end()
 
     def training_step(
