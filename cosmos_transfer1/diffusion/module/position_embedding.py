@@ -17,7 +17,6 @@ from typing import Literal, Optional
 
 import numpy as np
 import torch
-
 import torch.nn.functional as F
 from einops import rearrange, repeat
 from torch import nn
@@ -117,8 +116,6 @@ class VideoPositionEmb(nn.Module):
 
     def generate_embeddings(self, B_T_H_W_C: torch.Size, fps=Optional[torch.Tensor]):
         raise NotImplementedError
-
-
 
 
 class VideoRopePositionEmb(VideoPositionEmb):
@@ -301,7 +298,6 @@ class LearnablePosEmbAxis(VideoPositionEmb):
         return normalize(emb, dim=-1, eps=1e-6)
 
 
-
 class LearnableEmb3D(VideoPositionEmb):
     def __init__(
         self,
@@ -417,7 +413,6 @@ class LearnableEmb3D_FPS_Aware(VideoPositionEmb):
         raise ValueError(f"Unknown interpolation method {self.interpolation}")
 
 
-
 class SinCosPosEmbAxis(VideoPositionEmb):
     def __init__(
         self,
@@ -474,7 +469,6 @@ class SinCosPosEmbAxis(VideoPositionEmb):
             return emb
 
         raise ValueError(f"Unknown interpolation method {self.interpolation}")
-
 
 
 class SinCosPosEmb_FPS_Aware(VideoPositionEmb):

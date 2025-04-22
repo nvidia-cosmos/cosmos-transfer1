@@ -18,8 +18,8 @@ from abc import ABC, abstractmethod
 
 import torch
 import torch.nn.functional as F
-from torch.nn.modules import Module
 from einops import rearrange
+from torch.nn.modules import Module
 
 from cosmos_transfer1.utils.distributed import rank0_first
 
@@ -76,7 +76,6 @@ class BaseVAE(torch.nn.Module, ABC):
         Returns the spatial reduction factor for the VAE.
         """
         raise NotImplementedError("The spatial_compression_factor property must be implemented in the derived class.")
-
 
 
 class VideoTokenizerInterface(ABC):
@@ -604,7 +603,6 @@ class JITVAE(BasePretrainedImageVAE):
 #         return 8
 
 
-
 class VideoJITTokenizer(BasePretrainedVideoTokenizer, JITVAE, VideoTokenizerInterface):
     """
     Instance of BasePretrainedVideoVAE that loads encoder and decoder from JIT scripted module file
@@ -638,7 +636,6 @@ class VideoJITTokenizer(BasePretrainedVideoTokenizer, JITVAE, VideoTokenizerInte
     @property
     def spatial_resolution(self) -> str:
         return self._spatial_resolution
-
 
 
 class JointImageVideoTokenizer(BaseVAE, VideoTokenizerInterface):

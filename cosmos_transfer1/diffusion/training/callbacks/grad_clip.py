@@ -50,9 +50,10 @@ class _MagnitudeRecord:
 
 
 class GradClip(GradClipImage):
-    '''
+    """
     adds support for TP
-    '''
+    """
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.img_mag_log = _MagnitudeRecord()

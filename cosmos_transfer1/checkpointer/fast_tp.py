@@ -20,10 +20,9 @@ import torch
 
 from cosmos_transfer1.checkpointer.ddp_checkpointer import StateDictItemPath
 from cosmos_transfer1.checkpointer.tp_checkpointer import Checkpointer as TPCheckpointer
+from cosmos_transfer1.diffusion.training.models.model import DiffusionModel
 from cosmos_transfer1.utils import distributed, log, misc
 from cosmos_transfer1.utils.easy_io import easy_io
-from cosmos_transfer1.diffusion.training.models.model import DiffusionModel
-
 
 
 class Checkpointer(TPCheckpointer):
@@ -33,9 +32,9 @@ class Checkpointer(TPCheckpointer):
         """
         Load state_dict and broadcast efficiently.
 
-        This method optimizes checkpoint loading for distributed training for improved 
+        This method optimizes checkpoint loading for distributed training for improved
         connection speed and reliability.
-        
+
         The main steps are:
         1. Retrieve TP-rank-specific checkpoints for each GPU of DDP-rank 0
            and CP-rank 0.

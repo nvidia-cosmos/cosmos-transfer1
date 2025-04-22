@@ -80,6 +80,7 @@ default_model_names = {
     "lidar": LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 }
 
+
 class _IncompatibleKeys(
     NamedTuple(
         "IncompatibleKeys",

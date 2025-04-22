@@ -13,24 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from cosmos_transfer1.utils.lazy_config import LazyCall as L
-from cosmos_transfer1.diffusion.datasets.augmentors.merge_datadict import DataDictMerger
+from cosmos_transfer1.diffusion.config.transfer.blurs import BlurAugmentorConfig, random_blur_config
+from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_AUG_KEYS, CTRL_HINT_KEYS, CTRL_HINT_KEYS_COMB
+from cosmos_transfer1.diffusion.datasets.augmentors.basic_augmentors import (
+    ReflectionPadding,
+    ResizeLargestSideAspectPreserving,
+)
 from cosmos_transfer1.diffusion.datasets.augmentors.control_input import (
     VIDEO_RES_SIZE_INFO,
-    AddControlInputComb,
     AddControlInput,
+    AddControlInputComb,
 )
-from cosmos_transfer1.diffusion.datasets.augmentors.basic_augmentors import (
-    ResizeLargestSideAspectPreserving,
-    ReflectionPadding,
-)
-from cosmos_transfer1.diffusion.config.transfer.conditioner import (
-    CTRL_HINT_KEYS,
-    CTRL_HINT_KEYS_COMB,
-)
-from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_AUG_KEYS
-from cosmos_transfer1.diffusion.config.transfer.blurs import BlurAugmentorConfig, random_blur_config
-
+from cosmos_transfer1.diffusion.datasets.augmentors.merge_datadict import DataDictMerger
+from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
 AUGMENTOR_OPTIONS = {}
 
@@ -60,9 +55,7 @@ def get_video_augmentor(
                 "orig_num_frames",
             ],
         ),
-        "resize_largest_side_aspect_ratio_preserving": L(
-            ResizeLargestSideAspectPreserving
-        )(
+        "resize_largest_side_aspect_ratio_preserving": L(ResizeLargestSideAspectPreserving)(
             input_keys=["video"],
             args={"size": VIDEO_RES_SIZE_INFO[resolution]},
         ),
@@ -133,9 +126,7 @@ for hint_key in CTRL_HINT_KEYS:
                 # this addes the control input tensor to the data dict
                 "add_control_input": add_control_input,
                 # this resizes both the video and the control input to the model's required input size
-                "resize_largest_side_aspect_ratio_preserving": L(
-                    ResizeLargestSideAspectPreserving
-                )(
+                "resize_largest_side_aspect_ratio_preserving": L(ResizeLargestSideAspectPreserving)(
                     input_keys=["video", hint_key],
                     args={"size": VIDEO_RES_SIZE_INFO[resolution]},
                 ),
@@ -148,6 +139,4 @@ for hint_key in CTRL_HINT_KEYS:
 
         return _get_video_ctrlnet_augmentor
 
-    augmentor_register(f"video_ctrlnet_augmentor_{hint_key}")(
-        get_video_ctrlnet_augmentor(hint_key)
-    )
+    augmentor_register(f"video_ctrlnet_augmentor_{hint_key}")(get_video_ctrlnet_augmentor(hint_key))

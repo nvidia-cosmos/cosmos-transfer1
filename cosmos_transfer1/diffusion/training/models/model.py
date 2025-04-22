@@ -26,8 +26,8 @@ from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 from torch.distributed import broadcast_object_list, get_process_group_ranks
 from torch.distributed.utils import _verify_param_shape_across_processes
 
-from cosmos_transfer1.diffusion.diffusion.modules.res_sampler import COMMON_SOLVER_OPTIONS
 from cosmos_transfer1.diffusion.conditioner import BaseVideoCondition, DataType
+from cosmos_transfer1.diffusion.diffusion.modules.res_sampler import COMMON_SOLVER_OPTIONS
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.diffusion.training.models.model_image import CosmosCondition
 from cosmos_transfer1.diffusion.training.models.model_image import DiffusionModel as ImageModel

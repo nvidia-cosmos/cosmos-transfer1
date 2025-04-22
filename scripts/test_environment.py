@@ -18,6 +18,7 @@ import importlib
 import os
 import sys
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -38,6 +39,7 @@ def check_packages(package_list):
             all_success = False
         else:
             print(f"\033[92m[SUCCESS]\033[0m {package} found")
+
 
 args = parse_args()
 

@@ -20,7 +20,7 @@ from einops import rearrange
 from megatron.core import parallel_state
 from torch import Tensor
 
-from cosmos_transfer1.diffusion.conditioner import VideoConditionerWithCtrl, CosmosCondition
+from cosmos_transfer1.diffusion.conditioner import CosmosCondition, VideoConditionerWithCtrl
 from cosmos_transfer1.diffusion.inference.inference_utils import merge_patches_into_video, split_video_into_patches
 from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel, broadcast_condition
 from cosmos_transfer1.diffusion.model.model_v2w import DiffusionV2WModel
@@ -31,6 +31,7 @@ from cosmos_transfer1.utils.lazy_config import instantiate as lazy_instantiate
 T = TypeVar("T")
 IS_PREPROCESSED_KEY = "is_preprocessed"
 COMMON_SOLVER_OPTIONS = Literal["2ab", "2mid", "1euler"]
+
 
 class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
     def build_model(self) -> torch.nn.ModuleDict:
@@ -400,127 +401,127 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
         return samples
 
     def get_patch_based_x0_fn(
-            self,
-            data_batch: Dict,
-            guidance: float = 1.5,
-            is_negative_prompt: bool = False,
-            condition_latent: torch.Tensor = None,
-            num_condition_t: Union[int, None] = None,
-            condition_video_augment_sigma_in_inference: float = None,
-            target_h: int = 2112,
-            target_w: int = 3840,
-            patch_h: int = 704,
-            patch_w: int = 1280,
-            seed_inference: int = 1,
-        ) -> Callable:
-            """
-            Generates a callable function `x0_fn` based on the provided data batch and guidance factor.
-            The function will split the input into patches, run inference on each patch, then stitch them together.
+        self,
+        data_batch: Dict,
+        guidance: float = 1.5,
+        is_negative_prompt: bool = False,
+        condition_latent: torch.Tensor = None,
+        num_condition_t: Union[int, None] = None,
+        condition_video_augment_sigma_in_inference: float = None,
+        target_h: int = 2112,
+        target_w: int = 3840,
+        patch_h: int = 704,
+        patch_w: int = 1280,
+        seed_inference: int = 1,
+    ) -> Callable:
+        """
+        Generates a callable function `x0_fn` based on the provided data batch and guidance factor.
+        The function will split the input into patches, run inference on each patch, then stitch them together.
 
-            Additional args to original function:
-                target_h (int): final stitched video height
-                target_w (int): final stitched video width
-                patch_h (int): video patch height for each network inference
-                patch_w (int): video patch width for each network inference
+        Additional args to original function:
+            target_h (int): final stitched video height
+            target_w (int): final stitched video width
+            patch_h (int): video patch height for each network inference
+            patch_w (int): video patch width for each network inference
 
-            Returns:
-            - Callable: A function `x0_fn(noise_x, sigma)` that takes two arguments, `noise_x` and `sigma`, and return x0 prediction
-            """
-            assert patch_h <= target_h and patch_w <= target_w
-            # data_batch should be the one processed by self.get_data_and_condition
-            if is_negative_prompt:
-                condition, uncondition = self.conditioner.get_condition_with_negative_prompt(data_batch)
-            else:
-                condition, uncondition = self.conditioner.get_condition_uncondition(data_batch)
-            if hasattr(self, "is_extend_model") and self.is_extend_model:
-                # Add conditions for long video generation.
-                if condition_latent is None:
-                    condition_latent = torch.zeros(data_batch["latent_hint"].shape, **self.tensor_kwargs)
-                    num_condition_t = 0
-                    condition_video_augment_sigma_in_inference = 1000
+        Returns:
+        - Callable: A function `x0_fn(noise_x, sigma)` that takes two arguments, `noise_x` and `sigma`, and return x0 prediction
+        """
+        assert patch_h <= target_h and patch_w <= target_w
+        # data_batch should be the one processed by self.get_data_and_condition
+        if is_negative_prompt:
+            condition, uncondition = self.conditioner.get_condition_with_negative_prompt(data_batch)
+        else:
+            condition, uncondition = self.conditioner.get_condition_uncondition(data_batch)
+        if hasattr(self, "is_extend_model") and self.is_extend_model:
+            # Add conditions for long video generation.
+            if condition_latent is None:
+                condition_latent = torch.zeros(data_batch["latent_hint"].shape, **self.tensor_kwargs)
+                num_condition_t = 0
+                condition_video_augment_sigma_in_inference = 1000
 
-                condition.video_cond_bool = True
-                condition = self.add_condition_video_indicator_and_video_input_mask(
-                    condition_latent[:1], condition, num_condition_t
-                )
-                uncondition.video_cond_bool = True  # Not do cfg on condition frames
-                uncondition = self.add_condition_video_indicator_and_video_input_mask(
-                    condition_latent[:1], uncondition, num_condition_t
-                )
-            # Add extra conditions for ctrlnet.
-            latent_hint = data_batch["latent_hint"]
-            hint_key = data_batch["hint_key"]
-            setattr(condition, hint_key, latent_hint)
-            if "use_none_hint" in data_batch and data_batch["use_none_hint"]:
-                setattr(uncondition, hint_key, None)
-            else:
-                setattr(uncondition, hint_key, latent_hint)
+            condition.video_cond_bool = True
+            condition = self.add_condition_video_indicator_and_video_input_mask(
+                condition_latent[:1], condition, num_condition_t
+            )
+            uncondition.video_cond_bool = True  # Not do cfg on condition frames
+            uncondition = self.add_condition_video_indicator_and_video_input_mask(
+                condition_latent[:1], uncondition, num_condition_t
+            )
+        # Add extra conditions for ctrlnet.
+        latent_hint = data_batch["latent_hint"]
+        hint_key = data_batch["hint_key"]
+        setattr(condition, hint_key, latent_hint)
+        if "use_none_hint" in data_batch and data_batch["use_none_hint"]:
+            setattr(uncondition, hint_key, None)
+        else:
+            setattr(uncondition, hint_key, latent_hint)
 
-            to_cp = self.net.is_context_parallel_enabled
-            # For inference, check if parallel_state is initialized
-            if parallel_state.is_initialized() and not self.is_image_batch(data_batch):
-                condition = broadcast_condition(condition, to_tp=True, to_cp=to_cp)
-                uncondition = broadcast_condition(uncondition, to_tp=True, to_cp=to_cp)
-                cp_group = parallel_state.get_context_parallel_group()
-                latent_hint = getattr(condition, hint_key)
-                latent_hint = split_inputs_cp(latent_hint, seq_dim=2, cp_group=cp_group)
+        to_cp = self.net.is_context_parallel_enabled
+        # For inference, check if parallel_state is initialized
+        if parallel_state.is_initialized() and not self.is_image_batch(data_batch):
+            condition = broadcast_condition(condition, to_tp=True, to_cp=to_cp)
+            uncondition = broadcast_condition(uncondition, to_tp=True, to_cp=to_cp)
+            cp_group = parallel_state.get_context_parallel_group()
+            latent_hint = getattr(condition, hint_key)
+            latent_hint = split_inputs_cp(latent_hint, seq_dim=2, cp_group=cp_group)
 
-            setattr(condition, "base_model", self.model.base_model)
-            setattr(uncondition, "base_model", self.model.base_model)
-            if hasattr(self, "hint_encoders"):
-                self.model.net.hint_encoders = self.hint_encoders
+        setattr(condition, "base_model", self.model.base_model)
+        setattr(uncondition, "base_model", self.model.base_model)
+        if hasattr(self, "hint_encoders"):
+            self.model.net.hint_encoders = self.hint_encoders
 
-            def x0_fn(noise_x: torch.Tensor, sigma: torch.Tensor):
-                w, h = target_w, target_h
-                n_img_w = (w - 1) // patch_w + 1
-                n_img_h = (h - 1) // patch_h + 1
+        def x0_fn(noise_x: torch.Tensor, sigma: torch.Tensor):
+            w, h = target_w, target_h
+            n_img_w = (w - 1) // patch_w + 1
+            n_img_h = (h - 1) // patch_h + 1
 
-                overlap_size_w = overlap_size_h = 0
-                if n_img_w > 1:
-                    overlap_size_w = (n_img_w * patch_w - w) // (n_img_w - 1)
-                    assert n_img_w * patch_w - overlap_size_w * (n_img_w - 1) == w
-                if n_img_h > 1:
-                    overlap_size_h = (n_img_h * patch_h - h) // (n_img_h - 1)
-                    assert n_img_h * patch_h - overlap_size_h * (n_img_h - 1) == h
+            overlap_size_w = overlap_size_h = 0
+            if n_img_w > 1:
+                overlap_size_w = (n_img_w * patch_w - w) // (n_img_w - 1)
+                assert n_img_w * patch_w - overlap_size_w * (n_img_w - 1) == w
+            if n_img_h > 1:
+                overlap_size_h = (n_img_h * patch_h - h) // (n_img_h - 1)
+                assert n_img_h * patch_h - overlap_size_h * (n_img_h - 1) == h
 
-                batch_images = noise_x
-                batch_sigma = sigma
-                output = []
-                for idx, cur_images in enumerate(batch_images):
-                    noise_x = cur_images.unsqueeze(0)
-                    sigma = batch_sigma[idx : idx + 1]
-                    condition.gt_latent = condition_latent[idx : idx + 1]
-                    uncondition.gt_latent = condition_latent[idx : idx + 1]
-                    setattr(condition, hint_key, latent_hint[idx : idx + 1])
-                    if getattr(uncondition, hint_key) is not None:
-                        setattr(uncondition, hint_key, latent_hint[idx : idx + 1])
+            batch_images = noise_x
+            batch_sigma = sigma
+            output = []
+            for idx, cur_images in enumerate(batch_images):
+                noise_x = cur_images.unsqueeze(0)
+                sigma = batch_sigma[idx : idx + 1]
+                condition.gt_latent = condition_latent[idx : idx + 1]
+                uncondition.gt_latent = condition_latent[idx : idx + 1]
+                setattr(condition, hint_key, latent_hint[idx : idx + 1])
+                if getattr(uncondition, hint_key) is not None:
+                    setattr(uncondition, hint_key, latent_hint[idx : idx + 1])
 
-                    if self.is_image_batch(data_batch):
-                        cond_x0 = self.denoise(noise_x, sigma, condition).x0
-                        uncond_x0 = self.denoise(noise_x, sigma, uncondition).x0
-                    else:
-                        cond_x0 = self.denoise(
-                            noise_x,
-                            sigma,
-                            condition,
-                            condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                            seed_inference=seed_inference,
-                        ).x0_pred_replaced
-                        uncond_x0 = self.denoise(
-                            noise_x,
-                            sigma,
-                            uncondition,
-                            condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                            seed_inference=seed_inference,
-                        ).x0_pred_replaced
-                    x0 = cond_x0 + guidance * (cond_x0 - uncond_x0)
-                    output.append(x0)
-                output = rearrange(torch.stack(output), "(n t) b ... -> (b n t) ...", n=n_img_h, t=n_img_w)  # 8x3xhxw
-                final_output = merge_patches_into_video(output, overlap_size_h, overlap_size_w, n_img_h, n_img_w)
-                final_output = split_video_into_patches(final_output, patch_h, patch_w)
-                return final_output
+                if self.is_image_batch(data_batch):
+                    cond_x0 = self.denoise(noise_x, sigma, condition).x0
+                    uncond_x0 = self.denoise(noise_x, sigma, uncondition).x0
+                else:
+                    cond_x0 = self.denoise(
+                        noise_x,
+                        sigma,
+                        condition,
+                        condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+                        seed_inference=seed_inference,
+                    ).x0_pred_replaced
+                    uncond_x0 = self.denoise(
+                        noise_x,
+                        sigma,
+                        uncondition,
+                        condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+                        seed_inference=seed_inference,
+                    ).x0_pred_replaced
+                x0 = cond_x0 + guidance * (cond_x0 - uncond_x0)
+                output.append(x0)
+            output = rearrange(torch.stack(output), "(n t) b ... -> (b n t) ...", n=n_img_h, t=n_img_w)  # 8x3xhxw
+            final_output = merge_patches_into_video(output, overlap_size_h, overlap_size_w, n_img_h, n_img_w)
+            final_output = split_video_into_patches(final_output, patch_h, patch_w)
+            return final_output
 
-            return x0_fn
+        return x0_fn
 
     def generate_samples_from_patches(
         self,
@@ -649,7 +650,6 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
         gt = torch.cat([hint, gt], dim=3)
         caption = data["ai_caption"]
         return {"gt": gt, "result": result, "caption": caption}, torch.tensor([0]).to(**self.tensor_kwargs)
-
 
 
 class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
@@ -823,7 +823,6 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
             setattr(uncondition, hint_key, None)
         else:
             setattr(uncondition, hint_key, latent_hint)
-
 
         to_cp = self.net.is_context_parallel_enabled
         # For inference, check if parallel_state is initialized

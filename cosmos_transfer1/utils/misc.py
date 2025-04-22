@@ -31,7 +31,6 @@ import cv2
 import numpy as np
 import termcolor
 import torch
-
 from torch.distributed._functional_collectives import AsyncCollectiveTensor
 from torch.distributed._tensor.api import DTensor
 
@@ -134,6 +133,7 @@ def serialize(data: Any) -> Any:
         except TypeError:
             data = str(data)
         return data
+
 
 def print_environ_variables(env_vars: list[str]) -> None:
     """Print a specific list of environment variables.

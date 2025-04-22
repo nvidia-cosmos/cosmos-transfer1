@@ -33,12 +33,12 @@ from cosmos_transfer1.diffusion.config.transfer.blurs import (
     LaplacianOfGaussianConfig,
     MedianBlurConfig,
 )
+from cosmos_transfer1.diffusion.datasets.augmentors.guided_filter import FastGuidedFilter
 from cosmos_transfer1.diffusion.datasets.augmentors.human_keypoint_utils import (
+    coco_wholebody_133_skeleton,
     convert_coco_to_openpose,
     openpose134_skeleton,
-    coco_wholebody_133_skeleton,
 )
-from cosmos_transfer1.diffusion.datasets.augmentors.guided_filter import FastGuidedFilter
 from cosmos_transfer1.utils import log
 
 IMAGE_RES_SIZE_INFO: dict[str, tuple[int, int]] = {
@@ -1029,6 +1029,7 @@ class AddControlInputSeg(Augmentor):
         del all_masks  # free memory
         return data_dict
 
+
 class AddControlInputKeypoint(Augmentor):
     """
     Add control input to the data dictionary. control input are expanded to 3-channels
@@ -1048,7 +1049,7 @@ class AddControlInputKeypoint(Augmentor):
         self.hand_as_separate_channel = args.get("hand_as_separate_channel", False)
         self.kpt_thr = args.get("kpt_thr", 0.6)
         self.line_width = args.get("human_kpt_line_width", 4)
-    
+
     def denormalize_pose_kpts(self, pose_kps: np.ndarray, h: int, w: int):
         """
         pose_kps has shape = (#keypoints, 2)

@@ -34,7 +34,6 @@ from cosmos_transfer1.auxiliary.guardrail.face_blur_filter.retinaface_utils impo
 )
 from cosmos_transfer1.utils import log, misc
 
-
 # RetinaFace model constants from https://github.com/biubug6/Pytorch_Retinaface/blob/master/detect.py
 TOP_K = 5_000
 KEEP_TOP_K = 750

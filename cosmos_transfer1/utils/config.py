@@ -29,13 +29,11 @@ except ImportError:
     USE_MEGATRON = False
     print("Megatron-core is not installed.")
 
+from cosmos_transfer1.utils.callback import EMAModelCallback, ProgressBarCallback
+from cosmos_transfer1.utils.ddp_config import DDPConfig, make_freezable
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
 from cosmos_transfer1.utils.misc import Color
-from cosmos_transfer1.utils.callback import EMAModelCallback, ProgressBarCallback
-from cosmos_transfer1.utils.ddp_config import DDPConfig, make_freezable
-
-
 
 
 def _pretty_print_attrs_instance(obj: object, indent: int = 0, use_color: bool = False) -> str:
@@ -147,7 +145,6 @@ class CheckpointConfig:
     load_ema_to_reg: bool = False
 
 
-
 @make_freezable
 @attrs.define(slots=False)
 class TrainerConfig:
@@ -193,6 +190,7 @@ class TrainerConfig:
     # # Profiling config
     # profiling: Profiling = attrs.field(factory=Profiling)
 
+
 @make_freezable
 @attrs.define(slots=False)
 class Config:
@@ -211,7 +209,6 @@ class Config:
     dataloader_train: LazyDict = LazyDict(dict(dummy=None))
     # Validation data configs.
     dataloader_val: LazyDict = LazyDict(dict(dummy=None))
-
 
     # Training job configs.
     job: JobConfig = attrs.field(factory=JobConfig)

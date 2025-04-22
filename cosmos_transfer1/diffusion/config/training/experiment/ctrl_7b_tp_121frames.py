@@ -26,17 +26,19 @@ Example usage:
             torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain
 """
 
-from hydra.core.config_store import ConfigStore
 import os
 
+from hydra.core.config_store import ConfigStore
+
+from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT
+from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
+from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
+from cosmos_transfer1.diffusion.training.models.model_ctrl import (  # this one has training support
+    VideoDiffusionModelWithCtrl,
+)
+from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
-from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
-from cosmos_transfer1.diffusion.training.models.model_ctrl import VideoDiffusionModelWithCtrl  # this one has training support
-from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
-from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
-from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT
-
 
 cs = ConfigStore.instance()
 
@@ -46,16 +48,14 @@ num_control_blocks = 3
 
 
 def make_ctrlnet_config_7b_training(
-    hint_key: str = "control_input_canny",
-    num_control_blocks: int = 3,
-    pretrain_model_path: str = ""
+    hint_key: str = "control_input_canny", num_control_blocks: int = 3, pretrain_model_path: str = ""
 ) -> LazyDict:
     if pretrain_model_path == "":
-       job_name = f"CTRL_7Bv1pt3_lvg_tp_121frames_{hint_key}_block{num_control_blocks}_pretrain"
-       job_project = "cosmos_transfer1_pretrain"
+        job_name = f"CTRL_7Bv1pt3_lvg_tp_121frames_{hint_key}_block{num_control_blocks}_pretrain"
+        job_project = "cosmos_transfer1_pretrain"
     else:
-       job_name = f"CTRL_7Bv1pt3_lvg_tp_121frames_{hint_key}_block{num_control_blocks}_posttrain"
-       job_project = "cosmos_transfer1_posttrain"
+        job_name = f"CTRL_7Bv1pt3_lvg_tp_121frames_{hint_key}_block{num_control_blocks}_posttrain"
+        job_project = "cosmos_transfer1_posttrain"
 
     config = LazyDict(
         dict(
@@ -108,7 +108,7 @@ def make_ctrlnet_config_7b_training(
             model=dict(
                 fsdp_enabled=False,
                 context_parallel_size=1,
-                loss_reduce='mean',
+                loss_reduce="mean",
                 latent_shape=[
                     16,
                     (num_frames - 1) // 8 + 1,  # for 121 frames, this is 16
@@ -116,7 +116,9 @@ def make_ctrlnet_config_7b_training(
                     160,
                 ],
                 base_load_from=dict(
-                    load_path=os.path.join("checkpoints", COSMOS_TRANSFER1_7B_CHECKPOINT, "checkpoints_tp", "base_model_model_mp_*.pt")
+                    load_path=os.path.join(
+                        "checkpoints", COSMOS_TRANSFER1_7B_CHECKPOINT, "checkpoints_tp", "base_model_model_mp_*.pt"
+                    )
                 ),  # modify as needed. This is the TP version of base model ckpt (that's frozen during training).
                 finetune_base_model=False,
                 hint_mask=[True] * len(CTRL_HINT_KEYS_COMB[hint_key]),
@@ -178,8 +180,10 @@ Then in training command, simply need to pass the "experiment" arg to override t
 # NOTE: To launch real post-training, convert the checkpoints to TP checkpoints first. See scripts/convert_ckpt_fsdp_to_tp.py.
 """
 for key in CTRL_HINT_KEYS_COMB.keys():
-    # Register experiments for pretraining from scratch 
-    config = make_ctrlnet_config_7b_training(hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path="")
+    # Register experiments for pretraining from scratch
+    config = make_ctrlnet_config_7b_training(
+        hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path=""
+    )
     cs.store(
         group="experiment",
         package="_global_",
@@ -191,8 +195,12 @@ for key in CTRL_HINT_KEYS_COMB.keys():
     hint_key_short = key.replace("control_input_", "")  # "control_input_vis" -> "vis"
     pretrain_ckpt_path = default_model_names[hint_key_short]
     # note: The TP ckpt path are specified as <name>.pt to the script, but actually the <name>_model_mp_*.pt files will be loaded.
-    tp_ckpt_path = os.path.join("checkpoints", os.path.dirname(pretrain_ckpt_path), "checkpoints_tp", os.path.basename(pretrain_ckpt_path))
-    config = make_ctrlnet_config_7b_training(hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path=tp_ckpt_path)
+    tp_ckpt_path = os.path.join(
+        "checkpoints", os.path.dirname(pretrain_ckpt_path), "checkpoints_tp", os.path.basename(pretrain_ckpt_path)
+    )
+    config = make_ctrlnet_config_7b_training(
+        hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path=tp_ckpt_path
+    )
     cs.store(
         group="experiment",
         package="_global_",

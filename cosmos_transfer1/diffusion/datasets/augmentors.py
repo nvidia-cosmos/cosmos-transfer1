@@ -20,7 +20,7 @@ import torch
 import torchvision.transforms.functional as transforms_F
 
 from cosmos_transfer1.diffusion.datasets.augmentors.control_input import Augmentor
-from cosmos_transfer1.diffusion.datasets.dataset_utils import obtain_image_size, obtain_augmentation_size
+from cosmos_transfer1.diffusion.datasets.dataset_utils import obtain_augmentation_size, obtain_image_size
 
 
 class ReflectionPadding(Augmentor):
@@ -77,7 +77,6 @@ class ReflectionPadding(Augmentor):
         data_dict["image_size"] = torch.tensor([target_h, target_w, orig_h, orig_w], dtype=torch.float)
 
         return data_dict
-
 
 
 class ResizeSmallestSide(Augmentor):

@@ -13,24 +13,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-'''
+"""
 Registry for training experiments, callbacks and data.
-'''
+"""
+
+import copy
 
 from hydra.core.config_store import ConfigStore
 
-from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS, BaseVideoConditionerWithCtrlConfig, VideoConditionerFpsSizePaddingWithCtrlConfig
 import cosmos_transfer1.diffusion.config.training.registry as base_training_registry
-from cosmos_transfer1.diffusion.config.registry import register_conditioner
 from cosmos_transfer1.diffusion.config.base.data import register_data_ctrlnet
-
-from cosmos_transfer1.diffusion.training.networks.general_dit_ctrl_enc import GeneralDITEncoder
-from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
+from cosmos_transfer1.diffusion.config.registry import register_conditioner
 from cosmos_transfer1.diffusion.config.training.tokenizer import get_cosmos_diffusion_tokenizer_comp8x8x8
+from cosmos_transfer1.diffusion.config.transfer.conditioner import (
+    CTRL_HINT_KEYS,
+    BaseVideoConditionerWithCtrlConfig,
+    VideoConditionerFpsSizePaddingWithCtrlConfig,
+)
+from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
+from cosmos_transfer1.diffusion.training.networks.general_dit_ctrl_enc import GeneralDITEncoder
+
 # from cosmos_transfer1.diffusion.config.registry import register_tokenizer
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
-import copy
 
 FADITV2ConfigTrain: LazyDict = L(GeneralDIT)(
     max_img_h=240,
@@ -85,6 +90,7 @@ def register_conditioner_ctrlnet(cs):
         name="ctrlnet_add_fps_image_size_padding_mask",
         node=VideoConditionerFpsSizePaddingWithCtrlConfig,
     )
+
 
 def register_tokenizer(cs):
     cs.store(

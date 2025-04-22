@@ -41,7 +41,7 @@ huggingface-cli login
 CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
 ```
 
-5. The downloaded files should be in the following structure. 
+5. The downloaded files should be in the following structure.
 
 ```
 checkpoints/
@@ -128,7 +128,7 @@ Note: Only the folder corresponding to your chosen control input modality is req
 
 #### 1. Prepare Videos and Captions
 
-The first step is to prepare a dataset with videos and captions. You must provide a folder containing a collection of videos in **MP4 format**, preferably 720p. These videos should focus on the subject throughout the entire video so that each video chunk contains the subject. 
+The first step is to prepare a dataset with videos and captions. You must provide a folder containing a collection of videos in **MP4 format**, preferably 720p. These videos should focus on the subject throughout the entire video so that each video chunk contains the subject.
 
 Here we use a subset of sample videos from HD-VILA-100M as an example:
 
@@ -179,7 +179,7 @@ For VisControl and EdgeControl models: training is self-supervised. These models
 Due to the large model size, we leverage TensorParallel (TP) to split the model weights across multiple GPUs. We use 8 for the TP size.
 
 ```bash
-# Will split the Base model checkpoint into 8 TP checkpoints 
+# Will split the Base model checkpoint into 8 TP checkpoints
 PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B/base_model.pt
 # Example: for EdgeControl checkpoint splitting for post-train.
 PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B/edge_control.pt

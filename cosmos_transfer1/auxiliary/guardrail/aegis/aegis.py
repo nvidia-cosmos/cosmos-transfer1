@@ -14,8 +14,8 @@
 # limitations under the License.
 
 import argparse
-
 import os
+
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -27,6 +27,7 @@ from cosmos_transfer1.utils import log, misc
 
 SAFE = misc.Color.green("SAFE")
 UNSAFE = misc.Color.red("UNSAFE")
+
 
 class Aegis(ContentSafetyGuardrail):
     def __init__(
@@ -46,7 +47,7 @@ class Aegis(ContentSafetyGuardrail):
         base_model = AutoModelForCausalLM.from_pretrained(base_model_id, cache_dir=base_model_dir)
         self.tokenizer = AutoTokenizer.from_pretrained(base_model_id, cache_dir=base_model_dir)
         self.model = PeftModel.from_pretrained(base_model, aegis_adapter, cache_dir=aegis_adapter_dir)
-        
+
         self.model.to(self.device, dtype=self.dtype).eval()
 
     def get_moderation_prompt(self, user_prompt: str) -> str:
