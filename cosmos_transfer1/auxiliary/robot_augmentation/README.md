@@ -106,7 +106,7 @@ Input video:
   Your browser does not support the video tag.
 </video>
 
-You can run multiple times with different prompts, and you can get:
+You can run multiple times with different prompts (e.g., `assets/robot_augmentation_example/example1/example1_prompts.json`), and you can get different augmentation results:
 
 <video width="640" height="480" controls>
   <source src="../../assets/robot_augmentation_example/example1/robot_augmentation_result.mp4" type="video/mp4">
