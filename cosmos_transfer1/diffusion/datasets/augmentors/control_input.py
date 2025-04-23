@@ -737,8 +737,16 @@ class AddControlInputHDMAP(Augmentor):
         if "control_input_hdmap" in data_dict:
             # already processed
             return data_dict
-        else:
-            raise ValueError("HDMAP condition is not provided.")
+        if "video" not in data_dict:
+            image = np.array(data_dict[self.input_keys[1]])
+            h, w, _ = image.shape
+            data_dict[self.output_keys[0]] = torch.from_numpy(np.zeros((3, h, w)).astype(np.uint8))
+            return data_dict
+
+        key_out = self.output_keys[0]
+        hdmap = data_dict["hdmap"]["video"]
+        data_dict[key_out] = hdmap
+        return data_dict
 
 
 class AddControlInputLIDAR(Augmentor):
@@ -764,8 +772,16 @@ class AddControlInputLIDAR(Augmentor):
         if "control_input_lidar" in data_dict:
             # already processed
             return data_dict
-        else:
-            raise ValueError("LiDAR condition is not provided.")
+        if "video" not in data_dict:
+            image = np.array(data_dict[self.input_keys[1]])
+            h, w, _ = image.shape
+            data_dict[self.output_keys[0]] = torch.from_numpy(np.zeros((3, h, w)).astype(np.uint8))
+            return data_dict
+
+        key_out = self.output_keys[0]
+        lidar = data_dict["lidar"]["video"]
+        data_dict[key_out] = lidar
+        return data_dict
 
 
 # Array of 23 highly distinguishable colors in RGB format

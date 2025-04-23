@@ -37,6 +37,8 @@ from cosmos_transfer1.utils.lazy_config import instantiate
 CTRL_TYPE_INFO = {
     "keypoint": {"folder": "keypoint", "format": "pickle", "data_dict_key": "keypoint"},
     "depth": {"folder": "depth", "format": "mp4", "data_dict_key": "depth"},
+    "lidar": {"folder": "lidar", "format": "mp4", "data_dict_key": "lidar"},
+    "hdmap": {"folder": "hamap", "format": "mp4", "data_dict_key": "hdmap"},
     "seg": {"folder": "seg", "format": "pickle", "data_dict_key": "segmentation"},
     "edge": {"folder": None},  # Canny edge, computed on-the-fly
     "vis": {"folder": None},  # Blur, computed on-the-fly
@@ -67,7 +69,7 @@ class ExampleTransferDataset(Dataset):
         ), "The provided resolution cannot be found in VIDEO_RES_SIZE_INFO."
 
         # Control input setup with file formats
-        self.ctrl_type = hint_key.lstrip("control_input_")
+        self.ctrl_type = hint_key.replace("control_input_", "")
         self.ctrl_data_pth_config = CTRL_TYPE_INFO[self.ctrl_type]
 
         # Set up directories - only collect paths
@@ -133,6 +135,32 @@ class ExampleTransferDataset(Dataset):
                     "frame_start": frame_ids[0],
                     "frame_end": frame_ids[-1],
                 }
+            elif self.ctrl_type == "lidar":
+                vr = VideoReader(ctrl_path, ctx=cpu(0))
+                # Ensure the lidar depth video has the same number of frames
+                assert len(vr) >= frame_ids[-1] + 1, \
+                    f"Lidar video {ctrl_path} has fewer frames than main video"
+                # Load the corresponding frames
+                lidar_frames = vr.get_batch(frame_ids).asnumpy() # [T,H,W,C]
+                lidar_frames = torch.from_numpy(lidar_frames).permute(3, 0, 1, 2)  # [C,T,H,W], same as rgb video
+                data_dict["lidar"] = {  
+                    "video": lidar_frames,
+                    "frame_start": frame_ids[0],
+                    "frame_end": frame_ids[-1],
+                }
+            elif self.ctrl_type == "hdmap":
+                vr = VideoReader(ctrl_path, ctx=cpu(0))
+                # Ensure the hdmap video has the same number of frames
+                assert len(vr) >= frame_ids[-1] + 1, \
+                    f"Hdmap video {ctrl_path} has fewer frames than main video"
+                # Load the corresponding frames 
+                hdmap_frames = vr.get_batch(frame_ids).asnumpy() # [T,H,W,C]
+                hdmap_frames = torch.from_numpy(hdmap_frames).permute(3, 0, 1, 2)  # [C,T,H,W], same as rgb video
+                data_dict["hdmap"] = {
+                    "video": hdmap_frames,
+                    "frame_start": frame_ids[0],
+                    "frame_end": frame_ids[-1],
+                }
 
         except Exception as e:
             warnings.warn(f"Failed to load control data from {ctrl_path}: {str(e)}")
@@ -170,7 +198,7 @@ class ExampleTransferDataset(Dataset):
 
                 # Load T5 embeddings
                 with open(data["video_name"]["t5_embedding_path"], "rb") as f:
-                    t5_embedding = pickle.load(f)[0]
+                    t5_embedding = pickle.load(f)
                 data["t5_text_embeddings"] = torch.from_numpy(t5_embedding)  # .cuda()
                 data["t5_text_mask"] = torch.ones(512, dtype=torch.int64)  # .cuda()
 
@@ -230,11 +258,11 @@ if __name__ == "__main__":
     """
     Sanity check for the dataset.
     """
-    control_input_key = "control_input_keypoint"
+    control_input_key = "control_input_lidar"
     visualize_control_input = True
 
     dataset = ExampleTransferDataset(
-        dataset_dir="datasets/hdvila/", hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
+        dataset_dir="datasets/waymo/", hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
     )
     print("finished init dataset")
     indices = [0, 12, 100, -1]
