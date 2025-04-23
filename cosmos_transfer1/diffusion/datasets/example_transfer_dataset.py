@@ -143,7 +143,7 @@ class ExampleTransferDataset(Dataset):
                 # Load the corresponding frames
                 lidar_frames = vr.get_batch(frame_ids).asnumpy() # [T,H,W,C]
                 lidar_frames = torch.from_numpy(lidar_frames).permute(3, 0, 1, 2)  # [C,T,H,W], same as rgb video
-                data_dict["lidar"] = {  
+                data_dict["lidar"] = {
                     "video": lidar_frames,
                     "frame_start": frame_ids[0],
                     "frame_end": frame_ids[-1],
@@ -153,7 +153,7 @@ class ExampleTransferDataset(Dataset):
                 # Ensure the hdmap video has the same number of frames
                 assert len(vr) >= frame_ids[-1] + 1, \
                     f"Hdmap video {ctrl_path} has fewer frames than main video"
-                # Load the corresponding frames 
+                # Load the corresponding frames
                 hdmap_frames = vr.get_batch(frame_ids).asnumpy() # [T,H,W,C]
                 hdmap_frames = torch.from_numpy(hdmap_frames).permute(3, 0, 1, 2)  # [C,T,H,W], same as rgb video
                 data_dict["hdmap"] = {
