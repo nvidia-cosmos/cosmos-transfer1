@@ -154,13 +154,14 @@ def make_ctrlnet_config(
                     )
                 ),
                 net=L(VideoExtendGeneralDIT)(
+                    in_channels=16,
                     extra_per_block_abs_pos_emb=True,
                     pos_emb_learnable=True,
                     extra_per_block_abs_pos_emb_type="learnable",
                 ),
                 adjust_video_noise=True,
                 net_ctrl=dict(
-                    in_channels=17,
+                    in_channels=16,
                     hint_channels=16,
                     num_blocks=num_blocks,
                     layer_mask=[True if (i >= num_control_blocks) else False for i in range(num_blocks)],
