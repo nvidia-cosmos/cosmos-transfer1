@@ -43,6 +43,8 @@ CTRL_TYPE_INFO = {
     "edge": {"folder": None},  # Canny edge, computed on-the-fly
     "vis": {"folder": None},  # Blur, computed on-the-fly
     "upscale": {"folder": None},  # Computed on-the-fly
+    #"hdmap": {"folder": None},   # TODO: Change when data ready
+    #"lidar": {"folder": None}
 }
 
 
