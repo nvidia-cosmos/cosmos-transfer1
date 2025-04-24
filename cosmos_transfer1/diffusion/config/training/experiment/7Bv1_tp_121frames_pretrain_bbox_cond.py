@@ -30,7 +30,7 @@ from cosmos_transfer1.diffusion.config.base.data import get_sampler
 from cosmos_transfer1.diffusion.training.models.model_ctrl import VideoDiffusionModelWithCtrl  # this one has training support
 from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
 from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
-from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT
+from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT
 from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset
 
 
@@ -39,7 +39,7 @@ cs = ConfigStore.instance()
 num_frames = 121
 num_blocks = 28
 num_control_blocks = 3
-ckpt_root = "/mnt/scratch/cache/imageinaire/"   #"checkpoints
+ckpt_root = '/lustre/fsw/portfolios/nvr/users/tianshic/cosmos_ckpts'#"/mnt/scratch/cache/imageinaire/"   #"checkpoints
 
 
 
@@ -133,8 +133,8 @@ def make_ctrlnet_config(
                     160,
                 ],
                 base_load_from=dict(
-                    load_path=os.path.join(ckpt_root, COSMOS_TRANSFER1_7B_CHECKPOINT, "checkpoints_tp",
-                                           "base_model_mp_*.pt")
+                    load_path=os.path.join(ckpt_root, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT, "checkpoints_tp",
+                                           "base_model_model_mp_*.pt")
                 ),
                 finetune_base_model=False,
                 hint_mask=[True],
@@ -170,18 +170,21 @@ def make_ctrlnet_config(
                 ),
             ),
             model_obj=L(VideoDiffusionModelWithCtrl)(),
+            #/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/
             dataloader_train=dict(
-                dataset=dict(dataset_dir='/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/datasets/waymo/'),
+                dataset=dict(dataset_dir='/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo/'
+                             ),
                 sampler=dict(
-                    dataset=dict(dataset_dir='/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/datasets/waymo/')
+                    dataset=dict(dataset_dir='/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo/'
+                                 )
                 )
             ),
             dataloader_val=dict(
                 dataset=dict(
-                    dataset_dir='/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/datasets/waymo/'),
+                    dataset_dir='/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo/'),
                 sampler=dict(
                     dataset=dict(
-                        dataset_dir='/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/datasets/waymo/')
+                        dataset_dir='/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo/')
                 )
             ),
 
