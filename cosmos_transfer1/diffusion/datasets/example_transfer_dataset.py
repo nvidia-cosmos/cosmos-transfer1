@@ -38,7 +38,7 @@ CTRL_TYPE_INFO = {
     "keypoint": {"folder": "keypoint", "format": "pickle", "data_dict_key": "keypoint"},
     "depth": {"folder": "depth", "format": "mp4", "data_dict_key": "depth"},
     "lidar": {"folder": "lidar", "format": "mp4", "data_dict_key": "lidar"},
-    "hdmap": {"folder": "hamap", "format": "mp4", "data_dict_key": "hdmap"},
+    "hdmap": {"folder": "hdmap", "format": "mp4", "data_dict_key": "hdmap"},
     "seg": {"folder": "seg", "format": "pickle", "data_dict_key": "segmentation"},
     "edge": {"folder": None},  # Canny edge, computed on-the-fly
     "vis": {"folder": None},  # Blur, computed on-the-fly
@@ -192,17 +192,30 @@ class ExampleTransferDataset(Dataset):
                 # Basic data
                 data["video"] = video
                 data["aspect_ratio"] = aspect_ratio
-                data["video_name"] = {
-                    "video_path": video_path,
-                    "t5_embedding_path": os.path.join(self.t5_dir, f"{video_name}.pickle"),
-                    "start_frame_id": str(frame_ids[0]),
-                }
+
 
                 # Load T5 embeddings
-                with open(data["video_name"]["t5_embedding_path"], "rb") as f:
-                    t5_embedding = pickle.load(f)
-                data["t5_text_embeddings"] = torch.from_numpy(t5_embedding)  # .cuda()
-                data["t5_text_mask"] = torch.ones(512, dtype=torch.int64)  # .cuda()
+                if self.ctrl_type in ["hdmap", "lidar"]:
+                    # AV data load captions differently
+                    data["video_name"] = {
+                        "video_path": video_path,
+                        "t5_embedding_path": os.path.join(self.t5_dir, f"{video_name}.pkl"),
+                        "start_frame_id": str(frame_ids[0]),
+                    }
+                    with open(data["video_name"]["t5_embedding_path"], "rb") as f:
+                        t5_embedding = pickle.load(f)["pickle"]["ground_truth"]["embeddings"]["t5_xxl"]
+                    data["t5_text_embeddings"] = torch.from_numpy(t5_embedding)  # .cuda()
+                    data["t5_text_mask"] = torch.ones(512, dtype=torch.int64)  # .cuda()
+                else:
+                    data["video_name"] = {
+                        "video_path": video_path,
+                        "t5_embedding_path": os.path.join(self.t5_dir, f"{video_name}.pickle"),
+                        "start_frame_id": str(frame_ids[0]),
+                    }
+                    with open(data["video_name"]["t5_embedding_path"], "rb") as f:
+                        t5_embedding = pickle.load(f)
+                    data["t5_text_embeddings"] = torch.from_numpy(t5_embedding)  # .cuda()
+                    data["t5_text_mask"] = torch.ones(512, dtype=torch.int64)  # .cuda()
 
                 # Add metadata
                 data["fps"] = fps

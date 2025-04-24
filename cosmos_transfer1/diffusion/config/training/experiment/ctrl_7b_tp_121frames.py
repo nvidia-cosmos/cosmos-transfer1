@@ -26,6 +26,8 @@ Example usage:
             torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain
 """
 
+import copy
+from hydra.core.config_store import ConfigStore
 import os
 
 from hydra.core.config_store import ConfigStore
@@ -180,6 +182,8 @@ Then in training command, simply need to pass the "experiment" arg to override t
 # NOTE: To launch real post-training, convert the checkpoints to TP checkpoints first. See scripts/convert_ckpt_fsdp_to_tp.py.
 """
 for key in CTRL_HINT_KEYS_COMB.keys():
+    if key in ["control_input_hdmap", "control_input_lidar"]:
+        continue
     # Register experiments for pretraining from scratch
     config = make_ctrlnet_config_7b_training(
         hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path=""
@@ -190,7 +194,6 @@ for key in CTRL_HINT_KEYS_COMB.keys():
         name=config["job"]["name"],
         node=config,
     )
-
     # Register experiments for post-training from TP checkpoints.
     hint_key_short = key.replace("control_input_", "")  # "control_input_vis" -> "vis"
     pretrain_ckpt_path = default_model_names[hint_key_short]

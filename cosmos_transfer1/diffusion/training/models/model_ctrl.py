@@ -29,6 +29,7 @@ from cosmos_transfer1.diffusion.inference.inference_utils import (
 )
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.diffusion.training.models.extend_model import ExtendDiffusionModel as ExtendVideoDiffusionModel
+from cosmos_transfer1.diffusion.training.models.model import DiffusionModel as VideoDiffusionModel
 from cosmos_transfer1.diffusion.training.models.model import _broadcast, broadcast_condition
 from cosmos_transfer1.diffusion.training.models.model_image import diffusion_fsdp_class_decorator
 from cosmos_transfer1.utils import log, misc
@@ -716,4 +717,15 @@ class VideoDiffusionModelWithCtrl(ExtendVideoDiffusionModel):
 @video_ctrlnet_decorator
 @ctrlnet_decorator
 class VideoDiffusionFSDPModelWithCtrl(ExtendVideoDiffusionModel):
+    pass
+
+@video_ctrlnet_decorator
+@ctrlnet_decorator
+class ShortVideoDiffusionModelWithCtrl(VideoDiffusionModel):
+    pass
+
+@diffusion_fsdp_class_decorator
+@video_ctrlnet_decorator
+@ctrlnet_decorator
+class ShortVideoDiffusionFSDPModelWithCtrl(VideoDiffusionModel):
     pass

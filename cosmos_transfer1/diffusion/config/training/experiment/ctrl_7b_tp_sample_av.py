@@ -27,8 +27,9 @@ from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
 from cosmos_transfer1.diffusion.config.base.data import get_sampler
-from cosmos_transfer1.diffusion.training.models.model_ctrl import VideoDiffusionModelWithCtrl  # this one has training support
+from cosmos_transfer1.diffusion.training.models.model_ctrl import VideoDiffusionModelWithCtrl, ShortVideoDiffusionModelWithCtrl  # this one has training support
 from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
+from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
 from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
 from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT
 from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset
@@ -36,11 +37,11 @@ from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import Example
 
 cs = ConfigStore.instance()
 
-num_frames = 121
+num_frames = 57
 num_blocks = 28
 num_control_blocks = 3
 ckpt_root = '/lustre/fsw/portfolios/nvr/users/tianshic/cosmos_ckpts'#"/mnt/scratch/cache/imageinaire/"   #"checkpoints
-
+data_root = '/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo_transfer1/'
 
 
 def make_ctrlnet_config(
@@ -106,7 +107,7 @@ def make_ctrlnet_config(
                 broadcast_via_filesystem=True,
                 save_iter=1000,
                 load_training_state=False,
-                strict_resume=True,
+                strict_resume=False,
                 keys_not_to_resume=[],
             ),
             trainer=dict(
@@ -153,12 +154,19 @@ def make_ctrlnet_config(
                         augment_sigma_sample_multiplier=1.0,
                     )
                 ),
-                net=L(VideoExtendGeneralDIT)(
+                net=dict(
                     in_channels=16,
                     extra_per_block_abs_pos_emb=True,
                     pos_emb_learnable=True,
                     extra_per_block_abs_pos_emb_type="learnable",
                 ),
+                # net=L(GeneralDIT)(
+                # net=dict(
+                #     in_channels=16,
+                #     extra_per_block_abs_pos_emb=True,
+                #     pos_emb_learnable=True,
+                #     extra_per_block_abs_pos_emb_type="learnable",
+                # ),
                 adjust_video_noise=True,
                 net_ctrl=dict(
                     in_channels=16,
@@ -169,23 +177,35 @@ def make_ctrlnet_config(
                     pos_emb_learnable=True,
                     extra_per_block_abs_pos_emb_type="learnable",
                 ),
+                tokenizer=dict(
+                    #video_vae=dict(
+                        pixel_chunk_duration=num_frames,
+                    #)
+                ),
             ),
-            model_obj=L(VideoDiffusionModelWithCtrl)(),
+            model_obj=L(ShortVideoDiffusionModelWithCtrl)(),
+            # model_obj=L(VideoDiffusionModelWithCtrl)(),
             #/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/
             dataloader_train=dict(
-                dataset=dict(dataset_dir='/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo/'
+                dataset=dict(dataset_dir=data_root,
+                             num_frames=num_frames
                              ),
                 sampler=dict(
-                    dataset=dict(dataset_dir='/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo/'
+                    dataset=dict(dataset_dir=data_root,
+                                 num_frames=num_frames
                                  )
                 )
             ),
             dataloader_val=dict(
                 dataset=dict(
-                    dataset_dir='/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo/'),
+                    dataset_dir=data_root,
+                    num_frames=num_frames
+                ),
                 sampler=dict(
                     dataset=dict(
-                        dataset_dir='/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo/')
+                        dataset_dir=data_root,
+                        num_frames=num_frames
+                    )
                 )
             ),
 
