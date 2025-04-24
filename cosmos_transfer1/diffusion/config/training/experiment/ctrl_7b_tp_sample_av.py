@@ -37,7 +37,6 @@ from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import Example
 
 cs = ConfigStore.instance()
 
-num_frames = 57
 num_blocks = 28
 num_control_blocks = 3
 ckpt_root = '/lustre/fsw/portfolios/nvr/users/tianshic/cosmos_ckpts'#"/mnt/scratch/cache/imageinaire/"   #"checkpoints
@@ -48,22 +47,23 @@ def make_ctrlnet_config(
     hint_key: str = "control_input_segmentation",
     num_control_blocks: int = 3,
     pretrain_model_path: str = "",
-    t2v: bool=True
+    t2v: bool=True,
+    num_frames=121
 ) -> LazyDict:
 
     if pretrain_model_path == "":
         if t2v:
-            job_name = f"CTRL_7Bv1pt3_t2v_121frames_{hint_key}_block{num_control_blocks}_pretrain"
+            job_name = f"CTRL_7Bv1pt3_t2v_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
             job_project = "cosmos_transfer1_pretrain"
         else:
-            job_name = f"CTRL_7Bv1pt3_lvg_121frames_{hint_key}_block{num_control_blocks}_pretrain"
+            job_name = f"CTRL_7Bv1pt3_lvg_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
             job_project = "cosmos_transfer1_pretrain"
     else:
         if t2v:
-            job_name = f"CTRL_7Bv1pt3_t2v_121frames_{hint_key}_block{num_control_blocks}_posttrain"
+            job_name = f"CTRL_7Bv1pt3_t2v_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
             job_project = "cosmos_transfer1_posttrain"
         else:
-            job_name = f"CTRL_7Bv1pt3_lvg_121frames_{hint_key}_block{num_control_blocks}_posttrain"
+            job_name = f"CTRL_7Bv1pt3_lvg_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
             job_project = "cosmos_transfer1_posttrain"
     # dataset = L(ExampleTransferDataset)(
     #     "/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/datasets/waymo/",
@@ -178,14 +178,10 @@ def make_ctrlnet_config(
                     extra_per_block_abs_pos_emb_type="learnable",
                 ),
                 tokenizer=dict(
-                    #video_vae=dict(
-                        pixel_chunk_duration=num_frames,
-                    #)
+                    pixel_chunk_duration=num_frames,
                 ),
             ),
             model_obj=L(ShortVideoDiffusionModelWithCtrl)(),
-            # model_obj=L(VideoDiffusionModelWithCtrl)(),
-            #/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/
             dataloader_train=dict(
                 dataset=dict(dataset_dir=data_root,
                              num_frames=num_frames
@@ -238,43 +234,35 @@ all_hint_key = [
 ]
 
 for key in all_hint_key:
-    # Register experiments for pretraining from scratch
-    t2v_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                     pretrain_model_path="", t2v=True)
-    # never released these lol...
-    i2v_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                     pretrain_model_path="", t2v=False)
-    # Register experiments for pretraining from scratch
-    debug_config = make_small_config(t2v_config, net_ctrl=True)
-    cs.store(
-        group="experiment",
-        package="_global_",
-        name=t2v_config["job"]["name"],
-        node=t2v_config,
-    )
-    cs.store(
-        group="experiment",
-        package="_global_",
-        name=i2v_config["job"]["name"],
-        node=i2v_config,
-    )
-    cs.store(
-        group="experiment",
-        package="_global_",
-        name=debug_config["job"]["name"],
-        node=debug_config,
-    )
-    # Register experiments for post-training from TP checkpoints.
-    hint_key_short = key.replace("control_input_", "")  # "control_input_vis" -> "vis"
-    pretrain_ckpt_path = default_model_names[hint_key_short]
-    # note: The TP ckpt path are specified as <name>.pt to the script, but actually the <name>_model_mp_*.pt files will be loaded.
-    tp_ckpt_path = os.path.join(ckpt_root, os.path.dirname(pretrain_ckpt_path), "checkpoints_tp",
-                                os.path.basename(pretrain_ckpt_path))
-    config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                pretrain_model_path=tp_ckpt_path, t2v=True)
-    cs.store(
-        group="experiment",
-        package="_global_",
-        name=config["job"]["name"],
-        node=config,
-    )
+    for num_frames in [57, 121]:
+        # Register experiments for pretraining from scratch
+        t2v_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
+                                         pretrain_model_path="", t2v=True, num_frames=num_frames)
+        # Register experiments for pretraining from scratch
+        debug_config = make_small_config(t2v_config, net_ctrl=True)
+        cs.store(
+            group="experiment",
+            package="_global_",
+            name=t2v_config["job"]["name"],
+            node=t2v_config,
+        )
+        cs.store(
+            group="experiment",
+            package="_global_",
+            name=debug_config["job"]["name"],
+            node=debug_config,
+        )
+        # Register experiments for post-training from TP checkpoints.
+        hint_key_short = key.replace("control_input_", "")  # "control_input_vis" -> "vis"
+        pretrain_ckpt_path = default_model_names[hint_key_short]
+        # note: The TP ckpt path are specified as <name>.pt to the script, but actually the <name>_model_mp_*.pt files will be loaded.
+        tp_ckpt_path = os.path.join(ckpt_root, os.path.dirname(pretrain_ckpt_path), "checkpoints_tp",
+                                    os.path.basename(pretrain_ckpt_path))
+        config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
+                                    pretrain_model_path=tp_ckpt_path, t2v=True, num_frames=num_frames)
+        cs.store(
+            group="experiment",
+            package="_global_",
+            name=config["job"]["name"],
+            node=config,
+        )
