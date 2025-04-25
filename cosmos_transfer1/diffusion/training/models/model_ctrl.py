@@ -113,7 +113,7 @@ def ctrlnet_decorator(base_class: Type[T]) -> Type[T]:
                 state_dict = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
                 log.success(f"Complete loading base model checkpoint (local): {checkpoint_path}")
 
-                if "ema" in state_dict:
+                if state_dict.get("ema") is not None:
                     # Copy the base model weights from ema model.
                     log.info("Copying ema to base model")
                     base_state_dict = {k.replace("-", "."): v for k, v in state_dict["ema"].items()}
