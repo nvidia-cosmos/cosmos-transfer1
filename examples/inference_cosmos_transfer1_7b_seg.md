@@ -22,6 +22,6 @@ Same as the [Edge example](/examples/inference_cosmos_transfer1_7b.md#example-1-
 
 This will generate a 960 x 704 video that maintains the structural consistency from the input video while enhancing visual quality, detail, and realism.
 
-<video src="https://github.com/user-attachments/assets/6fab1a4a-73e3-45cb-ab07-3e3f4ecbd0bc">
+<video src="https://github.com/user-attachments/assets/08058680-be85-4571-81b2-cd56b51e41f5">
   Your browser does not support the video tag.
 </video>
