@@ -105,7 +105,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --n
 
 Cosmos-Transfer1 supports a variety of configurations. You can pass your configuration in a JSON file via the argument `--controlnet_specs`. Let's go over a few examples:
 
-#### Example 1: single control
+### Example 1: single control (Edge)
 
 The following `controlnet_specs` only activates the edge controlnet.
 
@@ -149,7 +149,6 @@ This launches `transfer.py` and configures the controlnets for inference accordi
 }
 ```
 
-#### The input and output videos
 The input video is a low-resolution 640 × 480 video.
 
 <video src="https://github.com/user-attachments/assets/e63b9e9c-fee1-4105-a480-bb525bde1115">
@@ -191,8 +190,7 @@ Here is the generated video using the upsampled prompt.
   Your browser does not support the video tag.
 </video>
 
-
-### Examples 2: multimodal control
+### Example 2: multimodal control
 
 The following `controlnet_specs` activates vis, edge, depth, seg controls at the same time and apply uniform spatial weights.
 
@@ -254,7 +252,7 @@ The output video can be found at `assets/example1_uniform_weights.mp4`.
 - For `depth` and `seg`, if the `input_control` is not provided, we will run DepthAnything2 and GroundingDino+SAM2 on `input_video_path` to generate the corresponding `input_control`. Please see `assets/inference_cosmos_transfer1_uniform_weights_auto.json` as an example.
 - For `seg`, `input_control_prompt` can be provided to customize the prompt sent to GroundingDino. We can use ` . ` to separate objects in the `input_control_prompt`, e.g. `robotic arms . woman . cup`, as suggested by [GroundingDino](https://github.com/IDEA-Research/GroundingDINO?tab=readme-ov-file#arrow_forward-demo). If `input_control_prompt` is not provided, `prompt` will be used by default. Please see `assets/inference_cosmos_transfer1_uniform_weights_auto.json` as an example.
 
-### Examples 3: multimodal control with spatiotemporal control map
+### Example 3: multimodal control with spatiotemporal control map
 
 The following `controlnet_specs` activates vis, edge, depth, seg controls at the same time and apply spatiotemporal weights.
 
