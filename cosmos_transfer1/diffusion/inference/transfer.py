@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import argparse
+import copy
 import json
 import os
 
@@ -242,16 +243,27 @@ def demo(cfg, control_inputs):
         current_prompt = input_dict.get("prompt", None)
         current_video_path = input_dict.get("visual_input", None)
 
+        video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{i}")
+        os.makedirs(video_save_subfolder, exist_ok=True)
+        current_control_inputs = copy.deepcopy(control_inputs)
+
+        if "control_overrides" in input_dict:
+            for hint_key, override in input_dict["control_overrides"].items():
+                if hint_key in current_control_inputs:
+                    current_control_inputs[hint_key].update(override)
+                else:
+                    log.warning(f"Ignoring unknown control key in override: {hint_key}")
+
         # if control inputs are not provided, run respective preprocessor (for seg and depth)
-        preprocessors(current_video_path, current_prompt, control_inputs, cfg.video_save_folder)
+        preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder)
 
         # Generate video
         generated_output = pipeline.generate(
             prompt=current_prompt,
             video_path=current_video_path,
             negative_prompt=cfg.negative_prompt,
-            control_inputs=control_inputs,
-            save_folder=cfg.video_save_folder,
+            control_inputs=current_control_inputs,
+            save_folder=video_save_subfolder,
         )
         if generated_output is None:
             log.critical("Guardrail blocked generation.")
@@ -259,8 +271,8 @@ def demo(cfg, control_inputs):
         video, prompt = generated_output
 
         if cfg.batch_input_path:
-            video_save_path = os.path.join(cfg.video_save_folder, f"{i}.mp4")
-            prompt_save_path = os.path.join(cfg.video_save_folder, f"{i}.txt")
+            video_save_path = os.path.join(video_save_subfolder, "output.mp4")
+            prompt_save_path = os.path.join(video_save_subfolder, "prompt.txt")
         else:
             video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
             prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")

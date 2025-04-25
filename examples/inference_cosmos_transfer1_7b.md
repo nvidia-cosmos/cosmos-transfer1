@@ -316,11 +316,13 @@ In effect, for the configuration given in `assets/inference_cosmos_transfer1_spa
 
 
 #### Example 4: batch generation
-This example runs inference on a batch of prompts, provided through the `--batch_input_path` argument (path to a JSONL file). This enables running multiple generations with different prompts based on the same controlnet configurations.
-Each line in the JSONL file must contain a `visual_input` field equivalent to the `--input_video_path` argument in the case of single control generation. It can also contain the a `prompt` field:
+This example runs inference on a batch of prompts, provided through the `--batch_input_path` argument (path to a JSONL file). This enables running multiple generations with different prompts (and per-video control input customization) based on the same controlnet configurations.
+Each line in the JSONL file must contain a `visual_input` field equivalent to the `--input_video_path` argument in the case of single control generation. It can also contain the `prompt` field. The batch system supports automatic control input generation, manual override of specific controls per video, and mixed usage of automatic and manual controls in the same batch. By default, the `input_control` specified within the controlnet spec json will be used for all samples in the batch, and are overridden if explicitly specified in the batch input json file (either with another `input_control` path or with `null` to indicate automatic generation based on the visual input).
+Here is an example of the Batch Input JSONL Format
 ```json
-{"visual_input": "path/to/video1.mp4"}
-{"visual_input": "path/to/video2.mp4"}
+{"visual_input": "path/to/video0.mp4", "prompt": "A detailed description..."}
+{"visual_input": "path/to/video1.mp4", "prompt": "A detailed description...",   "control_overrides": {"seg": {"input_control": "path/to/video1_seg.mp4"}, "depth": {"input_control": null}}}
+{"visual_input": "path/to/video2.mp4", "prompt": "A detailed description...",   "control_overrides": {"seg": {"input_control": "path/to/video2_seg.mp4"}, "depth": {"input_control": "path/to/video2_depth.mp4"}}}
 ```
 Inference command (with 9 input frames):
 ```bash
