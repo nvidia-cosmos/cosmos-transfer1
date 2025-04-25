@@ -22,6 +22,6 @@ Same as the [Edge example](/examples/inference_cosmos_transfer1_7b.md#example-1-
 
 This will generate a 960 x 704 video that preserves the overall color palette, lighting, and coarse structure from the input video using the vis control. By guiding the generation with a blurred version of the input, the model maintains the original scene's visual feel while significantly enhancing visual quality, detail, and realism based on the provided prompt.
 
-<video src="https://github.com/user-attachments/assets/3b982e26-8077-47de-a57e-cb034b033836">
+<video src="https://github.com/user-attachments/assets/2e9ef23c-5356-4d26-aedb-b19752560581">
   Your browser does not support the video tag.
 </video>
