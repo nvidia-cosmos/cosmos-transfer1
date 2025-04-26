@@ -269,6 +269,201 @@ class ExampleTransferDataset(Dataset):
         return f"{len(self.video_paths)} samples from {self.dataset_dir}"
 
 
+class AVTransferDataset(ExampleTransferDataset):
+    def __init__(self, dataset_dir, num_frames, resolution, view_keys, hint_key="control_input_hdmap",
+                 sample_n_views=-1, caption_view_idx_map=None,
+                 is_train=True):
+        """Dataset class for loading video-text-to-video generation data with control inputs.
+
+        Args:
+            dataset_dir (str): Base path to the dataset directory
+            num_frames (int): Number of consecutive frames to load per sequence
+            resolution (str): resolution of the target video size
+            hint_key (str): The hint key for loading the correct control input data modality
+            is_train (bool): Whether this is for training
+
+        NOTE: in our example dataset we do not have a validation dataset. The is_train flag is kept here for customized configuration.
+        """
+        super(ExampleTransferDataset, self).__init__()
+        self.dataset_dir = dataset_dir
+        self.sequence_length = num_frames
+        self.is_train = is_train
+        self.resolution = resolution
+        self.view_keys = view_keys
+        assert (
+            resolution in VIDEO_RES_SIZE_INFO.keys()
+        ), "The provided resolution cannot be found in VIDEO_RES_SIZE_INFO."
+
+        # Control input setup with file formats
+        self.ctrl_type = hint_key.replace("control_input_", "")
+        self.ctrl_data_pth_config = CTRL_TYPE_INFO[self.ctrl_type]
+
+        # Set up directories - only collect paths
+        video_dir = os.path.join(self.dataset_dir, "front", "rgb")
+        self.video_paths = [os.path.join(video_dir, f) for f in os.listdir(video_dir) if f.endswith(".mp4")]
+        self.t5_dir = os.path.join(self.dataset_dir, "t5_xxl")
+
+        cache_dir = os.path.join(self.dataset_dir, "cache")
+        self.prefix_t5_embeddings = {}
+        for view_key in view_keys:
+            with open(os.path.join(cache_dir, f"prefix_t5_embeddings_pinhole_{view_key}.pickle"), "rb") as f:
+                self.prefix_t5_embeddings[view_key] = pickle.load(f)
+        if caption_view_idx_map is None:
+            self.caption_view_idx_map = dict([(i, i) for i in range(len(self.view_keys))])
+        else:
+            self.caption_view_idx_map = caption_view_idx_map
+        self.sample_n_views = sample_n_views
+
+        print(f"Finish initializing dataset with {len(self.video_paths)} videos in total.")
+
+        # Set up preprocessing and augmentation
+        augmentor_name = f"video_ctrlnet_augmentor_{hint_key}"
+        augmentor_cfg = AUGMENTOR_OPTIONS[augmentor_name](resolution=resolution)
+        self.augmentor = {k: instantiate(v) for k, v in augmentor_cfg.items()}
+
+    def _load_video(self, video_path, frame_ids):
+        vr = VideoReader(video_path, ctx=cpu(0), num_threads=2)
+        assert (np.array(frame_ids) < len(vr)).all()
+        assert (np.array(frame_ids) >= 0).all()
+        vr.seek(0)
+        frame_data = vr.get_batch(frame_ids).asnumpy()
+        try:
+            fps = vr.get_avg_fps()
+        except Exception:  # failed to read FPS
+            fps = 24
+        return frame_data, fps
+
+
+    def __getitem__(self, index):
+        max_retries = 3
+        for _ in range(max_retries):
+            try:
+                video_path = self.video_paths[index]
+                video_name = os.path.basename(video_path).replace(".mp4", "")
+
+                data = dict()
+                ctrl_videos = []
+                videos = []
+                t5_embeddings = []
+                view_indices = [i for i in range(len(self.view_keys))]
+                view_indices_conditioning = []
+                if self.sample_n_views > 1:
+                    sampled_idx = np.random.choice(
+                        np.arange(1, len(view_indices)), size=min(self.sample_n_views - 1, len(view_indices) - 1),
+                        replace=False
+                    )
+                    sampled_idx = np.concatenate(
+                        [
+                            [
+                                0,
+                            ],
+                            sampled_idx,
+                        ]
+                    )
+                    sampled_idx.sort()
+                    view_indices = sampled_idx.tolist()
+
+                frame_ids = None
+                fps = None
+                for view_index in view_indices:
+                    view_key = self.view_keys[view_index]
+                    if frame_ids is None:
+                        frames, frame_ids, fps = self._sample_frames(video_path)
+                        if frames is None:  # Invalid video or too short
+                            index = np.random.randint(len(self.video_paths))
+                            continue
+
+                    else:
+                        frames, fps = self._load_video(os.path.join(self.dataset_dir, view_key, "rgb",
+                                                                   os.path.basename(video_path)), frame_ids)
+                    # Process video frames
+                    video = torch.from_numpy(frames)
+
+                    video = video.permute(3, 0, 1, 2) # Rearrange from [T, C, H, W] to [C, T, H, W]
+                    aspect_ratio = detect_aspect_ratio((video.shape[3], video.shape[2]))  # expects (W, H)
+                    videos.append(video)
+
+                    if view_key == "front":
+
+                        if video_name.endswith("_0"):
+                            video_name_emb = video_name[:-2]
+                        else:
+                            video_name_emb = video_name
+                        t5_embedding_path = os.path.join(self.t5_dir, f"{video_name_emb}.pkl")
+                        with open(t5_embedding_path, "rb") as f:
+                            t5_embedding = pickle.load(f)["pickle"]["ground_truth"]["embeddings"]["t5_xxl"]
+                    else:
+                        # use camera prompt
+                        t5_embedding = self.prefix_t5_embeddings[view_key]
+                    t5_embedding = torch.from_numpy(t5_embedding)
+                    if t5_embedding.shape[0] < 512:
+                        t5_embedding = torch.cat([t5_embedding, torch.zeros(512 - t5_embedding.shape[0], 1024)], dim=0)
+                    t5_embeddings.append(t5_embedding)
+                    caption_viewid = self.caption_view_idx_map[view_index]
+                    view_indices_conditioning.append(torch.ones(video.shape[1]) * caption_viewid)
+
+                    if self.ctrl_type:
+                        v_ctrl_data = self._load_control_data(
+                            {
+                                "ctrl_path": os.path.join(
+                                    self.dataset_dir,
+                                    view_key,
+                                    self.ctrl_data_pth_config["folder"],
+                                    f"{video_name}.{self.ctrl_data_pth_config['format']}",
+                                )
+                                if self.ctrl_data_pth_config["folder"] is not None
+                                else None,
+                                "frame_ids": frame_ids,
+                            }
+                        )
+                        if v_ctrl_data is None:  # Control data loading failed
+                            index = np.random.randint(len(self.video_paths))
+                            continue
+                        ctrl_videos.append(v_ctrl_data[self.ctrl_type]["video"])
+
+                video = torch.cat(videos, dim=1)
+                ctrl_videos = torch.cat(ctrl_videos, dim=1)
+                t5_embedding = torch.cat(t5_embeddings, dim=0)
+                view_indices_conditioning = torch.cat(view_indices_conditioning, dim=0)
+
+                # Basic data
+                data["video"] = video
+                data["aspect_ratio"] = aspect_ratio
+                data["t5_text_embeddings"] = t5_embedding # .cuda()
+                data["t5_text_mask"] = torch.ones(512 * len(self.view_keys), dtype=torch.int64)  # .cuda()
+                data["view_indices"] = view_indices_conditioning.contiguous()
+
+                # Add metadata
+                data["fps"] = fps
+                data["frame_start"] = frame_ids[0]
+                data["frame_end"] = frame_ids[-1] + 1
+                data["num_frames"] = self.sequence_length
+                data["image_size"] = torch.tensor([704, 1280, 704, 1280])  # .cuda()
+                data["padding_mask"] = torch.zeros(1, 704, 1280)  # .cuda()
+                data[self.ctrl_type] = dict()
+                data[self.ctrl_type]["video"] = ctrl_videos
+
+
+                # The ctrl_data above is the 'raw' data loaded (e.g. a loaded segmentation pkl).
+                # Next, we process it into the control input "video" tensor that the model expects.
+                # This is done in the augmentor.
+                for _, aug_fn in self.augmentor.items():
+                    data = aug_fn(data)
+
+                return data
+
+            except Exception:
+                warnings.warn(
+                    f"Invalid data encountered: {self.video_paths[index]}. Skipped "
+                    f"(by randomly sampling another sample in the same dataset)."
+                )
+                warnings.warn("FULL TRACEBACK:")
+                warnings.warn(traceback.format_exc())
+                if _ == max_retries - 1:
+                    raise RuntimeError(f"Failed to load data after {max_retries} attempts")
+                index = np.random.randint(len(self.video_paths))
+
+
 if __name__ == "__main__":
     """
     Sanity check for the dataset.
@@ -276,8 +471,8 @@ if __name__ == "__main__":
     control_input_key = "control_input_lidar"
     visualize_control_input = True
 
-    dataset = ExampleTransferDataset(
-        dataset_dir="datasets/waymo/", hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
+    dataset = AVTransferDataset(
+        dataset_dir="/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/waymo_apr25_transfer1", view_keys=["front"], hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
     )
     print("finished init dataset")
     indices = [0, 12, 100, -1]

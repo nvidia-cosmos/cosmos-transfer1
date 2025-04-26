@@ -20,9 +20,10 @@ Usage:
 
 import copy
 import os
+from megatron.core import parallel_state
 
 from hydra.core.config_store import ConfigStore
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, DistributedSampler
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
@@ -32,7 +33,7 @@ from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned 
 from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
 from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
 from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT
-from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset
+from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset, AVTransferDataset
 
 
 cs = ConfigStore.instance()
@@ -41,7 +42,6 @@ num_blocks = 28
 num_control_blocks = 3
 ckpt_root = '/lustre/fsw/portfolios/nvr/users/tianshic/cosmos_ckpts'#"/mnt/scratch/cache/imageinaire/"   #"checkpoints
 data_root = '/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo_transfer1/'
-
 
 def make_ctrlnet_config(
     hint_key: str = "control_input_segmentation",
@@ -65,6 +65,14 @@ def make_ctrlnet_config(
         else:
             job_name = f"CTRL_7Bv1pt3_lvg_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
             job_project = "cosmos_transfer1_posttrain"
+    example_multiview_dataset_waymo = L(AVTransferDataset)(
+        dataset_dir="/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/waymo_apr25_transfer1",
+        num_frames=num_frames,
+        hint_key=hint_key,
+        resolution="720",
+        view_keys=["front"],
+        sample_n_views=-1,
+    )
     # dataset = L(ExampleTransferDataset)(
     #     "/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/datasets/waymo/",
     #     hint_key,
@@ -182,29 +190,22 @@ def make_ctrlnet_config(
                 ),
             ),
             model_obj=L(ShortVideoDiffusionModelWithCtrl)(),
-            dataloader_train=dict(
-                dataset=dict(dataset_dir=data_root,
-                             num_frames=num_frames
-                             ),
-                sampler=dict(
-                    dataset=dict(dataset_dir=data_root,
-                                 num_frames=num_frames
-                                 )
-                )
+            dataloader_train=L(DataLoader)(
+                dataset=example_multiview_dataset_waymo,
+                sampler=L(get_sampler)(dataset=example_multiview_dataset_waymo),
+                batch_size=1,
+                drop_last=True,
+                pin_memory=True,
+                num_workers=8
             ),
-            dataloader_val=dict(
-                dataset=dict(
-                    dataset_dir=data_root,
-                    num_frames=num_frames
-                ),
-                sampler=dict(
-                    dataset=dict(
-                        dataset_dir=data_root,
-                        num_frames=num_frames
-                    )
-                )
+            dataloader_val=L(DataLoader)(
+                dataset=example_multiview_dataset_waymo,
+                sampler=L(get_sampler)(dataset=example_multiview_dataset_waymo),
+                batch_size=1,
+                drop_last=True,
+                pin_memory=True,
+                num_workers=8
             ),
-
         )
     )
     return ctrl_config
