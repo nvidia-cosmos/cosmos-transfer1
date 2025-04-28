@@ -126,9 +126,7 @@ class BaseWorldGenerationPipeline(ABC):
         Initializes models used for checking input prompts against safety policies.
         Models are loaded from the specified guardrail directory.
         """
-        self.text_guardrail = guardrail_presets.create_text_guardrail_runner(
-            checkpoint_dir=self.checkpoint_dir
-        )
+        self.text_guardrail = guardrail_presets.create_text_guardrail_runner(checkpoint_dir=self.checkpoint_dir)
 
     def _load_video_guardrail(self):
         """Load video safety classifier models.
@@ -136,9 +134,7 @@ class BaseWorldGenerationPipeline(ABC):
         Initializes models used for validating generated video content against
         safety policies. Models are loaded from the specified guardrail directory.
         """
-        self.video_guardrail = guardrail_presets.create_video_guardrail_runner(
-            checkpoint_dir=self.checkpoint_dir
-        )
+        self.video_guardrail = guardrail_presets.create_video_guardrail_runner(checkpoint_dir=self.checkpoint_dir)
 
     def _offload_network(self):
         if self.model.model:

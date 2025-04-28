@@ -64,6 +64,9 @@ def register_tokenizer(cs):
 
 
 def register_configs():
+    """
+    base model related registry
+    """
     cs = ConfigStore.instance()
 
     register_net(cs)

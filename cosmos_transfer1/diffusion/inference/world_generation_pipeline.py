@@ -46,8 +46,8 @@ from cosmos_transfer1.diffusion.inference.inference_utils import (
     load_tokenizer_model,
     merge_patches_into_video,
     non_strict_load_model,
-    split_video_into_patches,
     resize_control_weight_map,
+    split_video_into_patches,
 )
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
 from cosmos_transfer1.utils import log
@@ -300,12 +300,11 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 )  # , weights_only=True)
                 non_strict_load_model(self.model.model, net_state_dict)
 
-        if self.process_group is not None: 
+        if self.process_group is not None:
             self.model.model.net.enable_context_parallel(self.process_group)
             self.model.model.base_model.net.enable_context_parallel(self.process_group)
             if hasattr(self.model.model, "hint_encoders"):
                 self.model.model.hint_encoders.net.enable_context_parallel(self.process_group)
-
 
     def _load_tokenizer(self):
         load_tokenizer_model(self.model, f"{self.checkpoint_dir}/{COSMOS_TOKENIZER_CHECKPOINT}")

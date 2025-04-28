@@ -36,7 +36,6 @@ class Blocklist(ContentSafetyGuardrail):
         guardrail_partial_match_min_chars: int = 6,
         guardrail_partial_match_letter_count: float = 0.4,
     ) -> None:
-
         self.checkpoint_dir = os.path.join(checkpoint_dir, "nvidia/Cosmos-Guardrail1/blocklist")
         nltk.data.path.append(os.path.join(self.checkpoint_dir, "nltk_data"))
         self.lemmatizer = nltk.WordNetLemmatizer()

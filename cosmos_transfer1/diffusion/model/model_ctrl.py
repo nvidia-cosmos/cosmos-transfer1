@@ -544,7 +544,6 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
         else:
             setattr(uncondition, hint_key, latent_hint)
 
-
         to_cp = self.net.is_context_parallel_enabled
         # For inference, check if parallel_state is initialized
         if parallel_state.is_initialized():

@@ -154,3 +154,27 @@ class BlurAugmentorConfig:
     # probabilities from the list of combinations should add up to 1.0
     blur_combinations: List[BlurCombinationConfig] = []
     downscale_factor: List[int] = [1]
+
+
+# random blur for training the VisControl
+random_blur_config = BlurAugmentorConfig(
+    downscale_factor=list(range(1, 5)),
+    blur_combinations=[
+        BlurCombinationConfig(
+            blur_types=["bilateral"],
+            probability=0.5,
+            bilateral_filter=BilateralFilterConfig(use_random=True),
+        ),
+        BlurCombinationConfig(
+            blur_types=["gaussian"],
+            probability=0.3,
+            gaussian_blur=GaussianBlurConfig(use_random=True),
+        ),
+        BlurCombinationConfig(
+            blur_types=["bilateral", "gaussian"],
+            probability=0.2,
+            bilateral_filter=BilateralFilterConfig(use_random=True),
+            gaussian_blur=GaussianBlurConfig(use_random=True),
+        ),
+    ],
+)
