@@ -299,7 +299,7 @@
       blogpost, about page, or product documentation. If you use the Llama Materials to create,
       train, fine tune, or otherwise improve an AI model, which is distributed or made available,
       you shall also include “Llama 3” at the beginning of any such AI model name.
-      
+
       ii. If you receive Llama Materials, or any derivative works thereof, from a Licensee as
       part of an integrated end user product, then Section 2 of this Agreement will not apply
       to you.
@@ -398,10 +398,10 @@
    allow others to use, Meta Llama 3 to:
 
    1. Violate the law or others’ rights, including to:
-   
+
    a. Engage in, promote, generate, contribute to, encourage, plan, incite, or further illegal
    or unlawful activity or content, such as:
-      
+
       i. Violence or terrorism
       ii. Exploitation or harm to children, including the solicitation, creation, acquisition,
       or dissemination of child exploitative content or failure to report Child Sexual Abuse
@@ -438,7 +438,7 @@
    2. Engage in, promote, incite, facilitate, or assist in the planning or development of
    activities that present a risk of death or bodily harm to individuals, including use of Meta
    Llama 3 related to the following:
-   
+
    a. Military, warfare, nuclear industries or applications, espionage, use for materials or
    activities that are subject to the International Traffic Arms Regulations (ITAR) maintained
    by the United States Department of State
@@ -451,7 +451,7 @@
 
    3. Intentionally deceive or mislead others, including use of Meta Llama 3 related to the
    following:
-   
+
    a. Generating, promoting, or furthering fraud or the creation or promotion of disinformation
    b. Generating, promoting, or furthering defamatory content, including the creation of
    defamatory statements, images, or other content

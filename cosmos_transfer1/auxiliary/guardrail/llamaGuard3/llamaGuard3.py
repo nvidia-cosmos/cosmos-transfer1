@@ -19,8 +19,8 @@ import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from cosmos_transfer1.auxiliary.guardrail.llamaGuard3.categories import UNSAFE_CATEGORIES
 from cosmos_transfer1.auxiliary.guardrail.common.core import ContentSafetyGuardrail, GuardrailRunner
+from cosmos_transfer1.auxiliary.guardrail.llamaGuard3.categories import UNSAFE_CATEGORIES
 from cosmos_transfer1.utils import log, misc
 
 SAFE = misc.Color.green("SAFE")
@@ -53,7 +53,7 @@ class LlamaGuard3(ContentSafetyGuardrail):
             categories_detected = []
             for line in lines[1:]:
                 line_stripped = line.split("<|eot_id|>")[0].strip()
-                for catagory in line_stripped.split(','):
+                for catagory in line_stripped.split(","):
                     catagory = catagory.strip()
                     if catagory not in UNSAFE_CATEGORIES:
                         log.warning(f"Unrecognized category from moderation output: {catagory}")
@@ -69,7 +69,9 @@ class LlamaGuard3(ContentSafetyGuardrail):
     def filter_llamaGuard3_output(self, prompt: str) -> tuple[bool, str]:
         """Filter the Llama Guard 3 model output and return the safety status and message."""
         conversation = [{"role": "user", "content": prompt}]
-        input_ids = self.tokenizer.apply_chat_template(conversation, categories=UNSAFE_CATEGORIES, return_tensors="pt").to("cuda")  
+        input_ids = self.tokenizer.apply_chat_template(
+            conversation, categories=UNSAFE_CATEGORIES, return_tensors="pt"
+        ).to("cuda")
         prompt_len = input_ids.shape[1]
         output = self.model.generate(
             input_ids=input_ids,
