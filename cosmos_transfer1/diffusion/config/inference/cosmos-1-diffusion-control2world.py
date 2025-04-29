@@ -18,7 +18,9 @@ from hydra.core.config_store import ConfigStore
 from cosmos_transfer1.checkpoints import BASE_7B_CHECKPOINT_AV_SAMPLE_PATH
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
+from cosmos_transfer1.diffusion.model.model_multi_camera_ctrl import MultiVideoDiffusionModelWithCtrl
 from cosmos_transfer1.diffusion.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
+from cosmos_transfer1.diffusion.networks.general_dit_multi_view import MultiViewVideoExtendGeneralDIT
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
 
@@ -136,6 +138,65 @@ def make_ctrlnet_config_7b_t2v(
         )
     )
 
+def make_ctrlnet_config_7b_mv(
+    hint_key: str = "control_input_seg",
+    num_control_blocks: int = 3,
+) -> LazyDict:
+    hint_mask = [True] * len(CTRL_HINT_KEYS_COMB[hint_key])
+
+    return LazyDict(
+        dict(
+            defaults=[
+                "/experiment/Base_7B_Config",
+                {"override /hint_key": hint_key},
+                {"override /net_ctrl": "faditv2_7b_mv"},
+                {"override /conditioner": "view_cond_ctrlnet_add_fps_image_size_padding_mask"},
+            ],
+            job=dict(
+                group="CTRL_7Bv1_mv",
+                name=f"CTRL_7Bv1pt3_mv_t2v_57frames_{hint_key}_block{num_control_blocks}",
+                project="cosmos_ctrlnet1",
+            ),
+            model=dict(
+                n_cameras=6,
+                base_load_from=dict(
+                    load_path=f"checkpoints/{BASE_7B_CHECKPOINT_AV_SAMPLE_PATH}",
+                ),
+                hint_mask=hint_mask,
+                hint_dropout_rate=0.3,
+                net=L(MultiViewVideoExtendGeneralDIT)(
+                    n_cameras=6,
+                    n_cameras_emb=7,
+                    camera_condition_dim=6,
+                    add_repeat_frame_embedding=True,
+                    extra_per_block_abs_pos_emb=True,
+                    pos_emb_learnable=True,
+                    # extra_per_block_abs_pos_emb_type="learnable",
+                ),
+                net_ctrl=dict(
+                    in_channels=16,
+                    hint_channels=16,
+                    num_blocks=28,
+                    n_cameras=6,
+                    n_cameras_emb=7,
+                    camera_condition_dim=6,
+                    add_repeat_frame_embedding=True,
+                    is_extend_model=True,
+                    layer_mask=[True if (i >= num_control_blocks) else False for i in range(28)],
+                    extra_per_block_abs_pos_emb=True,
+                    pos_emb_learnable=True,
+                    # extra_per_block_abs_pos_emb_type="learnable",
+                ),
+                tokenizer=dict(
+                    video_vae=dict(
+                        pixel_chunk_duration=57,
+                    )
+                ),
+            ),
+            model_obj=L(MultiVideoDiffusionModelWithCtrl)(),
+        )
+    )
+
 
 # Register base configs
 cs.store(group="experiment", package="_global_", name=Base_7B_Config["job"]["name"], node=Base_7B_Config)
@@ -151,4 +212,10 @@ num_control_blocks = 3
 for key in ["control_input_hdmap", "control_input_lidar"]:
     # Register 7B configurations
     config_7b = make_ctrlnet_config_7b_t2v(hint_key=key, num_control_blocks=num_control_blocks)
+    cs.store(group="experiment", package="_global_", name=config_7b["job"]["name"], node=config_7b)
+
+num_control_blocks = 3
+for key in ["control_input_hdmap", "control_input_lidar"]:
+    # Register 7B configurations
+    config_7b = make_ctrlnet_config_7b_mv(hint_key=key, num_control_blocks=num_control_blocks)
     cs.store(group="experiment", package="_global_", name=config_7b["job"]["name"], node=config_7b)
