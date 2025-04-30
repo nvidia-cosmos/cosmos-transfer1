@@ -67,7 +67,7 @@ class ExampleTransferDataset(Dataset):
         ), "The provided resolution cannot be found in VIDEO_RES_SIZE_INFO."
 
         # Control input setup with file formats
-        self.ctrl_type = hint_key.lstrip("control_input_")
+        self.ctrl_type = hint_key.replace("control_input_", "")
         self.ctrl_data_pth_config = CTRL_TYPE_INFO[self.ctrl_type]
 
         # Set up directories - only collect paths
@@ -150,7 +150,6 @@ class ExampleTransferDataset(Dataset):
                 # Sample frames
                 frames, frame_ids, fps = self._sample_frames(video_path)
                 if frames is None:  # Invalid video or too short
-                    index = np.random.randint(len(self.video_paths))
                     continue
 
                 data = dict()
@@ -196,7 +195,6 @@ class ExampleTransferDataset(Dataset):
                         }
                     )
                     if ctrl_data is None:  # Control data loading failed
-                        index = np.random.randint(len(self.video_paths))
                         continue
                     data.update(ctrl_data)
 
@@ -215,9 +213,11 @@ class ExampleTransferDataset(Dataset):
                 )
                 warnings.warn("FULL TRACEBACK:")
                 warnings.warn(traceback.format_exc())
-                if _ == max_retries - 1:
-                    raise RuntimeError(f"Failed to load data after {max_retries} attempts")
+            finally:
+                # update index to a random index and retry when we reach here
                 index = np.random.randint(len(self.video_paths))
+        # after max_retries, raise an error
+        raise RuntimeError(f"Failed to load data after {max_retries} attempts")
 
     def __len__(self):
         return len(self.video_paths)
