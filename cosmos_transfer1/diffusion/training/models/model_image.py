@@ -588,14 +588,14 @@ class DiffusionModel(Model):
                                      or using customized loading procedures. Defaults to False.
         """
         if strict:
-            if self.config.ema.enabled and state_dict["ema"] is not None:
+            if self.config.ema.enabled and state_dict.get("ema") is not None:
                 ema_results: _IncompatibleKeys = self.model_ema.load_state_dict(
                     state_dict["ema"], strict=strict, assign=assign
                 )
             reg_results: _IncompatibleKeys = self.model.load_state_dict(
                 state_dict["model"], strict=strict, assign=assign
             )
-            if self.config.ema.enabled and state_dict["ema"] is not None:
+            if self.config.ema.enabled and state_dict.get("ema") is not None:
                 return _IncompatibleKeys(
                     ema_results.missing_keys + reg_results.missing_keys,
                     ema_results.unexpected_keys + reg_results.unexpected_keys,
@@ -606,7 +606,7 @@ class DiffusionModel(Model):
 
             log.critical("load model in non-strict mode")
             log.critical(non_strict_load_model(self.model, state_dict["model"]), rank0_only=False)
-            if self.config.ema.enabled and state_dict["ema"] is not None:
+            if self.config.ema.enabled and state_dict.get("ema") is not None:
                 log.critical("load ema model in non-strict mode")
                 log.critical(non_strict_load_model(self.model_ema, state_dict["ema"]), rank0_only=False)
 

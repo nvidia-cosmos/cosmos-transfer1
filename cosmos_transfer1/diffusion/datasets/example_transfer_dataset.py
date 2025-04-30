@@ -67,7 +67,7 @@ class ExampleTransferDataset(Dataset):
         ), "The provided resolution cannot be found in VIDEO_RES_SIZE_INFO."
 
         # Control input setup with file formats
-        self.ctrl_type = hint_key.lstrip("control_input_")
+        self.ctrl_type = hint_key.replace("control_input_", "")
         self.ctrl_data_pth_config = CTRL_TYPE_INFO[self.ctrl_type]
 
         # Set up directories - only collect paths
