@@ -43,8 +43,6 @@ CTRL_TYPE_INFO = {
     "edge": {"folder": None},  # Canny edge, computed on-the-fly
     "vis": {"folder": None},  # Blur, computed on-the-fly
     "upscale": {"folder": None},  # Computed on-the-fly
-    #"hdmap": {"folder": None},   # TODO: Change when data ready
-    #"lidar": {"folder": None}
 }
 
 
@@ -145,7 +143,7 @@ class ExampleTransferDataset(Dataset):
                 # Load the corresponding frames
                 lidar_frames = vr.get_batch(frame_ids).asnumpy() # [T,H,W,C]
                 lidar_frames = torch.from_numpy(lidar_frames).permute(3, 0, 1, 2)  # [C,T,H,W], same as rgb video
-                data_dict["lidar"] = {
+                data_dict["lidar"] = {  
                     "video": lidar_frames,
                     "frame_start": frame_ids[0],
                     "frame_end": frame_ids[-1],
@@ -155,7 +153,7 @@ class ExampleTransferDataset(Dataset):
                 # Ensure the hdmap video has the same number of frames
                 assert len(vr) >= frame_ids[-1] + 1, \
                     f"Hdmap video {ctrl_path} has fewer frames than main video"
-                # Load the corresponding frames
+                # Load the corresponding frames 
                 hdmap_frames = vr.get_batch(frame_ids).asnumpy() # [T,H,W,C]
                 hdmap_frames = torch.from_numpy(hdmap_frames).permute(3, 0, 1, 2)  # [C,T,H,W], same as rgb video
                 data_dict["hdmap"] = {
@@ -281,7 +279,6 @@ class AVTransferDataset(ExampleTransferDataset):
             num_frames (int): Number of consecutive frames to load per sequence
             resolution (str): resolution of the target video size
             hint_key (str): The hint key for loading the correct control input data modality
-            view_keys (list[str]): list of view names that the dataloader should load
             sample_n_views (int): Number of views to sample
             caption_view_idx_map (dict): Optional dictionary mapping index in view_keys to index in model.view_embeddings
             is_train (bool): Whether this is for training
@@ -304,7 +301,7 @@ class AVTransferDataset(ExampleTransferDataset):
         self.ctrl_data_pth_config = CTRL_TYPE_INFO[self.ctrl_type]
 
         # Set up directories - only collect paths
-        video_dir = os.path.join(self.dataset_dir, "videos", "pinhole_front")
+        video_dir = os.path.join(self.dataset_dir, "front", "rgb")
         self.video_paths = [os.path.join(video_dir, f) for f in os.listdir(video_dir) if f.endswith(".mp4")]
         self.t5_dir = os.path.join(self.dataset_dir, "t5_xxl")
 
@@ -376,7 +373,8 @@ class AVTransferDataset(ExampleTransferDataset):
                     if frame_ids is None:
                         frames, frame_ids, fps = self._sample_frames(video_path)
                         if frames is None:  # Invalid video or too short
-                            raise Exception("Failed to load frames")
+                            index = np.random.randint(len(self.video_paths))
+                            continue
 
                     else:
                         frames, fps = self._load_video(os.path.join(self.dataset_dir, "videos", view_key,
@@ -431,7 +429,8 @@ class AVTransferDataset(ExampleTransferDataset):
                             }
                         )
                         if v_ctrl_data is None:  # Control data loading failed
-                            raise Exception("Failed to load v_ctrl_data")
+                            index = np.random.randint(len(self.video_paths))
+                            continue
                         ctrl_videos.append(v_ctrl_data[self.ctrl_type]["video"])
 
                 video = torch.cat(videos, dim=1)
@@ -457,7 +456,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 data[self.ctrl_type]["video"] = ctrl_videos
 
 
-                # The ctrl_data above is the 'raw' data loaded (e.g. a loaded lidar pkl).
+                # The ctrl_data above is the 'raw' data loaded (e.g. a loaded segmentation pkl).
                 # Next, we process it into the control input "video" tensor that the model expects.
                 # This is done in the augmentor.
                 for _, aug_fn in self.augmentor.items():
@@ -485,7 +484,7 @@ if __name__ == "__main__":
     visualize_control_input = True
 
     dataset = AVTransferDataset(
-        dataset_dir="datasets/waymo_transfer1", view_keys=["pinhole_front"], hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
+        dataset_dir="/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/waymo_apr25_transfer1", view_keys=["front"], hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
     )
     print("finished init dataset")
     indices = [0, 12, 100, -1]
