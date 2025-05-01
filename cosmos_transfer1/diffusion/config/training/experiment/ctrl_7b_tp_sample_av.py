@@ -40,11 +40,11 @@ cs = ConfigStore.instance()
 
 num_blocks = 28
 num_control_blocks = 3
-ckpt_root = '/lustre/fsw/portfolios/nvr/users/tianshic/cosmos_ckpts'#"/mnt/scratch/cache/imageinaire/"   #"checkpoints
-data_root = '/lustre/fs12/portfolios/nvr/users/tianshic/jobs/edify_video4/alpamayo_finetune_debug/driving_FT_7Bv312_lvg_1to6_cameras_multi_camera_005_002_frame_repeat_dbg_2_nodes_1_202504231445/cosmos-predict/cosmos-av-sample-toolkits/datasets/waymo_transfer1/'
+ckpt_root = 'checkpoints/'
+data_root = 'datasets/waymo_transfer1/'
 
 def make_ctrlnet_config(
-    hint_key: str = "control_input_segmentation",
+    hint_key: str = "control_input_hdmap",
     num_control_blocks: int = 3,
     pretrain_model_path: str = "",
     t2v: bool=True,
@@ -66,27 +66,15 @@ def make_ctrlnet_config(
             job_name = f"CTRL_7Bv1pt3_lvg_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
             job_project = "cosmos_transfer1_posttrain"
     example_multiview_dataset_waymo = L(AVTransferDataset)(
-        dataset_dir="/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/waymo_apr25_transfer1",
+        dataset_dir=data_root,
         num_frames=num_frames,
         hint_key=hint_key,
         resolution="720",
         view_keys=["front"],
         sample_n_views=-1,
+        load_mv_emb=False,
     )
-    # dataset = L(ExampleTransferDataset)(
-    #     "/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/datasets/waymo/",
-    #     hint_key,
-    #     121,
-    #     "720",
-    #     True
-    # ),
-    # dataset = L(ExampleTransferDataset)(
-    #     dataset_dir="/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/datasets/waymo/",
-    #     hint_key = hint_key,
-    #     num_frames = 121,
-    #     resolution = "720",
-    #     is_train = True
-    # ),
+
     ctrl_config = LazyDict(
         dict(
             defaults=[
@@ -98,8 +86,6 @@ def make_ctrlnet_config(
                 {"override /callbacks": "basic"},
                 {"override /checkpoint": "local"},
                 {"override /ckpt_klass": "fast_tp"},
-                {"override /data_train": f"example_transfer_train_data_{hint_key}"},
-                {"override /data_val": f"example_transfer_val_data_{hint_key}"},
                 "_self_",
             ],
             job=dict(group="CTRL_7Bv1_sampleAV", project=job_project, name=job_name),
@@ -168,13 +154,6 @@ def make_ctrlnet_config(
                     pos_emb_learnable=True,
                     extra_per_block_abs_pos_emb_type="learnable",
                 ),
-                # net=L(GeneralDIT)(
-                # net=dict(
-                #     in_channels=16,
-                #     extra_per_block_abs_pos_emb=True,
-                #     pos_emb_learnable=True,
-                #     extra_per_block_abs_pos_emb_type="learnable",
-                # ),
                 adjust_video_noise=True,
                 net_ctrl=dict(
                     in_channels=16,
@@ -211,23 +190,6 @@ def make_ctrlnet_config(
     return ctrl_config
 
 
-def make_small_config(base_config: LazyDict, net_ctrl=False) -> LazyDict:
-    small_config = copy.deepcopy(base_config)
-    small_config["job"]["group"] = "debug"
-    small_config["job"]["name"] = f"{small_config['job']['name']}_SMALL"
-    num_blocks_small = 2
-    small_config["model"]["net"]["num_blocks"] = num_blocks_small
-    if net_ctrl:
-        small_config["model"]["net_ctrl"]["num_blocks"] = num_blocks_small
-        small_config["model"]["net_ctrl"]["layer_mask"] = [
-            True if (i >= num_blocks_small // 2) else False for i in range(num_blocks_small)
-        ]
-    small_config["model_parallel"]["tensor_model_parallel_size"] = 1
-    small_config["model_parallel"]["sequence_parallel"] = False
-    small_config["checkpoint"]["load_path"] = ""
-    small_config["model"]["base_load_from"]["load_path"] = ""
-    return small_config
-
 
 all_hint_key = [
     "control_input_hdmap",
@@ -239,20 +201,13 @@ for key in all_hint_key:
         # Register experiments for pretraining from scratch
         t2v_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
                                          pretrain_model_path="", t2v=True, num_frames=num_frames)
-        # Register experiments for pretraining from scratch
-        debug_config = make_small_config(t2v_config, net_ctrl=True)
         cs.store(
             group="experiment",
             package="_global_",
             name=t2v_config["job"]["name"],
             node=t2v_config,
         )
-        cs.store(
-            group="experiment",
-            package="_global_",
-            name=debug_config["job"]["name"],
-            node=debug_config,
-        )
+
         # Register experiments for post-training from TP checkpoints.
         hint_key_short = key.replace("control_input_", "")  # "control_input_vis" -> "vis"
         pretrain_ckpt_path = default_model_names[hint_key_short]

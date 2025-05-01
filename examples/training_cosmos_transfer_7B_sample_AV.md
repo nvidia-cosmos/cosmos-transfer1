@@ -1,13 +1,13 @@
-# Training Cosmos-Transfer1 Models
+# Training Cosmos-Transfer1-Sample-AV Models
 In this document, we provide examples and steps to:
-- Build your own Cosmos-Transfer1 models, training from scratch; or
-- Post-train Cosmos-Transfer1 models from our checkpoint using your data.
+- Build your own Cosmos-Transfer1-Sample-AV models, training from scratch; or
+- Post-train Cosmos-Transfer1-Sample-AV models from our checkpoint using your data.
 
 The model is trained separately for each control input type.
 
 
 ## Model Support Matrix
-We support the following Cosmos-Transfer1 models for pre-training and post-training. Review the available models and their compute requirements for training to determine the best model for your use case. We use Tensor Parallel of size 8 for training.
+We support the following Cosmos-Transfer1-Sample-AV models for pre-training and post-training. Review the available models and their compute requirements for training to determine the best model for your use case. We use Tensor Parallel of size 8 for training.
 
 | Model Name                            | Model Status | Compute Requirements for Post-Training |
 |---------------------------------------|--------------|----------------------------------------|
@@ -93,11 +93,11 @@ checkpoints/
 
 Checkpoint Requirements:
 - Base model (`base_model.pt`) and tokenizer models (under `Cosmos-Tokenize1-CV8x8x8-720p`): Required for all training.
-- Control modality-specific model checkpoint (e.g., `seg_control.pt`): Only needed for post-training that specific control. Not needed if training from scratch.
+- Control modality-specific model checkpoint (e.g., `hdmap_control.pt`): Only needed for post-training that specific control. Not needed if training from scratch.
 - Other folders such as `depth-anything`, `facebook/sam2-hiera-large` etc.: optional. These are helper modules to process the video data into the respective control modalities such as depth and segmentation.
 
 ## Example
-There are 3 steps to train a Cosmos-Transfer1 model: preparing a dataset, prepare checkpoints, and launch training.
+There are 3 steps to train a Cosmos-Transfer1-Sample-AV model: preparing a dataset, prepare checkpoints, and launch training.
 
 ### 1. Dataset Download and Preprocessing
 In the example below, we use a subset of [Waymo Open Dataset](https://waymo.com/open/) dataset to demonstrate the steps for preparing the data and launching training. 
@@ -110,7 +110,7 @@ Due to the large model size, we leverage TensorParallel (TP) to split the model 
 ```bash
 # Will split the Base model checkpoint into 8 TP checkpoints
 PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV/base_model.pt
-# Example: for EdgeControl checkpoint splitting for post-train.
+# Example: for LidarControl checkpoint splitting for post-train.
 PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV/lidar_control.pt
 ```
 This will generate the TP checkpoints under `checkpoints/checkpoints_tp/*_mp_*.pt`, which we load in the training below.

@@ -737,11 +737,6 @@ class AddControlInputHDMAP(Augmentor):
         if "control_input_hdmap" in data_dict:
             # already processed
             return data_dict
-        if "video" not in data_dict:
-            image = np.array(data_dict[self.input_keys[1]])
-            h, w, _ = image.shape
-            data_dict[self.output_keys[0]] = torch.from_numpy(np.zeros((3, h, w)).astype(np.uint8))
-            return data_dict
 
         key_out = self.output_keys[0]
         hdmap = data_dict["hdmap"]["video"]
@@ -753,7 +748,7 @@ class AddControlInputLIDAR(Augmentor):
     """
     Add control input to the data dictionary. control input are expanded to 3-channels
     steps to add new items: modify this file, configs/conditioner.py, conditioner.py.
-    For HDMAP condition, the hdmap should already been provided as input. So no extra process is needed.
+    For LIDAR condition, the lidar should already been provided as input. So no extra process is needed.
     """
 
     def __init__(
@@ -771,11 +766,6 @@ class AddControlInputLIDAR(Augmentor):
     def __call__(self, data_dict) -> dict:
         if "control_input_lidar" in data_dict:
             # already processed
-            return data_dict
-        if "video" not in data_dict:
-            image = np.array(data_dict[self.input_keys[1]])
-            h, w, _ = image.shape
-            data_dict[self.output_keys[0]] = torch.from_numpy(np.zeros((3, h, w)).astype(np.uint8))
             return data_dict
 
         key_out = self.output_keys[0]

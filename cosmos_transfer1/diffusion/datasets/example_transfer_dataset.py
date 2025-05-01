@@ -279,6 +279,7 @@ class AVTransferDataset(ExampleTransferDataset):
             num_frames (int): Number of consecutive frames to load per sequence
             resolution (str): resolution of the target video size
             hint_key (str): The hint key for loading the correct control input data modality
+            view_keys (list[str]): list of view names that the dataloader should load
             sample_n_views (int): Number of views to sample
             caption_view_idx_map (dict): Optional dictionary mapping index in view_keys to index in model.view_embeddings
             is_train (bool): Whether this is for training
@@ -301,7 +302,7 @@ class AVTransferDataset(ExampleTransferDataset):
         self.ctrl_data_pth_config = CTRL_TYPE_INFO[self.ctrl_type]
 
         # Set up directories - only collect paths
-        video_dir = os.path.join(self.dataset_dir, "front", "rgb")
+        video_dir = os.path.join(self.dataset_dir, "videos", "pinhole_front")
         self.video_paths = [os.path.join(video_dir, f) for f in os.listdir(video_dir) if f.endswith(".mp4")]
         self.t5_dir = os.path.join(self.dataset_dir, "t5_xxl")
 
@@ -373,8 +374,7 @@ class AVTransferDataset(ExampleTransferDataset):
                     if frame_ids is None:
                         frames, frame_ids, fps = self._sample_frames(video_path)
                         if frames is None:  # Invalid video or too short
-                            index = np.random.randint(len(self.video_paths))
-                            continue
+                            raise Exception("Failed to load frames")
 
                     else:
                         frames, fps = self._load_video(os.path.join(self.dataset_dir, "videos", view_key,
@@ -429,8 +429,7 @@ class AVTransferDataset(ExampleTransferDataset):
                             }
                         )
                         if v_ctrl_data is None:  # Control data loading failed
-                            index = np.random.randint(len(self.video_paths))
-                            continue
+                            raise Exception("Failed to load v_ctrl_data")
                         ctrl_videos.append(v_ctrl_data[self.ctrl_type]["video"])
 
                 video = torch.cat(videos, dim=1)
@@ -456,7 +455,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 data[self.ctrl_type]["video"] = ctrl_videos
 
 
-                # The ctrl_data above is the 'raw' data loaded (e.g. a loaded segmentation pkl).
+                # The ctrl_data above is the 'raw' data loaded (e.g. a loaded lidar pkl).
                 # Next, we process it into the control input "video" tensor that the model expects.
                 # This is done in the augmentor.
                 for _, aug_fn in self.augmentor.items():
@@ -484,7 +483,7 @@ if __name__ == "__main__":
     visualize_control_input = True
 
     dataset = AVTransferDataset(
-        dataset_dir="/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/waymo_apr25_transfer1", view_keys=["front"], hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
+        dataset_dir="datasets/waymo_transfer1", view_keys=["pinhole_front"], hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
     )
     print("finished init dataset")
     indices = [0, 12, 100, -1]
