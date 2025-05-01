@@ -43,8 +43,6 @@ CTRL_TYPE_INFO = {
     "edge": {"folder": None},  # Canny edge, computed on-the-fly
     "vis": {"folder": None},  # Blur, computed on-the-fly
     "upscale": {"folder": None},  # Computed on-the-fly
-    #"hdmap": {"folder": None},   # TODO: Change when data ready
-    #"lidar": {"folder": None}
 }
 
 
@@ -272,7 +270,8 @@ class ExampleTransferDataset(Dataset):
 class AVTransferDataset(ExampleTransferDataset):
     def __init__(self, dataset_dir, num_frames, resolution, view_keys, hint_key="control_input_hdmap",
                  sample_n_views=-1, caption_view_idx_map=None,
-                 is_train=True):
+                 is_train=True,
+                 load_mv_emb=False):
         """Dataset class for loading video-text-to-video generation data with control inputs.
 
         Args:
@@ -280,8 +279,10 @@ class AVTransferDataset(ExampleTransferDataset):
             num_frames (int): Number of consecutive frames to load per sequence
             resolution (str): resolution of the target video size
             hint_key (str): The hint key for loading the correct control input data modality
+            sample_n_views (int): Number of views to sample
+            caption_view_idx_map (dict): Optional dictionary mapping index in view_keys to index in model.view_embeddings
             is_train (bool): Whether this is for training
-
+            load_mv_emb (bool): Whether to load t5 embeddings for all views, or only  for front view
         NOTE: in our example dataset we do not have a validation dataset. The is_train flag is kept here for customized configuration.
         """
         super(ExampleTransferDataset, self).__init__()
@@ -290,6 +291,7 @@ class AVTransferDataset(ExampleTransferDataset):
         self.is_train = is_train
         self.resolution = resolution
         self.view_keys = view_keys
+        self.load_mv_emb = load_mv_emb
         assert (
             resolution in VIDEO_RES_SIZE_INFO.keys()
         ), "The provided resolution cannot be found in VIDEO_RES_SIZE_INFO."
@@ -306,7 +308,7 @@ class AVTransferDataset(ExampleTransferDataset):
         cache_dir = os.path.join(self.dataset_dir, "cache")
         self.prefix_t5_embeddings = {}
         for view_key in view_keys:
-            with open(os.path.join(cache_dir, f"prefix_t5_embeddings_pinhole_{view_key}.pickle"), "rb") as f:
+            with open(os.path.join(cache_dir, f"prefix_{view_key}.pkl"), "rb") as f:
                 self.prefix_t5_embeddings[view_key] = pickle.load(f)
         if caption_view_idx_map is None:
             self.caption_view_idx_map = dict([(i, i) for i in range(len(self.view_keys))])
@@ -345,6 +347,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 ctrl_videos = []
                 videos = []
                 t5_embeddings = []
+                t5_masks = []
                 view_indices = [i for i in range(len(self.view_keys))]
                 view_indices_conditioning = []
                 if self.sample_n_views > 1:
@@ -374,7 +377,7 @@ class AVTransferDataset(ExampleTransferDataset):
                             continue
 
                     else:
-                        frames, fps = self._load_video(os.path.join(self.dataset_dir, view_key, "rgb",
+                        frames, fps = self._load_video(os.path.join(self.dataset_dir, "videos", view_key,
                                                                    os.path.basename(video_path)), frame_ids)
                     # Process video frames
                     video = torch.from_numpy(frames)
@@ -383,22 +386,31 @@ class AVTransferDataset(ExampleTransferDataset):
                     aspect_ratio = detect_aspect_ratio((video.shape[3], video.shape[2]))  # expects (W, H)
                     videos.append(video)
 
-                    if view_key == "front":
+                    if video_name.endswith("_0"):
+                        video_name_emb = video_name[:-2]
+                    else:
+                        video_name_emb = video_name
 
-                        if video_name.endswith("_0"):
-                            video_name_emb = video_name[:-2]
-                        else:
-                            video_name_emb = video_name
-                        t5_embedding_path = os.path.join(self.t5_dir, f"{video_name_emb}.pkl")
+                    if self.load_mv_emb or view_key == "pinhole_front":
+                        t5_embedding_path = os.path.join(self.dataset_dir, "t5_xxl", view_key, f"{video_name_emb}.pkl")
                         with open(t5_embedding_path, "rb") as f:
-                            t5_embedding = pickle.load(f)["pickle"]["ground_truth"]["embeddings"]["t5_xxl"]
+                            t5_embedding = pickle.load(f)[0]
+                        if self.load_mv_emb:
+                            t5_embedding = np.concatenate([self.prefix_t5_embeddings[view_key], t5_embedding], axis=0)
                     else:
                         # use camera prompt
                         t5_embedding = self.prefix_t5_embeddings[view_key]
+
                     t5_embedding = torch.from_numpy(t5_embedding)
+                    t5_mask = torch.ones(t5_embedding.shape[0], dtype=torch.int64)
                     if t5_embedding.shape[0] < 512:
                         t5_embedding = torch.cat([t5_embedding, torch.zeros(512 - t5_embedding.shape[0], 1024)], dim=0)
+                        t5_mask = torch.cat([t5_mask, torch.zeros(512 - t5_mask.shape[0])], dim=0)
+                    else:
+                        t5_embedding = t5_embedding[:512]
+                        t5_mask = t5_mask[:512]
                     t5_embeddings.append(t5_embedding)
+                    t5_masks.append(t5_mask)
                     caption_viewid = self.caption_view_idx_map[view_index]
                     view_indices_conditioning.append(torch.ones(video.shape[1]) * caption_viewid)
 
@@ -407,8 +419,8 @@ class AVTransferDataset(ExampleTransferDataset):
                             {
                                 "ctrl_path": os.path.join(
                                     self.dataset_dir,
-                                    view_key,
                                     self.ctrl_data_pth_config["folder"],
+                                    view_key,
                                     f"{video_name}.{self.ctrl_data_pth_config['format']}",
                                 )
                                 if self.ctrl_data_pth_config["folder"] is not None
@@ -429,8 +441,8 @@ class AVTransferDataset(ExampleTransferDataset):
                 # Basic data
                 data["video"] = video
                 data["aspect_ratio"] = aspect_ratio
-                data["t5_text_embeddings"] = t5_embedding # .cuda()
-                data["t5_text_mask"] = torch.ones(512 * len(self.view_keys), dtype=torch.int64)  # .cuda()
+                data["t5_text_embeddings"] = t5_embedding
+                data["t5_text_mask"] = torch.cat(t5_masks)
                 data["view_indices"] = view_indices_conditioning.contiguous()
 
                 # Add metadata
@@ -438,8 +450,8 @@ class AVTransferDataset(ExampleTransferDataset):
                 data["frame_start"] = frame_ids[0]
                 data["frame_end"] = frame_ids[-1] + 1
                 data["num_frames"] = self.sequence_length
-                data["image_size"] = torch.tensor([704, 1280, 704, 1280])  # .cuda()
-                data["padding_mask"] = torch.zeros(1, 704, 1280)  # .cuda()
+                data["image_size"] = torch.tensor([704, 1280, 704, 1280])
+                data["padding_mask"] = torch.zeros(1, 704, 1280)
                 data[self.ctrl_type] = dict()
                 data[self.ctrl_type]["video"] = ctrl_videos
 
