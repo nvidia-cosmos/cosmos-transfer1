@@ -259,6 +259,7 @@ class ExampleTransferDataset(Dataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
+        return
 
     def __len__(self):
         return len(self.video_paths)
@@ -473,7 +474,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
-
+        return
 
 if __name__ == "__main__":
     """
@@ -483,7 +484,7 @@ if __name__ == "__main__":
     visualize_control_input = True
 
     dataset = AVTransferDataset(
-        dataset_dir="datasets/waymo_transfer1", view_keys=["pinhole_front"], hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
+        dataset_dir="/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/waymo_apr25_transfer1", view_keys=["pinhole_front", "pinhole_front_left", "pinhole_front_right", "pinhole_side_left", "pinhole_side_right"], hint_key=control_input_key, num_frames=121, resolution="720", is_train=True, load_mv_emb=False
     )
     print("finished init dataset")
     indices = [0, 12, 100, -1]
