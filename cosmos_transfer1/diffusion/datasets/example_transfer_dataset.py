@@ -256,6 +256,7 @@ class ExampleTransferDataset(Dataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
+        return
 
     def __len__(self):
         return len(self.video_paths)
@@ -479,7 +480,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
-
+        return
 
 if __name__ == "__main__":
     """
