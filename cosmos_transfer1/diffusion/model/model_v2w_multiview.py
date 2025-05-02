@@ -59,20 +59,20 @@ class VideoDenoisePrediction:
 class DiffusionV2WMultiviewModel(DiffusionV2WModel):
     def __init__(self, config):
         super().__init__(config)
-        self.n_cameras = config.n_cameras
+        self.n_views = config.n_views
 
     @torch.no_grad()
     def encode(self, state: torch.Tensor) -> torch.Tensor:
-        state = rearrange(state, "B C (V T) H W -> (B V) C T H W", V=self.n_cameras)
-        encoded_state = self.vae.encode(state)
-        encoded_state = rearrange(encoded_state, "(B V) C T H W -> B C (V T) H W", V=self.n_cameras) * self.sigma_data
+        state = rearrange(state, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
+        encoded_state = self.tokenizer.encode(state)
+        encoded_state = rearrange(encoded_state, "(B V) C T H W -> B C (V T) H W", V=self.n_views) * self.sigma_data
         return encoded_state
 
     @torch.no_grad()
     def decode(self, latent: torch.Tensor) -> torch.Tensor:
-        latent = rearrange(latent, "B C (V T) H W -> (B V) C T H W", V=self.n_cameras)
-        decoded_state = self.vae.decode(latent / self.sigma_data)
-        decoded_state = rearrange(decoded_state, "(B V) C T H W -> B C (V T) H W", V=self.n_cameras)
+        latent = rearrange(latent, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
+        decoded_state = self.tokenizer.decode(latent / self.sigma_data)
+        decoded_state = rearrange(decoded_state, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
         return decoded_state
 
     def augment_conditional_latent_frames(
@@ -179,14 +179,30 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
 
         if parallel_state.get_context_parallel_world_size() > 1:
             cp_group = parallel_state.get_context_parallel_group()
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "B C (V T) H W -> (B V) C T H W", V=self.n_views
+            )
+            augment_latent = rearrange(augment_latent, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
+            gt_latent = rearrange(gt_latent, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
+            if getattr(condition, "view_indices_B_T", None) is not None:
+                # view_indices_B_T_og = copy.deepcopy(condition.view_indices_B_T)
+                view_indices_B_V_T = rearrange(condition.view_indices_B_T, "B (V T) -> (B V) T", V=self.n_views)
+                view_indices_B_V_T = split_inputs_cp(view_indices_B_V_T, seq_dim=1, cp_group=cp_group)
+                condition.view_indices_B_T = rearrange(view_indices_B_V_T, "(B V) T -> B (V T)", V=self.n_views)
             condition_video_indicator = split_inputs_cp(condition_video_indicator, seq_dim=2, cp_group=cp_group)
             augment_latent = split_inputs_cp(augment_latent, seq_dim=2, cp_group=cp_group)
             gt_latent = split_inputs_cp(gt_latent, seq_dim=2, cp_group=cp_group)
 
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "(B V) C T H W -> B C (V T) H W", V=self.n_views
+            )
+            augment_latent = rearrange(augment_latent, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
+            gt_latent = rearrange(gt_latent, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
+
         # Compose the model input with condition region (augment_latent) and generation region (noise_x)
         new_noise_xt = condition_video_indicator * augment_latent + (1 - condition_video_indicator) * noise_x
         # Call the abse model
-        denoise_pred = super().denoise(new_noise_xt, sigma, condition)
+        denoise_pred = super(DiffusionV2WModel, self).denoise(new_noise_xt, sigma, condition)
 
         x0_pred_replaced = condition_video_indicator * gt_latent + (1 - condition_video_indicator) * denoise_pred.x0
 
@@ -371,6 +387,9 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
         condition_video_indicator = torch.zeros(1, 1, T, 1, 1, device=latent_state.device).type(
             latent_dtype
         )  # 1 for condition region
+        condition_video_indicator = rearrange(
+            condition_video_indicator, "B C (V T) H W -> B V C T H W", V=self.n_views
+        )
         if self.config.conditioner.video_cond_bool.condition_location  == "first_cam":
             # condition on first cam
             condition_video_indicator[:, 0, :, :, :, :] += 1.0

@@ -40,9 +40,10 @@ class MultiViewGeneralDIT(GeneralDIT):
     def __init__(
         self,
         *args,
-        n_cameras: int = 3,
-        n_cameras_emb: int = -1,
+        n_views: int = 3,
+        n_views_emb: int = -1,
         camera_condition_dim: int = 3,
+        traj_condition_dim: int = 3,
         concat_camera_embedding: bool = True,
         concat_traj_embedding: bool = False,
         add_repeat_frame_embedding: bool = False,
@@ -51,12 +52,14 @@ class MultiViewGeneralDIT(GeneralDIT):
         if kwargs.get("add_augment_sigma_embedding", None) is not None:
             self.add_augment_sigma_embedding = kwargs.pop("add_augment_sigma_embedding")
 
-        self.n_cameras = n_cameras
-        if n_cameras_emb < 0:
-            self.n_cameras_emb = n_cameras
+        self.n_views = n_views
+        if n_views_emb < 0:
+            self.n_views_emb = n_views
         else:
-            self.n_cameras_emb = n_cameras_emb
+            self.n_views_emb = n_views_emb
+
         self.camera_condition_dim = camera_condition_dim
+        self.traj_condition_dim= traj_condition_dim
         self.concat_camera_embedding = concat_camera_embedding
         self.concat_traj_embedding = concat_traj_embedding
         self.add_repeat_frame_embedding = add_repeat_frame_embedding
@@ -82,16 +85,16 @@ class MultiViewGeneralDIT(GeneralDIT):
                 x_format=self.block_x_format,
                 use_adaln_lora=self.use_adaln_lora,
                 adaln_lora_dim=self.adaln_lora_dim,
-                n_cameras=self.n_cameras,
+                n_views=self.n_views,
             )
-        self.view_embeddings = nn.Embedding(self.n_cameras_emb, camera_condition_dim)  # Learnable embedding layer
+        self.view_embeddings = nn.Embedding(self.n_views_emb, camera_condition_dim)  # Learnable embedding layer
 
         if self.concat_traj_embedding:
             self.traj_embeddings = nn.Linear(192, self.traj_condition_dim)  # Learnable embedding layer
         if self.add_repeat_frame_embedding:
             self.repeat_frame_embedding = nn.Linear(1, camera_condition_dim)  # Learnable embedding layer
 
-        self.init_weights()
+        self.initialize_weights()
 
     def build_patch_embed(self):
         (
@@ -128,9 +131,9 @@ class MultiViewGeneralDIT(GeneralDIT):
         )
 
         # Initialize patch_embed like nn.Linear (instead of nn.Conv2d)
-        if self.legacy_patch_emb:
-            w = self.x_embedder.proj.weight.data
-            nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+        # if self.legacy_patch_emb:
+        #     w = self.x_embedder.proj.weight.data
+        #     nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
 
     def build_pos_embed(self):
         if self.pos_emb_cls == "rope3d":
@@ -144,15 +147,15 @@ class MultiViewGeneralDIT(GeneralDIT):
             len_h=self.max_img_h // self.patch_spatial,
             len_w=self.max_img_w // self.patch_spatial,
             len_t=self.max_frames // self.patch_temporal,
-            max_fps=self.max_fps,
-            min_fps=self.min_fps,
+            # max_fps=self.max_fps,
+            # min_fps=self.min_fps,
             is_learnable=self.pos_emb_learnable,
             interpolation=self.pos_emb_interpolation,
             head_dim=self.model_channels // self.num_heads,
             h_extrapolation_ratio=self.rope_h_extrapolation_ratio,
             w_extrapolation_ratio=self.rope_w_extrapolation_ratio,
             t_extrapolation_ratio=self.rope_t_extrapolation_ratio,
-            n_cameras=self.n_cameras,
+            n_views=self.n_views,
         )
         self.pos_embedder = cls_type(
             **kwargs,
@@ -334,8 +337,8 @@ class MultiViewGeneralDIT(GeneralDIT):
             )
 
         if view_indices_B_T is None:
-            view_indices = torch.arange(self.n_cameras).clamp(
-                max=self.n_cameras_emb - 1
+            view_indices = torch.arange(self.n_views).clamp(
+                max=self.n_views_emb - 1
             )  # View indices [0, 1, ..., V-1]
             view_indices = view_indices.to(x_B_C_T_H_W.device)
             view_embedding = self.view_embeddings(view_indices)  # Shape: [V, embedding_dim]
@@ -344,10 +347,10 @@ class MultiViewGeneralDIT(GeneralDIT):
                 view_embedding.unsqueeze(0).unsqueeze(3).unsqueeze(4).unsqueeze(5)
             )  # Shape: [1, D, V, 1, 1, 1]
         else:
-            view_indices_B_T = view_indices_B_T.clamp(max=self.n_cameras_emb - 1)
+            view_indices_B_T = view_indices_B_T.clamp(max=self.n_views_emb - 1)
             view_indices_B_T = view_indices_B_T.to(x_B_C_T_H_W.device).long()
             view_embedding = self.view_embeddings(view_indices_B_T)  # B, (V T), D
-            view_embedding = rearrange(view_embedding, "B (V T) D -> B D V T", V=self.n_cameras)
+            view_embedding = rearrange(view_embedding, "B (V T) D -> B D V T", V=self.n_views)
             view_embedding = view_embedding.unsqueeze(-1).unsqueeze(-1)  # Shape: [B, D, V, T, 1, 1]
 
         if self.add_repeat_frame_embedding:
@@ -361,7 +364,7 @@ class MultiViewGeneralDIT(GeneralDIT):
             frame_repeat_embedding = rearrange(frame_repeat_embedding, "B V D -> B D V")
             view_embedding = view_embedding + frame_repeat_embedding.unsqueeze(3).unsqueeze(4).unsqueeze(5)
 
-        x_B_C_V_T_H_W = rearrange(x_B_C_T_H_W, "B C (V T) H W -> B C V T H W", V=self.n_cameras)
+        x_B_C_V_T_H_W = rearrange(x_B_C_T_H_W, "B C (V T) H W -> B C V T H W", V=self.n_views)
         view_embedding = view_embedding.expand(
             x_B_C_V_T_H_W.shape[0],
             view_embedding.shape[1],
@@ -386,7 +389,7 @@ class MultiViewGeneralDIT(GeneralDIT):
         else:
             x_B_C_V_T_H_W = torch.cat([x_B_C_V_T_H_W, view_embedding], dim=1)
 
-        x_B_C_T_H_W = rearrange(x_B_C_V_T_H_W, " B C V T H W -> B C (V T) H W", V=self.n_cameras)
+        x_B_C_T_H_W = rearrange(x_B_C_V_T_H_W, " B C V T H W -> B C (V T) H W", V=self.n_views)
         x_B_T_H_W_D = self.x_embedder(x_B_C_T_H_W)
 
         if self.extra_per_block_abs_pos_emb:
@@ -442,13 +445,13 @@ class MultiViewVideoExtendGeneralDIT(MultiViewGeneralDIT):
             ), "condition_video_input_mask is required for video data type; check if your model_obj is extend_model.FSDPDiffusionModel or the base DiffusionModel"
             if parallel_state.is_initialized():
                 condition_video_input_mask = rearrange(
-                    condition_video_input_mask, "B C (V T) H W -> B C V T H W", V=self.n_cameras
+                    condition_video_input_mask, "B C (V T) H W -> B C V T H W", V=self.n_views
                 )
                 condition_video_input_mask = split_inputs_cp(
                     condition_video_input_mask, seq_dim=3, cp_group=self.cp_group
                 )
                 condition_video_input_mask = rearrange(
-                    condition_video_input_mask, "B C V T H W -> B C (V T) H W", V=self.n_cameras
+                    condition_video_input_mask, "B C V T H W -> B C (V T) H W", V=self.n_views
                 )
             input_list = [x, condition_video_input_mask]
             if condition_video_pose is not None:

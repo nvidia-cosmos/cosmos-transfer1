@@ -256,7 +256,7 @@ class VideoAttn(nn.Module):
         bias (bool): Whether to include bias in attention projections. Default: False
         qkv_norm_mode (str): Normalization mode for query/key/value projections. Must be "per_head". Default: "per_head"
         x_format (str): Format of input tensor. Must be "BTHWD". Default: "THWBD"
-        n_cameras (int): Extra parameter used in multi-view diffusion model. It indicated total number of camera we model together.
+        n_views (int): Extra parameter used in multi-view diffusion model. It indicated total number of camera we model together.
     Input shape:
         - x: (T, H, W, B, D) video features
         - context (optional): (M, B, D) context features for cross-attention
@@ -277,10 +277,10 @@ class VideoAttn(nn.Module):
         bias: bool = False,
         qkv_norm_mode: str = "per_head",
         x_format: str = "THWBD",
-        n_cameras: int = 1,
+        n_views: int = 1,
     ) -> None:
         super().__init__()
-        self.n_cameras = n_cameras
+        self.n_views = n_views
         self.x_format = x_format
 
         self.attn = Attention(
@@ -316,9 +316,9 @@ class VideoAttn(nn.Module):
         Returns:
             Tensor: The output tensor with applied attention, maintaining the input shape.
         """
-        if context is not None and self.n_cameras > 1:
-            x_T_H_W_B_D = rearrange(x, "(v t) h w b d -> t h w (v b) d", v=self.n_cameras)
-            context_M_B_D = rearrange(context, "(v m) b d -> m (v b) d", v=self.n_cameras)
+        if context is not None and self.n_views > 1:
+            x_T_H_W_B_D = rearrange(x, "(v t) h w b d -> t h w (v b) d", v=self.n_views)
+            context_M_B_D = rearrange(context, "(v m) b d -> m (v b) d", v=self.n_views)
         else:
             x_T_H_W_B_D = x
             context_M_B_D = context
@@ -331,8 +331,8 @@ class VideoAttn(nn.Module):
             rope_emb=rope_emb_L_1_1_D,
         )
         x_T_H_W_B_D = rearrange(x_THW_B_D, "(t h w) b d -> t h w b d", h=H, w=W)
-        if context is not None and self.n_cameras > 1:
-            x_T_H_W_B_D = rearrange(x_T_H_W_B_D, "t h w (v b) d -> (v t) h w b d", v=self.n_cameras)
+        if context is not None and self.n_views > 1:
+            x_T_H_W_B_D = rearrange(x_T_H_W_B_D, "t h w (v b) d -> (v t) h w b d", v=self.n_views)
         return x_T_H_W_B_D
 
 
@@ -361,7 +361,7 @@ class DITBuildingBlock(nn.Module):
         x_format (str): Input tensor format. Default: "THWBD"
         use_adaln_lora (bool): Whether to use AdaLN-LoRA. Default: False
         adaln_lora_dim (int): Dimension for AdaLN-LoRA. Default: 256
-        n_cameras (int): Extra parameter used in multi-view diffusion model. It indicated total number of camera we model together.
+        n_views (int): Extra parameter used in multi-view diffusion model. It indicated total number of camera we model together.
     """
 
     def __init__(
@@ -377,7 +377,7 @@ class DITBuildingBlock(nn.Module):
         x_format: str = "THWBD",
         use_adaln_lora: bool = False,
         adaln_lora_dim: int = 256,
-        n_cameras: int = 1,
+        n_views: int = 1,
     ) -> None:
         block_type = block_type.lower()
 
@@ -391,7 +391,7 @@ class DITBuildingBlock(nn.Module):
                 bias=bias,
                 qkv_norm_mode=qkv_norm_mode,
                 x_format=self.x_format,
-                n_cameras=n_cameras,
+                n_views=n_views,
             )
         elif block_type in ["full_attn", "fa"]:
             self.block = VideoAttn(
@@ -513,7 +513,7 @@ class GeneralDITTransformerBlock(nn.Module):
         x_format: str = "THWBD",
         use_adaln_lora: bool = False,
         adaln_lora_dim: int = 256,
-        n_cameras: int = 1,
+        n_views: int = 1,
     ):
         super().__init__()
         self.blocks = nn.ModuleList()
@@ -529,7 +529,7 @@ class GeneralDITTransformerBlock(nn.Module):
                     x_format=self.x_format,
                     use_adaln_lora=use_adaln_lora,
                     adaln_lora_dim=adaln_lora_dim,
-                    n_cameras=n_cameras
+                    n_views=n_views
                 )
             )
 

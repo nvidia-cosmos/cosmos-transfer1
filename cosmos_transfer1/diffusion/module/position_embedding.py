@@ -666,15 +666,15 @@ class MultiCameraVideoPositionEmb(nn.Module):
         if self.cp_group is not None:
             if isinstance(self, MultiCameraVideoRopePosition3DEmb):
                 seq_dim = 1
-                embeddings = rearrange(embeddings, "(V T) H W D -> V (T H W) 1 1 D", V=self.n_cameras).float()
+                embeddings = rearrange(embeddings, "(V T) H W D -> V (T H W) 1 1 D", V=self.n_views).float()
                 # rearrange(em_T_H_W_D, "t h w d -> (t h w) 1 1 d").float()
                 embeddings = split_inputs_cp(x=embeddings, seq_dim=seq_dim, cp_group=self.cp_group)
-                embeddings = rearrange(embeddings, "V T 1 1 D -> (V T) 1 1 D", V=self.n_cameras).float()
+                embeddings = rearrange(embeddings, "V T 1 1 D -> (V T) 1 1 D", V=self.n_views).float()
             else:
                 seq_dim = 1
-                embeddings = rearrange(embeddings, "B (V T) H W C -> (B V) T H W C", V=self.n_cameras)
+                embeddings = rearrange(embeddings, "B (V T) H W C -> (B V) T H W C", V=self.n_views)
                 embeddings = split_inputs_cp(x=embeddings, seq_dim=seq_dim, cp_group=self.cp_group)
-                embeddings = rearrange(embeddings, "(B V) T H W C -> B (V T) H W C", V=self.n_cameras)
+                embeddings = rearrange(embeddings, "(B V) T H W C -> B (V T) H W C", V=self.n_views)
         else:
             if isinstance(self, MultiCameraVideoRopePosition3DEmb):
                 embeddings = rearrange(embeddings, "t h w d -> (t h w) 1 1 d").float()
@@ -697,7 +697,7 @@ class MultiCameraVideoRopePosition3DEmb(MultiCameraVideoPositionEmb):
         h_extrapolation_ratio: float = 1.0,
         w_extrapolation_ratio: float = 1.0,
         t_extrapolation_ratio: float = 1.0,
-        n_cameras: int = 4,
+        n_views: int = 4,
         **kwargs,  # used for compatibility with other positional embeddings; unused in this class
     ):
         del kwargs
@@ -706,7 +706,7 @@ class MultiCameraVideoRopePosition3DEmb(MultiCameraVideoPositionEmb):
         self.base_fps = base_fps
         self.max_h = len_h
         self.max_w = len_w
-        self.n_cameras = n_cameras
+        self.n_views = n_views
         dim = head_dim
         dim_h = dim // 6 * 2
         dim_w = dim_h
@@ -816,7 +816,7 @@ class MultiCameraVideoRopePosition3DEmb(MultiCameraVideoPositionEmb):
 
         B, T, H, W, C = B_T_H_W_C
 
-        single_camera_B_T_H_W_C = (B, T // self.n_cameras, H, W, C)
+        single_camera_B_T_H_W_C = (B, T // self.n_views, H, W, C)
         em_T_H_W_D = torch.cat(
             [
                 self.generate_embedding_for_batch(
@@ -826,7 +826,7 @@ class MultiCameraVideoRopePosition3DEmb(MultiCameraVideoPositionEmb):
                     w_ntk_factor=w_ntk_factor,
                     t_ntk_factor=t_ntk_factor,
                 )
-                for item in range(self.n_cameras)
+                for item in range(self.n_views)
             ],
             dim=0,
         )
@@ -847,7 +847,7 @@ class MultiCameraSinCosPosEmbAxis(MultiCameraVideoPositionEmb):
         h_extrapolation_ratio: float = 1.0,
         w_extrapolation_ratio: float = 1.0,
         t_extrapolation_ratio: float = 1.0,
-        n_cameras: int = 4,
+        n_views: int = 4,
         **kwargs,
     ):
         # TODO: (qsh 2024-11-08) add more interpolation methods and args for extrapolation fine-tuning
@@ -856,7 +856,7 @@ class MultiCameraSinCosPosEmbAxis(MultiCameraVideoPositionEmb):
             interpolation (str): we curretly only support "crop", ideally when we need extrapolation capacity, we should adjust frequency or other more advanced methods. they are not implemented yet.
         """
         del kwargs  # unused
-        self.n_cameras = n_cameras
+        self.n_views = n_views
         super().__init__()
         self.interpolation = interpolation
         assert self.interpolation in ["crop"], f"Unknown interpolation method {self.interpolation}"
@@ -879,7 +879,7 @@ class MultiCameraSinCosPosEmbAxis(MultiCameraVideoPositionEmb):
     def generate_embeddings(self, B_T_H_W_C: torch.Size, fps=Optional[torch.Tensor]) -> torch.Tensor:
         B, T, H, W, C = B_T_H_W_C
 
-        single_camera_T = T // self.n_cameras
+        single_camera_T = T // self.n_views
 
         if self.interpolation == "crop":
             emb_h_H = self.pos_emb_h[:H]
@@ -895,7 +895,7 @@ class MultiCameraSinCosPosEmbAxis(MultiCameraVideoPositionEmb):
                         ],
                         dim=-1,
                     )
-                    for _ in range(self.n_cameras)
+                    for _ in range(self.n_views)
                 ],
                 1,
             )
