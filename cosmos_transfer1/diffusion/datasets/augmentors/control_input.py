@@ -737,15 +737,18 @@ class AddControlInputHDMAP(Augmentor):
         if "control_input_hdmap" in data_dict:
             # already processed
             return data_dict
-        else:
-            raise ValueError("HDMAP condition is not provided.")
+
+        key_out = self.output_keys[0]
+        hdmap = data_dict["hdmap"]["video"]
+        data_dict[key_out] = hdmap
+        return data_dict
 
 
 class AddControlInputLIDAR(Augmentor):
     """
     Add control input to the data dictionary. control input are expanded to 3-channels
     steps to add new items: modify this file, configs/conditioner.py, conditioner.py.
-    For HDMAP condition, the hdmap should already been provided as input. So no extra process is needed.
+    For LIDAR condition, the lidar should already been provided as input. So no extra process is needed.
     """
 
     def __init__(
@@ -764,8 +767,11 @@ class AddControlInputLIDAR(Augmentor):
         if "control_input_lidar" in data_dict:
             # already processed
             return data_dict
-        else:
-            raise ValueError("LiDAR condition is not provided.")
+
+        key_out = self.output_keys[0]
+        lidar = data_dict["lidar"]["video"]
+        data_dict[key_out] = lidar
+        return data_dict
 
 
 # Array of 23 highly distinguishable colors in RGB format
