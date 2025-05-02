@@ -15,7 +15,7 @@
 
 from hydra.core.config_store import ConfigStore
 
-from cosmos_transfer1.checkpoints import BASE_7B_CHECKPOINT_AV_SAMPLE_PATH
+from cosmos_transfer1.checkpoints import BASE_7B_CHECKPOINT_AV_SAMPLE_PATH, SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
 from cosmos_transfer1.diffusion.model.model_multi_camera_ctrl import MultiVideoDiffusionModelWithCtrl
@@ -158,15 +158,20 @@ def make_ctrlnet_config_7b_mv(
                 project="cosmos_ctrlnet1",
             ),
             model=dict(
-                n_cameras=6,
+                n_views=6,
                 base_load_from=dict(
-                    load_path=f"checkpoints/{BASE_7B_CHECKPOINT_AV_SAMPLE_PATH}",
+                    load_path=f"checkpoints/{SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg}",
                 ),
                 hint_mask=hint_mask,
                 hint_dropout_rate=0.3,
+                conditioner=dict(
+                    video_cond_bool=dict(
+                        condition_location="first_cam",
+                    )
+                ),
                 net=L(MultiViewVideoExtendGeneralDIT)(
-                    n_cameras=6,
-                    n_cameras_emb=7,
+                    n_views=6,
+                    n_views_emb=7,
                     camera_condition_dim=6,
                     add_repeat_frame_embedding=True,
                     extra_per_block_abs_pos_emb=True,
@@ -177,8 +182,8 @@ def make_ctrlnet_config_7b_mv(
                     in_channels=16,
                     hint_channels=16,
                     num_blocks=28,
-                    n_cameras=6,
-                    n_cameras_emb=7,
+                    n_views=6,
+                    n_views_emb=7,
                     camera_condition_dim=6,
                     add_repeat_frame_embedding=True,
                     is_extend_model=True,
@@ -197,6 +202,23 @@ def make_ctrlnet_config_7b_mv(
         )
     )
 
+import copy
+def make_small_config(base_config: LazyDict, net_ctrl=False) -> LazyDict:
+    small_config = copy.deepcopy(base_config)
+    small_config["job"]["group"] = "debug"
+    small_config["job"]["name"] = f"{small_config['job']['name']}_SMALL"
+    num_blocks_small = 2
+    small_config["model"]["net"]["num_blocks"] = num_blocks_small
+    if net_ctrl:
+        small_config["model"]["net_ctrl"]["num_blocks"] = num_blocks_small
+        small_config["model"]["net_ctrl"]["layer_mask"] = [
+            True if (i >= num_blocks_small // 2) else False for i in range(num_blocks_small)
+        ]
+    #small_config["model_parallel"]["tensor_model_parallel_size"] = 1
+    #small_config["model_parallel"]["sequence_parallel"] = False
+    #small_config["checkpoint"]["load_path"] = ""
+    small_config["model"]["base_load_from"]["load_path"] = ""
+    return small_config
 
 # Register base configs
 cs.store(group="experiment", package="_global_", name=Base_7B_Config["job"]["name"], node=Base_7B_Config)
@@ -218,4 +240,7 @@ num_control_blocks = 3
 for key in ["control_input_hdmap", "control_input_lidar"]:
     # Register 7B configurations
     config_7b = make_ctrlnet_config_7b_mv(hint_key=key, num_control_blocks=num_control_blocks)
+    debug_config = make_small_config(config_7b, net_ctrl=True)
     cs.store(group="experiment", package="_global_", name=config_7b["job"]["name"], node=config_7b)
+    cs.store(group="experiment", package="_global_", name=debug_config["job"]["name"], node=debug_config)
+

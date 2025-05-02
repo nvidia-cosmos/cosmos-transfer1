@@ -22,7 +22,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUpsampler
+#from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUpsampler
 from cosmos_transfer1.checkpoints import (
     BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
     BASE_7B_CHECKPOINT_PATH,
@@ -57,9 +57,8 @@ from cosmos_transfer1.diffusion.inference.inference_utils import (
     non_strict_load_model,
     resize_control_weight_map,
     split_video_into_patches,
-    get_condition_latent,
-    get_condition_latent_multiview,
-    read_and_resize_input
+    read_and_resize_input,
+    valid_hint_keys
 )
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
 from cosmos_transfer1.diffusion.model.model_multi_camera_ctrl import MultiVideoDiffusionModelWithCtrl
@@ -80,6 +79,7 @@ MODEL_NAME_DICT = {
     SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg: "CTRL_7Bv1pt3_mv_t2v_57frames_control_input_hdmap_block3",
     SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg: "CTRL_7Bv1pt3_mv_t2v_57frames_control_input_hdmap_block3",
     SV2MV_i2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg: "CTRL_7Bv1pt3_mv_t2v_57frames_control_input_hdmap_block3",
+    "": "CTRL_7Bv1pt3_mv_t2v_57frames_control_input_hdmap_block3_SMALL",
 }
 MODEL_CLASS_DICT = {
     BASE_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
@@ -95,6 +95,7 @@ MODEL_CLASS_DICT = {
     SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg: MultiVideoDiffusionModelWithCtrl,
     SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg: MultiVideoDiffusionModelWithCtrl,
     SV2MV_i2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg: MultiVideoDiffusionModelWithCtrl,
+    "": MultiVideoDiffusionModelWithCtrl
 }
 
 
@@ -297,20 +298,24 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
     # load the hint encoders. these encoders are run along with the main model to provide additional context
     def _load_network(self):
-        load_network_model(self.model, f"{self.checkpoint_dir}/{self.checkpoint_name}")
+        if self.checkpoint_name == "":
+            load_network_model(self.model, "")
+        else:
+            load_network_model(self.model, f"{self.checkpoint_dir}/{self.checkpoint_name}")
         if len(self.control_inputs) > 1:
             hint_encoders = torch.nn.ModuleList([])
-            for _, spec in self.control_inputs.items():
-                model = load_model_by_config(
-                    config_job_name=self.model_name,
-                    config_file="cosmos_transfer1/diffusion/config/transfer/config.py",
-                    model_class=self.model_class,
-                    base_checkpoint_dir=self.checkpoint_dir,
-                )
-                load_network_model(model, spec["ckpt_path"])
-                hint_encoders.append(model.model.net)
-                del model
-                torch.cuda.empty_cache()
+            for key, spec in self.control_inputs.items():
+                if key in valid_hint_keys:
+                    model = load_model_by_config(
+                        config_job_name=self.model_name,
+                        config_file="cosmos_transfer1/diffusion/config/transfer/config.py",
+                        model_class=self.model_class,
+                        base_checkpoint_dir=self.checkpoint_dir,
+                    )
+                    load_network_model(model, spec["ckpt_path"])
+                    hint_encoders.append(model.model.net)
+                    del model
+                    torch.cuda.empty_cache()
             self.model.hint_encoders = hint_encoders
         else:
             for _, spec in self.control_inputs.items():
@@ -640,7 +645,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         """
         # Decode video
         video = (1.0 + self.model.decode(sample)).clamp(0, 2) / 2  # [B, 3, T, H, W]
-        video_segments = einops.rearrange(video, "b c (v t) h w -> b c v t h w", v=self.n_views)
+        video_segments = einops.rearrange(video, "b c (v t) h w -> b c v t h w", v=self.model.n_views)
         grid_video = torch.stack(
             [video_segments[:, :, i] for i in [1, 0, 2, 4, 3, 5]],
             dim=2,
@@ -654,10 +659,6 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
     def _run_model_with_offload(
         self,
         prompt_embedding: torch.Tensor,
-        condition_location: str,
-        view_condition_video_path: str,
-        initial_condition_video_path: str,
-        view_cond_start_frame: str,
         control_inputs: dict = None,
     ) -> np.ndarray:
         """Generate world representation with automatic model offloading.
@@ -679,10 +680,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         if self.offload_network:
             self._load_network()
 
-        sample = self._run_model(prompt_embedding, condition_location=condition_location,
-                                 view_condition_video_path=view_condition_video_path,
-                                 initial_condition_video_path=initial_condition_video_path,
-                                 view_cond_start_frame=view_cond_start_frame,
+        sample = self._run_model(prompt_embedding,
                                  control_inputs=control_inputs
                                  )
 
@@ -694,111 +692,9 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         return sample
 
-    def _get_view_id_from_cond_location(self, condition_location):
-        if condition_location in ("first_cam", "first_cam_and_first_n"):
-            return [0]
-        elif condition_location.startswith("fixed_cam"):
-            return [int(c) for c in condition_location.split("_")[2:]]
-        else:
-            raise ValueError(f"condition_location {condition_location} not recognized")
-
-    def _mix_condition_latents(self, state_shape, view_condition_latent, initial_condition_latent) -> torch.Tensor:
-        if initial_condition_latent is None:
-            initial_condition_latent = torch.zeros(state_shape, dtype=torch.bfloat16).unsqueeze(0).cuda()
-        initial_condition_latent = einops.rearrange(initial_condition_latent, "B C (V T) H W -> B C V T H W", V=self.model.n_views)
-        for k,v in view_condition_latent.items():
-            initial_condition_latent[:,:,k] = v
-        initial_condition_latent = einops.rearrange(initial_condition_latent, "B C V T H W -> B C (V T) H W ")
-        return initial_condition_latent
-
-    def _get_condition_latent_pred_1(self,
-                              view_condition_video_path,
-                              initial_condition_video_path,
-                              view_cond_start_frame,
-                              requisite_input_views,
-                              condition_location,
-                              state_shape
-                              ):
-        view_condition_latents = {}
-        if os.path.isdir(view_condition_video_path):
-            fnames = sorted(os.listdir(view_condition_video_path))
-            for fname in fnames:
-                if fname.endswith(".mp4"):
-                    try:
-                        input_view_id = int(fname.split(".")[0])
-                    except ValueError:
-                        log.warning(f"Could not parse video file name {fname} into view id")
-                        continue
-                    condition_latent = get_condition_latent(
-                        model=self.model,
-                        input_image_or_video_path=os.path.join(view_condition_video_path, fname),
-                        num_input_frames=self.num_video_frames,
-                        from_back=False,
-                        start_frame=view_cond_start_frame
-                    )
-                    view_condition_latents[input_view_id] = condition_latent
-                    log.info(f"read {condition_latent.shape} shaped latent from view_condition_video_path/{fname}")
-        else:
-            assert len(requisite_input_views) == 1
-            condition_latent = get_condition_latent(
-                model=self.model,
-                input_image_or_video_path=view_condition_video_path,
-                num_input_frames=self.num_video_frames,
-                from_back=False,
-                start_frame=view_cond_start_frame
-            )
-            view_condition_latents[requisite_input_views[0]] = condition_latent
-            log.info(f"read {condition_latent.shape} shaped latent from {view_condition_video_path}")
-
-        assert set(view_condition_latents.keys()).issuperset(set(requisite_input_views)), \
-            f"Not all views required by condition location, are found in {view_condition_video_path}. Views required:  {requisite_input_views}, views found:  {set(view_condition_latents.keys())}"
-
-        if "first_n" in condition_location:
-            assert initial_condition_video_path is not None
-
-            if os.path.isdir(initial_condition_video_path):
-                initial_condition_latents = []
-                fnames = sorted(os.listdir(initial_condition_video_path))
-                for fname in fnames:
-                    if fname.endswith(".mp4"):
-                        try:
-                            input_view_id = int(fname.split(".")[0])
-                        except ValueError:
-                            log.warning(f"Could not parse video file name {fname} into view id")
-                            continue
-                        condition_latent = get_condition_latent(
-                            model=self.model,
-                            input_image_or_video_path=os.path.join(initial_condition_video_path, fname),
-                            num_input_frames=self.num_input_frames,
-                            from_back=True
-                        )
-                        initial_condition_latents.append(condition_latent)
-                        log.info(
-                            f"read {condition_latent.shape} shaped latent from initial_condition_video_path/{fname}")
-                assert len(initial_condition_latents) == self.model.n_views
-                initial_condition_latents = torch.cat(initial_condition_latents, dim=2)
-            else:
-                assert len(requisite_input_views) == 1
-                initial_condition_latents, _ = get_condition_latent_multiview(
-                    model=self.model,
-                    input_image_or_video_path=initial_condition_video_path,
-                    num_input_frames=self.num_input_frames,
-                )  # B C (VT) H W
-
-                log.info(f"read {initial_condition_latents.shape} shaped latent from {initial_condition_video_path}")
-        else:
-            initial_condition_latents = None
-
-        condition_latent = self._mix_condition_latents(state_shape, view_condition_latents, initial_condition_latents)
-        return condition_latent
-
     def _run_model(
         self,
         embedding: torch.Tensor,
-        condition_location: str,
-        view_condition_video_path: str,
-        initial_condition_video_path: str,
-        view_cond_start_frame: str,
         control_inputs: dict = None,
     ) -> torch.Tensor:
         """Generate video frames using the diffusion model.
@@ -826,33 +722,44 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             num_video_frames=self.num_video_frames * len(embedding),
             frame_repeat_negative_condition=0,
         )
-        requisite_input_views = self._get_view_id_from_cond_location(condition_location)
-        self.model.condition_location = condition_location
+        requisite_input_views = [0]
+        self.model.condition_location = "first_cam"
 
-        condition_input_frame_0, fps, aspect_ratio = read_and_resize_input(
-            view_condition_video_path, num_total_frames=self.num_video_frames, interpolation=cv2.INTER_LINEAR
+        view_condition_video, fps, aspect_ratio = read_and_resize_input(
+            control_inputs["view_condition_video"], num_total_frames=self.num_video_frames, interpolation=cv2.INTER_LINEAR
         )
-        condition_input_frame_0 = condition_input_frame_0[None]
-        total_T = condition_input_frame_0.shape[2]
-        input_frames_list = [condition_input_frame_0]
-
-        if view_condition_video_path:
-            pieces = view_condition_video_path.split("/")
-
+        view_condition_video = view_condition_video[None]
+        total_T = view_condition_video.shape[2]
 
         data_batch = get_ctrl_batch_mv( #model, data_batch, num_total_frames, control_inputs
             self.model,
             data_batch,
-            self.num_video_frames,
+            total_T, #self.num_video_frames,
             control_inputs
         )
+        """
+        data_batch["control_weight"] = control_weights
 
+        if len(control_inputs) > 1:  # Multicontrol enabled
+            data_batch["hint_key"] = "control_input_multi"
+            data_batch["control_input_multi"] = control_input
+        else:  # Single-control case
+            data_batch["hint_key"] = hint_key
+            data_batch[hint_key] = control_input
+
+        data_batch["target_h"], data_batch["target_w"] = target_h // 8, target_w // 8
+        data_batch["video"] = torch.zeros((1, 3, 121, H, W), dtype=torch.uint8).cuda()  #?????
+        data_batch["image_size"] = torch.tensor([[H, W, H, W]] * 1, dtype=torch.bfloat16).cuda()
+        data_batch["padding_mask"] = torch.zeros((1, 1, H, W), dtype=torch.bfloat16).cuda()
+        """
         hint_key = data_batch["hint_key"]
-        input_video = data_batch["input_video"]
+        input_video = None
         control_input = data_batch[hint_key]
         control_weight = data_batch["control_weight"]
+
         num_new_generated_frames = self.num_video_frames - self.num_input_frames
         B, C, T, H, W = control_input.shape
+        T = T // self.model.n_views
         if (T - self.num_input_frames) % num_new_generated_frames != 0:  # pad duplicate frames at the end
             pad_t = num_new_generated_frames - ((T - self.num_input_frames) % num_new_generated_frames)
             pad_frames = control_input[:, :, -1:].repeat(1, 1, pad_t, 1, 1)
@@ -860,7 +767,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             if input_video is not None:
                 pad_video = input_video[:, :, -1:].repeat(1, 1, pad_t, 1, 1)
                 input_video = torch.cat([input_video, pad_video], dim=2)
-            num_total_frames_with_padding = control_input.shape[2]
+            num_total_frames_with_padding = control_input.shape[2] // self.model.n_views
             if (
                 isinstance(control_weight, torch.Tensor)
                 and control_weight.ndim > 5
@@ -889,7 +796,18 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             else:
                 x_sigma_max = None
 
-            data_batch_i[hint_key] = control_input[:, :, start_frame:end_frame].cuda()
+            control_input_BVCT = einops.rearrange(control_input, "B C (V T) H W -> (B V) C T H W", V=self.model.n_views)
+            control_input_i = control_input_BVCT[:, :, start_frame: end_frame].cuda()
+
+            data_batch_i[hint_key] = einops.rearrange(
+                control_input_i, "(B V) C T H W -> B C (V T) H W", V=self.model.n_views
+            )
+
+            condition_input_i = view_condition_video[
+                                :, :,
+                                start_frame: end_frame
+                                ].cuda()
+
             latent_hint = []
             for b in range(B):
                 data_batch_p = {k: v for k, v in data_batch_i.items()}
@@ -910,18 +828,21 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 data_batch_i["control_weight"] = resize_control_weight_map(control_weight_t, (t, h // 2, w // 2))
 
             if i_clip == 0:
+                #num_condition_t = 0
                 num_input_frames = 0
-                latent_tmp = latent_hint if latent_hint.ndim == 5 else latent_hint[:, 0]
-                condition_latent = torch.zeros_like(latent_tmp)
+                #condition_video_augment_sigma_in_inference = 0.0
+                prev_frames = None
             else:
+                #num_condition_t = (self.num_input_frames - 1) // self.model.tokenizer.temporal_compression_factor + 1
                 num_input_frames = self.num_input_frames
-                prev_frames = split_video_into_patches(prev_frames, control_input.shape[-2], control_input.shape[-1])
-                condition_latent = []
-                for b in range(B):
-                    input_frames = prev_frames[b : b + 1].cuda().bfloat16() / 255.0 * 2 - 1
-                    condition_latent += [self.model.encode(input_frames).contiguous()]
-                condition_latent = torch.cat(condition_latent)
-
+                #condition_video_augment_sigma_in_inference = 0.0
+            condition_latent = self.get_condition_latent(state_shape, data_batch_i,
+                                                           cond_video=condition_input_i,
+                                                           prev_frames=prev_frames,
+                                                           patch_h=H,
+                                                           patch_w=W,
+                                                           skip_reencode=False,
+                                                           ).bfloat16()
             # Generate video frames
             latents = generate_world_from_control(
                 model=self.model,
@@ -936,8 +857,9 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 sigma_max=self.sigma_max if x_sigma_max is not None else None,
                 x_sigma_max=x_sigma_max,
             )
-            frames = self._run_tokenizer_decoding(latents)
-            frames = torch.from_numpy(frames).permute(3, 0, 1, 2)[None]
+            torch.cuda.empty_cache()
+            _, frames = self._run_tokenizer_decoding(latents)   # T H W C
+            frames = torch.from_numpy(frames).permute(3, 0, 1, 2)[None] # 1 C T H W
 
             if i_clip == 0:
                 video.append(frames)
@@ -946,15 +868,14 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             prev_frames = torch.zeros_like(frames)
             prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
 
-        video = torch.cat(video, dim=2)[:, :, :T]
-        video = video[0].permute(1, 2, 3, 0).numpy()
+        video = torch.cat(video, dim=2)[:, :, :(T * self.model.n_views)]
+        video = video[0].permute(1, 2, 3, 0).numpy()    # T H W C
         return video
 
     def get_condition_latent(
         self,
         state_shape,
         data_batch_i,
-        multi_cam=True,
         cond_video=None,
         prev_frames=None,
         patch_h=1024,
@@ -983,18 +904,18 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         B = data_batch_i["video"].shape[0]
 
         latent_sample = torch.zeros(state_shape).unsqueeze(0).repeat(B, 1, 1, 1, 1).cuda()  # B, C, (V T), H, W
-        latent_sample = einops.rearrange(latent_sample, "B C (V T) H W -> B V C T H W", V=self.model.n_cameras)
+        latent_sample = einops.rearrange(latent_sample, "B C (V T) H W -> B V C T H W", V=self.model.n_views)
         log.info(f"model.sigma_data {self.model.sigma_data}")
         if self.model.config.conditioner.video_cond_bool.condition_location.endswith("first_n"):
             if skip_reencode:
                 assert prev_latents is not None
-                prev_latents = einops.rearrange(prev_latents, "B C (V T) H W -> B V C T H W", V=self.model.n_cameras)
+                prev_latents = einops.rearrange(prev_latents, "B C (V T) H W -> B V C T H W", V=self.model.n_views)
                 latent_sample = prev_latents.clone()
             else:
                 prev_frames = split_video_into_patches(prev_frames, patch_h, patch_w)
                 for b in range(prev_frames.shape[0]):
                     input_frames = prev_frames[b : b + 1].cuda() / 255.0 * 2 - 1
-                    input_frames = einops.rearrange(input_frames, "1 C (V T) H W -> V C T H W", V=self.model.n_cameras)
+                    input_frames = einops.rearrange(input_frames, "1 C (V T) H W -> V C T H W", V=self.model.n_views)
                     encoded_frames = self.model.tokenizer.encode(input_frames).contiguous() * self.model.sigma_data
                     latent_sample[b : b + 1, :] = encoded_frames
 
@@ -1003,12 +924,12 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             cond_video = split_video_into_patches(cond_video, patch_h, patch_w)
             for b in range(cond_video.shape[0]):
                 input_frames = cond_video[b : b + 1].cuda() / 255.0 * 2 - 1
-                input_frames = einops.rearrange(input_frames, "1 C (V T) H W -> V C T H W", V=self.model.n_cameras)[:1]
+                #input_frames = einops.rearrange(input_frames, "1 C (V T) H W -> V C T H W", V=self.model.n_views)[:1]
                 latent_sample[
                     b : b + 1,
                     0,
                 ] = (
-                    self.model.tokenizer.vae.encode(input_frames).contiguous() * self.model.sigma_data
+                    self.model.tokenizer.encode(input_frames).contiguous() * self.model.sigma_data
                 )
 
         latent_sample = einops.rearrange(latent_sample, " B V C T H W -> B C (V T) H W")
@@ -1016,33 +937,32 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         return latent_sample
 
-    def build_mv_prompt(self, prompt, n_cameras):
+    def build_mv_prompt(self, mv_prompts, n_views):
         """
         Apply multiview prompt formatting to the input prompt such that hte text conditioning matches that used during
         training.
         Args:
             prompt: caption of one scene, with prompt of each view separated by ";"
-            n_cameras: number of cameras to format the caption to
+            n_views: number of cameras to format the caption to
 
         Returns:
 
         """
         base_prompts = [
-            "The video is captured from a camera mounted on a car. The camera is facing forward. The camera provides a sharp view of the scene. The frames are clear and in focus.",
-            "The video is captured from a camera mounted on a car. The camera is facing to the left. The camera provides a sharp view of the scene. The frames are clear and in focus.",
-            "The video is captured from a camera mounted on a car. The camera is facing to the right. The camera provides a sharp view of the scene. The frames are clear and in focus.",
-            "The video is captured from a camera mounted on a car. The camera is facing backwards. The camera provides a sharp view of the scene. The frames are clear and in focus.",
-            "The video is captured from a camera mounted on a car. The camera is facing the rear left side. The camera provides a sharp view of the scene. The frames are clear and in focus.",
-            "The video is captured from a camera mounted on a car. The camera is facing the rear right side. The camera provides a sharp view of the scene. The frames are clear and in focus.",
+            "The video is captured from a camera mounted on a car. The camera is facing forward. ",
+            "The video is captured from a camera mounted on a car. The camera is facing to the left. ",
+            "The video is captured from a camera mounted on a car. The camera is facing to the right. ",
+            "The video is captured from a camera mounted on a car. The camera is facing backwards. ",
+            "The video is captured from a camera mounted on a car. The camera is facing the rear left side. ",
+            "The video is captured from a camera mounted on a car. The camera is facing the rear right side. ",
         ]
 
-        mv_prompts = prompt.split(";")
         log.info(f"Reading multiview prompts, found {len(mv_prompts)} splits")
         n = len(mv_prompts)
-        if n < n_cameras:
+        if n < n_views:
             mv_prompts += base_prompts[n:]
         else:
-            mv_prompts = mv_prompts[:n_cameras]
+            mv_prompts = mv_prompts[:n_views]
 
         for vid, p in enumerate(mv_prompts):
             if not p.startswith(base_prompts[vid]):
@@ -1054,11 +974,6 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
     def generate(
         self,
-        prompt: str,
-        condition_location: str,
-        view_condition_video_path: str,
-        initial_condition_video_path: str,
-        view_cond_start_frame: str,
         control_inputs: dict = None,
         save_folder: str = "outputs/",
     ) -> tuple[np.ndarray, str] | None:
@@ -1071,11 +986,6 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         4. Run safety checks and apply face blur on generated video frames
 
         Args:
-            prompt: Text description of desired video
-            condition_location: str,
-            view_condition_video_path: str,
-            initial_condition_video_path: str,
-            view_cond_start_frame: str,
             control_inputs: Control inputs for guided generation
             save_folder: Folder to save intermediate files
 
@@ -1085,13 +995,10 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 Final prompt used for generation (may be enhanced)
             ), or None if content fails guardrail safety checks
         """
-        log.info(f"Run with prompt: {prompt}")
-        log.info(f"Run with video path: {view_condition_video_path}")
 
-        # Upsample prompt if enabled
-        multi_cam = False
-        if hasattr(self.model, "n_cameras") and self.model.n_cameras > 1:
-            multi_cam = self.model.n_cameras
+
+        log.info(f"Run with video path: {control_inputs['view_condition_video']}")
+
         # Process prompts into multiview format
         if False:
             log.info("Run guardrail on prompt")
@@ -1101,7 +1008,9 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 return None
             log.info("Pass guardrail on prompt")
 
-        mv_prompts = self.build_mv_prompt(prompt, self.model.n_cameras)
+        mv_prompts = self.build_mv_prompt(control_inputs['prompts'], self.model.n_views)
+        log.info(f"Run with prompt: {mv_prompts}")
+
         prompt_embeddings, _ = self._run_text_embedding_on_prompt_with_offload(mv_prompts)
         prompt_embedding = torch.concat(prompt_embeddings, dim=0).cuda()
 
@@ -1112,20 +1021,16 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         video = self._run_model_with_offload(
             prompt_embedding,
-            condition_location=condition_location,
-            view_condition_video_path=view_condition_video_path,
-            initial_condition_video_path=initial_condition_video_path,
-            view_cond_start_frame=view_cond_start_frame,
             control_inputs=control_inputs,
         )
         log.info("Finish generation")
+        if False:
+            log.info("Run guardrail on generated video")
+            video = self._run_guardrail_on_video_with_offload(video)
+            if video is None:
+                log.critical("Generated video is not safe")
+                raise ValueError("Guardrail check failed: Generated video is unsafe")
 
-        log.info("Run guardrail on generated video")
-        video = self._run_guardrail_on_video_with_offload(video)
-        if video is None:
-            log.critical("Generated video is not safe")
-            raise ValueError("Guardrail check failed: Generated video is unsafe")
+            log.info("Pass guardrail on generated video")
 
-        log.info("Pass guardrail on generated video")
-
-        return video, prompt
+        return video, mv_prompts

@@ -220,10 +220,13 @@ def load_model_by_config(
 
 
 def load_network_model(model: DiffusionT2WModel, ckpt_path: str):
-    with skip_init_linear():
+    if ckpt_path:
+        with skip_init_linear():
+            model.set_up_model()
+        net_state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=False)  # , weights_only=True)
+        non_strict_load_model(model.model, net_state_dict)
+    else:
         model.set_up_model()
-    net_state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=False)  # , weights_only=True)
-    non_strict_load_model(model.model, net_state_dict)
     model.cuda()
 
 
@@ -391,7 +394,7 @@ def get_video_batch_for_multiview_model(
             - state_shape (list): Shape of latent state [C,T,H,W] accounting for VAE compression
     """
     n_views = len(prompt_embedding)
-    prompt_embedding = einops.rearrange(torch.cat(prompt_embedding), "n t d -> (n t) d").unsqueeze(0)
+    prompt_embedding = einops.rearrange(prompt_embedding, "n t d -> (n t) d").unsqueeze(0)
     raw_video_batch = prepare_data_batch(
         height=height,
         width=width,
@@ -423,32 +426,26 @@ def get_ctrl_batch_mv(model, data_batch, num_total_frames, control_inputs):
     # Initialize control input dictionary
     control_input_dict = {k: v for k, v in data_batch.items()}
     control_weights = []
+    hint_keys = []
     for hint_key, control_info in control_inputs.items():
+        if hint_key not in valid_hint_keys:
+            continue
         if "input_control" in control_info:
-            in_file = control_info["input_control"]
-            interpolation = cv2.INTER_LINEAR
-            log.info(f"reading control input {in_file} for hint {hint_key}")
-            pieces = in_file.split("/")
             cond_videos = []
-            for vid in [0, 1, 2, 5, 3, 4]:
-                map_path = ("/").join(
-                    pieces[:-2]
-                    + [
-                        str(vid),
-                    ]
-                    + pieces[-1:]
-                )
-                log.info(f"hdmap_path {map_path}")
-                cond_vid, fps, aspect_ratio = read_and_resize_input(map_path, num_total_frames=num_total_frames, interpolation=interpolation)
-
+            for in_file in control_info["input_control"]:
+                log.info(f"reading control input {in_file} for hint {hint_key}")
+                cond_vid, fps, aspect_ratio = read_and_resize_input(in_file, num_total_frames=num_total_frames,
+                                                                    interpolation=cv2.INTER_LINEAR)
                 cond_videos.append(cond_vid)
+
             input_frames = torch.cat(cond_videos, dim=1)
-            control_input_dict[f"control_input_{hint_key}"] = input_frames.numpy()
-            _, num_total_frames, H, W = control_input_dict["video"].shape
+            control_input_dict[f"control_input_{hint_key}"] = input_frames#.numpy()
+            _, _, num_total_frames, H, W = control_input_dict["video"].shape
+            hint_keys.append(hint_key)
         control_weights.append(control_info["control_weight"])
 
     target_w, target_h = W, H
-    hint_key = "control_input_" + "_".join(control_inputs.keys())
+    hint_key = "control_input_" + "_".join(hint_keys)
     add_control_input = get_augmentor_for_eval(
         input_key="video",
         output_key=hint_key
@@ -924,47 +921,6 @@ def get_condition_latent(
 
     return condition_latent
 
-def get_condition_latent_multiview(
-    model: DiffusionV2WMultiviewModel,
-    input_image_or_video_path: str,
-    num_input_frames: int = 1,
-    state_shape: list[int] = None,
-    from_back: bool = True,
-    start_frame: int=0
-):
-    """Get condition latent from input image/video file. This is the function for the multi-view model where each view has one latent condition frame.
-
-    Args:
-        model (DiffusionMultiviewV2WModel): Video generation model
-        input_image_or_video_path (str): Path to conditioning image/video
-        num_input_frames (int): Number of input frames for video2world prediction
-
-    Returns:
-        tuple: (condition_latent, input_frames) where:
-            - condition_latent (torch.Tensor): Encoded latent condition [B,C,T,H,W]
-            - input_frames (torch.Tensor): Input frames tensor [B,C,T,H,W]
-    """
-    if state_shape is None:
-        state_shape = model.state_shape
-    assert num_input_frames > 0, "num_input_frames must be greater than 0"
-
-    H, W = (
-        state_shape[-2] * model.tokenizer.spatial_compression_factor,
-        state_shape[-1] * model.tokenizer.spatial_compression_factor,
-    )
-    input_path_format = input_image_or_video_path.split(".")[-1]
-    input_frames = read_video_or_image_into_frames_BCTHW(
-        input_image_or_video_path,
-        input_path_format=input_path_format,
-        H=H,
-        W=W,
-    )
-    input_frames = einops.rearrange(input_frames, "B C (V T) H W -> (B V) C T H W", V=model.n_views)
-    input_frames = input_frames[:,:,start_frame:,:,:]
-    condition_latent, _ = create_condition_latent_from_input_frames(model, input_frames, num_input_frames, from_back=from_back)
-    condition_latent = condition_latent.to(torch.bfloat16)
-
-    return condition_latent, einops.rearrange(input_frames, "(B V) C T H W -> B C (V T) H W", V=model.n_views)[0]
 
 def check_input_frames(input_path: str, required_frames: int) -> bool:
     """Check if input video/image has sufficient frames.

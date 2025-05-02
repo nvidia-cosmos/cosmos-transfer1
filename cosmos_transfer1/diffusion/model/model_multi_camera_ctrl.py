@@ -144,14 +144,14 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
         if "view_indices" in data_batch:
             comp_factor = self.vae.temporal_compression_factor
             # n_frames = data_batch['num_frames']
-            view_indices = rearrange(data_batch["view_indices"], "B (V T) -> B V T", V=self.n_cameras)
+            view_indices = rearrange(data_batch["view_indices"], "B (V T) -> B V T", V=self.n_views)
             view_indices_B_V_0 = view_indices[:, :, :1]
             view_indices_B_V_1T = view_indices[:, :, 1:-1:comp_factor]
             view_indices_B_V_T = torch.cat([view_indices_B_V_0, view_indices_B_V_1T], dim=-1)
-            condition.view_indices_B_T = rearrange(view_indices_B_V_T, "B V T -> B (V T)", V=self.n_cameras)
-            condition.data_n_cameras = self.n_cameras
+            condition.view_indices_B_T = rearrange(view_indices_B_V_T, "B V T -> B (V T)", V=self.n_views)
+            condition.data_n_views = self.n_views
             uncondition.view_indices_B_T = condition.view_indices_B_T
-            uncondition.data_n_cameras = self.n_cameras
+            uncondition.data_n_views = self.n_views
 
         if condition_latent is None:
             batch_size = data_batch["latent_hint"].shape[0]
@@ -180,9 +180,9 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
 
         to_cp = self.net.is_context_parallel_enabled
         # For inference, check if parallel_state is initialized
-        if parallel_state.is_initialized() and not self.is_image_batch(data_batch):
-            condition = broadcast_condition(condition, to_tp=True, to_cp=to_cp)
-            uncondition = broadcast_condition(uncondition, to_tp=True, to_cp=to_cp)
+        if parallel_state.is_initialized():# and not self.is_image_batch(data_batch):
+            condition = broadcast_condition(condition, to_tp=False, to_cp=to_cp)
+            uncondition = broadcast_condition(uncondition, to_tp=False, to_cp=to_cp)
 
             cp_group = parallel_state.get_context_parallel_group()
             latent_hint = getattr(condition, hint_key)
@@ -244,20 +244,20 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
             condition_latent (Optional[torch.Tensor]): latent tensor in shape B,C,T,H,W as condition to generate video.
             num_condition_t (Optional[int]): number of condition latent T, if None, will use the whole first half
         """
-        self._normalize_video_databatch_inplace(data_batch)
-        self._augment_image_dim_inplace(data_batch)
-        is_image_batch = self.is_image_batch(data_batch)
-        if is_image_batch:
-            log.debug("image batch, call base model generate_samples_from_batch")
-            return super(MultiVideoDiffusionModelWithCtrl, self).generate_samples_from_batch(
-                data_batch,
-                guidance=guidance,
-                seed=seed,
-                state_shape=state_shape,
-                n_sample=n_sample,
-                is_negative_prompt=is_negative_prompt,
-                num_steps=num_steps,
-            )
+        #self._normalize_video_databatch_inplace(data_batch)
+        #self._augment_image_dim_inplace(data_batch)
+        is_image_batch = False #self.is_image_batch(data_batch)
+        # if is_image_batch:
+        #     log.debug("image batch, call base model generate_samples_from_batch")
+        #     return super(MultiVideoDiffusionModelWithCtrl, self).generate_samples_from_batch(
+        #         data_batch,
+        #         guidance=guidance,
+        #         seed=seed,
+        #         state_shape=state_shape,
+        #         n_sample=n_sample,
+        #         is_negative_prompt=is_negative_prompt,
+        #         num_steps=num_steps,
+        #     )
         if n_sample is None:
             input_key = self.input_image_key if is_image_batch else self.input_data_key
             n_sample = data_batch[input_key].shape[0]
@@ -298,17 +298,17 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
             )
 
         if self.net.is_context_parallel_enabled:
-            x_sigma_max = rearrange(x_sigma_max, "B C (V T) H W -> (B V) C T H W", V=self.n_cameras)
+            x_sigma_max = rearrange(x_sigma_max, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
             x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
-            x_sigma_max = rearrange(x_sigma_max, "(B V) C T H W -> B C (V T) H W", V=self.n_cameras)
+            x_sigma_max = rearrange(x_sigma_max, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
 
         samples = self.sampler(
             x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max
         )
 
         if self.net.is_context_parallel_enabled:
-            samples = rearrange(samples, "B C (V T) H W -> (B V) C T H W", V=self.n_cameras)
+            samples = rearrange(samples, "B C (V T) H W -> (B V) C T H W", V=self.n_views).contiguous()
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
-            samples = rearrange(samples, "(B V) C T H W -> B C (V T) H W", V=self.n_cameras)
+            samples = rearrange(samples, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
 
         return samples

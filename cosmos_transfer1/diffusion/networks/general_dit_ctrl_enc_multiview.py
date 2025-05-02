@@ -83,7 +83,7 @@ class GeneralDITMultiviewEncoder(MultiViewGeneralDIT):
             input_hint_block += [nn.Linear(hint_nf[i], hint_nf[i + 1]), nonlinearity]
         self.input_hint_block = nn.Sequential(*input_hint_block)
         # Initialize weights
-        self.init_weights()
+        self.initialize_weights()
         self.zero_blocks = nn.ModuleDict()
         for idx in range(num_blocks):
             if layer_mask[idx]:
@@ -253,13 +253,13 @@ class GeneralDITMultiviewEncoder(MultiViewGeneralDIT):
             if condition_video_input_mask is not None:
                 if self.cp_group is not None:
                     condition_video_input_mask = rearrange(
-                        condition_video_input_mask, "B C (V T) H W -> B C V T H W", V=self.n_cameras
+                        condition_video_input_mask, "B C (V T) H W -> B C V T H W", V=self.n_views
                     )
                     condition_video_input_mask = split_inputs_cp(
                         condition_video_input_mask, seq_dim=3, cp_group=self.cp_group
                     )
                     condition_video_input_mask = rearrange(
-                        condition_video_input_mask, "B C V T H W -> B C (V T) H W", V=self.n_cameras
+                        condition_video_input_mask, "B C V T H W -> B C (V T) H W", V=self.n_views
                     )
                 input_list = [x, condition_video_input_mask]
                 x = torch.cat(

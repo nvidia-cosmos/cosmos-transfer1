@@ -359,7 +359,7 @@ class ViewConditionedWithCtrlCondition(BaseWithCtrlCondition):
     # view index indicating camera, used to index nn.Embedding
     view_indices_B_T: Optional[torch.Tensor] = None
     # number of cameras in this cond data
-    data_n_cameras: Optional[int] = -1
+    data_n_views: Optional[int] = -1
 
 class VideoConditionerWithCtrl(VideoExtendConditioner):
     def forward(
