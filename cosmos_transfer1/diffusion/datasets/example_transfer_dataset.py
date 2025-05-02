@@ -451,7 +451,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 data["t5_text_embeddings"] = t5_embedding
                 data["t5_text_mask"] = torch.cat(t5_masks)
                 data["view_indices"] = view_indices_conditioning.contiguous()
-
+                data["frame_repeat"] = torch.zeros(len(view_indices))
                 # Add metadata
                 data["fps"] = fps
                 data["frame_start"] = frame_ids[0]

@@ -283,6 +283,7 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
             )
 
         if self.net.is_context_parallel_enabled:
+            x_sigma_max = broadcast(x_sigma_max, to_tp=False, to_cp=True)
             x_sigma_max = rearrange(x_sigma_max, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
             x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
             x_sigma_max = rearrange(x_sigma_max, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
