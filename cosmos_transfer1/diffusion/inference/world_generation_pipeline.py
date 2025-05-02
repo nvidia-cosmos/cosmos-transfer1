@@ -58,6 +58,8 @@ from cosmos_transfer1.diffusion.inference.inference_utils import (
     resize_control_weight_map,
     split_video_into_patches,
     read_and_resize_input,
+    resize_video,
+    read_video_or_image_into_frames_BCTHW,
     valid_hint_keys
 )
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
@@ -298,6 +300,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
     # load the hint encoders. these encoders are run along with the main model to provide additional context
     def _load_network(self):
+        # This load seems to be non-functional for av-sample checkpoints. The base_model loading in build_model is required
         if self.checkpoint_name == "":
             load_network_model(self.model, "")
         else:
@@ -659,6 +662,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
     def _run_model_with_offload(
         self,
         prompt_embedding: torch.Tensor,
+        video_path="",
         control_inputs: dict = None,
     ) -> np.ndarray:
         """Generate world representation with automatic model offloading.
@@ -681,6 +685,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             self._load_network()
 
         sample = self._run_model(prompt_embedding,
+                                 video_path=video_path,
                                  control_inputs=control_inputs
                                  )
 
@@ -695,6 +700,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
     def _run_model(
         self,
         embedding: torch.Tensor,
+        video_path: str,
         control_inputs: dict = None,
     ) -> torch.Tensor:
         """Generate video frames using the diffusion model.
@@ -725,14 +731,22 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         requisite_input_views = [0]
         self.model.condition_location = "first_cam"
 
-        view_condition_video, fps, aspect_ratio = read_and_resize_input(
-            control_inputs["view_condition_video"], num_total_frames=self.num_video_frames, interpolation=cv2.INTER_LINEAR
+        # view_condition_video, fps, aspect_ratio = read_and_resize_input(
+        #     video_path, num_total_frames=self.num_video_frames, interpolation=cv2.INTER_LINEAR
+        # )
+        view_condition_video, fps = read_video_or_image_into_frames_BCTHW(
+            video_path,
+            normalize=False,  # s.t. output range is [0, 255]
+            max_frames=self.num_video_frames,
+            also_return_fps=True,
         )
-        view_condition_video = view_condition_video[None]
+        view_condition_video = resize_video(view_condition_video, self.height, self.width, interpolation=cv2.INTER_LINEAR)
+        view_condition_video = torch.from_numpy(view_condition_video)
         total_T = view_condition_video.shape[2]
 
         data_batch = get_ctrl_batch_mv( #model, data_batch, num_total_frames, control_inputs
-            self.model,
+            self.height,
+            self.width,
             data_batch,
             total_T, #self.num_video_frames,
             control_inputs
@@ -803,10 +817,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 control_input_i, "(B V) C T H W -> B C (V T) H W", V=self.model.n_views
             )
 
-            condition_input_i = view_condition_video[
-                                :, :,
-                                start_frame: end_frame
-                                ].cuda()
+            condition_input_i = view_condition_video[:, :, start_frame: end_frame].cuda()
 
             latent_hint = []
             for b in range(B):
@@ -974,6 +985,8 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
     def generate(
         self,
+        prompts: list,
+        video_path: str,
         control_inputs: dict = None,
         save_folder: str = "outputs/",
     ) -> tuple[np.ndarray, str] | None:
@@ -997,7 +1010,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         """
 
 
-        log.info(f"Run with video path: {control_inputs['view_condition_video']}")
+        log.info(f"Run with video path: {video_path}")
 
         # Process prompts into multiview format
         if False:
@@ -1008,7 +1021,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 return None
             log.info("Pass guardrail on prompt")
 
-        mv_prompts = self.build_mv_prompt(control_inputs['prompts'], self.model.n_views)
+        mv_prompts = self.build_mv_prompt(prompts, self.model.n_views)
         log.info(f"Run with prompt: {mv_prompts}")
 
         prompt_embeddings, _ = self._run_text_embedding_on_prompt_with_offload(mv_prompts)
@@ -1021,6 +1034,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         video = self._run_model_with_offload(
             prompt_embedding,
+            video_path,
             control_inputs=control_inputs,
         )
         log.info("Finish generation")

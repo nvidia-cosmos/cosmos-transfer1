@@ -415,13 +415,7 @@ def get_video_batch_for_multiview_model(
     ]
     return raw_video_batch, state_shape
 
-def get_ctrl_batch_mv(model, data_batch, num_total_frames, control_inputs):
-    state_shape = model.state_shape
-
-    H, W = (
-        state_shape[-2] * model.tokenizer.spatial_compression_factor,
-        state_shape[-1] * model.tokenizer.spatial_compression_factor,
-    )
+def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs):
 
     # Initialize control input dictionary
     control_input_dict = {k: v for k, v in data_batch.items()}
@@ -434,8 +428,17 @@ def get_ctrl_batch_mv(model, data_batch, num_total_frames, control_inputs):
             cond_videos = []
             for in_file in control_info["input_control"]:
                 log.info(f"reading control input {in_file} for hint {hint_key}")
-                cond_vid, fps, aspect_ratio = read_and_resize_input(in_file, num_total_frames=num_total_frames,
-                                                                    interpolation=cv2.INTER_LINEAR)
+                cond_vid, fps = read_video_or_image_into_frames_BCTHW(
+                    in_file,
+                    normalize=False,  # s.t. output range is [0, 255]
+                    max_frames=num_total_frames,
+                    also_return_fps=True,
+                )
+                cond_vid = resize_video(cond_vid, H, W,
+                                                    interpolation=cv2.INTER_LINEAR)
+                cond_vid = torch.from_numpy(cond_vid[0])
+                # cond_vid, fps, aspect_ratio = read_and_resize_input(in_file, num_total_frames=num_total_frames,
+                #                                                     interpolation=cv2.INTER_LINEAR)
                 cond_videos.append(cond_vid)
 
             input_frames = torch.cat(cond_videos, dim=1)
