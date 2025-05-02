@@ -9,11 +9,6 @@
             "assets/sample_av_mv_input_hdmap_rear_left.mp4",
             "assets/sample_av_mv_input_hdmap_rear_right.mp4"
         ],
-        "ckpt_path_ord": "/lustre/fs12/portfolios/nvr/users/tianshic/cosmos_ckpts/hdmap_sv2mv_t2v_cont_train/fsdp_checkpoints/iter_000018000_ema_model_only.pt",
-        "ckpt_path": "/mnt/scratch/cache/imageinaire/nvidia/hdmap_sv2mv_t2v/iter_000018000_ema_model_only.pt"
-    },
-    "view_condition_video": "assets/sample_av_mv_input_rgb.mp4",
-    "prompts": [
-         "The video is captured from a camera mounted on a car. The camera is facing forward. The video captures a driving scene on a multi-lane highway during the day. The sky is clear and blue, indicating good weather conditions. The road is relatively busy with several cars and trucks in motion. A red sedan is driving in the left lane, followed by a black pickup truck in the right lane. The vehicles are maintaining a safe distance from each other. On the right side of the road, there are speed limit signs indicating a limit of 65 mph. The surrounding area includes a mix of greenery and industrial buildings, with hills visible in the distance. The overall environment appears to be a typical day on a highway with moderate traffic. The golden light of the late afternoon bathes the highway, casting long shadows and creating a warm, serene atmosphere. The sky is a mix of orange and blue, with the sun low on the horizon. The red sedan in the left lane reflects the golden hues, while the black pickup truck in the right lane casts a distinct shadow on the pavement. The speed limit signs stand out clearly under the fading sunlight. The surrounding greenery glows with a rich, warm tone, and the industrial buildings take on a softened appearance in the sunset."
-    ]
+        "ckpt_path": "checkpoints/nvidia/hdmap_sv2mv_t2v/iter_000018000_ema_model_only.pt"
+    }
 }

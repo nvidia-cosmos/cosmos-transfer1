@@ -39,6 +39,49 @@ torch.enable_grad(False)
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Control to world generation demo script", conflict_handler="resolve")
     parser.add_argument(
+        "--prompt",
+        type=str,
+        default="The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution.",
+        help="prompt which the sampled video condition on",
+    )
+    parser.add_argument(
+        "--prompt_left",
+        type=str,
+        default="The video is captured from a camera mounted on a car. The camera is facing to the left. ",
+        help="Text prompt for generating left camera view video",
+    )
+    parser.add_argument(
+        "--prompt_right",
+        type=str,
+        default="The video is captured from a camera mounted on a car. The camera is facing to the right.",
+        help="Text prompt for generating right camera view video",
+    )
+
+    parser.add_argument(
+        "--prompt_back",
+        type=str,
+        default="The video is captured from a camera mounted on a car. The camera is facing backwards.",
+        help="Text prompt for generating rear camera view video",
+    )
+    parser.add_argument(
+        "--prompt_back_left",
+        type=str,
+        default="The video is captured from a camera mounted on a car. The camera is facing the rear left side.",
+        help="Text prompt for generating left camera view video",
+    )
+    parser.add_argument(
+        "--prompt_back_right",
+        type=str,
+        default="The video is captured from a camera mounted on a car. The camera is facing the rear right side.",
+        help="Text prompt for generating right camera view video",
+    )
+    parser.add_argument(
+        "--input_video_path",
+        type=str,
+        default="",
+        help="Optional input RGB video path",
+    )
+    parser.add_argument(
         "--num_input_frames",
         type=int,
         default=1,
@@ -210,8 +253,8 @@ def demo(cfg, control_inputs):
         device_rank = distributed.get_rank(process_group)
 
     preprocessors = Preprocessors()
-
-    checkpoint = SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg
+    prompts = [args.prompt, args.prompt_left,args.prompt_right, args.prompt_back, args.prompt_back_left, args.prompt_back_right]
+    checkpoint = "" #SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg
 
     # Initialize transfer generation model pipeline
     pipeline = DiffusionControl2WorldMultiviewGenerationPipeline(
@@ -229,6 +272,8 @@ def demo(cfg, control_inputs):
         sigma_max=80.,
         num_video_frames=57,
         process_group=process_group,
+        height=576,
+        width=1024
     )
 
     # if cfg.batch_input_path:
@@ -243,7 +288,7 @@ def demo(cfg, control_inputs):
     for i, input_dict in enumerate([{},]):
         #current_prompt = input_dict.get("prompt", None)
         #current_video_path = input_dict.get("visual_input", None)
-        current_prompt = control_inputs["prompts"]
+        current_prompt = prompts
         current_video_path = ""
         video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{i}")
         os.makedirs(video_save_subfolder, exist_ok=True)
@@ -261,6 +306,8 @@ def demo(cfg, control_inputs):
 
         # Generate video
         generated_output = pipeline.generate(
+            prompts = current_prompt,
+            video_path=cfg.input_video_path,
             control_inputs=current_control_inputs,
             save_folder=video_save_subfolder,
         )
@@ -284,7 +331,7 @@ def demo(cfg, control_inputs):
                 fps=cfg.fps,
                 H=video.shape[1],
                 W=video.shape[2],
-                video_save_quality=5,
+                video_save_quality=7,
                 video_save_path=video_save_path,
             )
 
