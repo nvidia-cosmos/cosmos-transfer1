@@ -49,3 +49,4 @@ SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg = "nvidia/sv2mv_t2v/iter_000005000_
 SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg = "nvidia/hdmap_sv2mv_t2v_cont_train/fsdp_checkpoints/iter_000018000_ema_model_only.pt"
 SV2MV_i2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg = "nvidia/sv2mv_i2v/iter_000054000_ema_model.pt"
 SV2MV_i2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg = "nvidia/hdmap_sv2mv_i2v/fsdp_checkpoints/iter_000019200_ema_model_only.pt"
+SV2MV_t2v_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg = "nvidia/lidar_sv2mv_t2v/fsdp_checkpoints/iter_000018600_ema_model_only.pt"

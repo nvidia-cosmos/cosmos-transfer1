@@ -33,7 +33,7 @@ from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
 from cosmos_transfer1.diffusion.training.networks.general_dit_multi_camera import VideoExtendGeneralDIT
 
 from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
-from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT
+from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT, SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg, SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg, SV2MV_t2v_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
 from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset, AVTransferDataset
 
 
@@ -42,7 +42,12 @@ cs = ConfigStore.instance()
 num_blocks = 28
 num_control_blocks = 3
 ckpt_root = 'checkpoints/'
-data_root = '/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/waymo_transfer/'
+data_root = 'datasets/waymo_transfer/'
+
+mv_model_names = {
+    "hdmap": SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
+    "lidar": SV2MV_t2v_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
+}
 
 def make_ctrlnet_config(
     hint_key: str = "control_input_hdmap",
@@ -134,8 +139,8 @@ def make_ctrlnet_config(
                     160,
                 ],
                 base_load_from=dict(
-                    load_path=os.path.join(ckpt_root, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT, "checkpoints_tp",
-                                           "base_model_model_mp_*.pt")
+                    load_path=os.path.join(ckpt_root, os.path.dirname(SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg), "checkpoints_tp",
+                                           "model_model_mp_*.pt")
                 ),
                 finetune_base_model=False,
                 hint_mask=[True],
@@ -250,10 +255,11 @@ for key in all_hint_key:
         )
         # Register experiments for post-training from TP checkpoints.
         hint_key_short = key.replace("control_input_", "")  # "control_input_vis" -> "vis"
-        pretrain_ckpt_path = default_model_names[hint_key_short]
+        pretrain_ckpt_path = mv_model_names[hint_key_short]
         # note: The TP ckpt path are specified as <name>.pt to the script, but actually the <name>_model_mp_*.pt files will be loaded.
         tp_ckpt_path = os.path.join(ckpt_root, os.path.dirname(pretrain_ckpt_path), "checkpoints_tp",
                                     os.path.basename(pretrain_ckpt_path))
+        #tp_ckpt_path = os.path.join(ckpt_root, SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg)
         config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
                                     pretrain_model_path=tp_ckpt_path, t2v=True, num_frames=num_frames)
         cs.store(
