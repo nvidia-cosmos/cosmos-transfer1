@@ -32,44 +32,55 @@ from cosmos_transfer1.diffusion.training.models.extend_model_multiview_ctrl impo
 from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
 from cosmos_transfer1.diffusion.training.networks.general_dit_multi_camera import VideoExtendGeneralDIT
 
-from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
-from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT, SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg, SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg, SV2MV_t2v_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
-from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset, AVTransferDataset
+from cosmos_transfer1.checkpoints import (
+                                          SV2MV_v2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg,
+                                          SV2MV_t2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg,
+                                          SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
+                                          SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
+                                          SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
+                                          SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
+                                          )
+from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import AVTransferDataset
 
 
 cs = ConfigStore.instance()
 
 num_blocks = 28
+num_frames = 57
 num_control_blocks = 3
 ckpt_root = 'checkpoints/'
 data_root = 'datasets/waymo_transfer/'
 
-mv_model_names = {
-    "hdmap": SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
-    "lidar": SV2MV_t2v_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
+t2w_mv_model_names = {
+    "hdmap": SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
+    "lidar": SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
+}
+v2w_mv_model_names = {
+    "hdmap": SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
+    "lidar": SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
 }
 
 def make_ctrlnet_config(
     hint_key: str = "control_input_hdmap",
     num_control_blocks: int = 3,
     pretrain_model_path: str = "",
-    t2v: bool=True,
+    t2w: bool=True,
     num_frames=121
 ) -> LazyDict:
 
     if pretrain_model_path == "":
-        if t2v:
-            job_name = f"CTRL_7Bv1pt3_t2v_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
+        if t2w:
+            job_name = f"CTRL_7Bv1pt3_t2w_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
             job_project = "cosmos_transfer1_pretrain"
         else:
-            job_name = f"CTRL_7Bv1pt3_lvg_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
+            job_name = f"CTRL_7Bv1pt3_v2w_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
             job_project = "cosmos_transfer1_pretrain"
     else:
-        if t2v:
-            job_name = f"CTRL_7Bv1pt3_t2v_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
+        if t2w:
+            job_name = f"CTRL_7Bv1pt3_t2w_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
             job_project = "cosmos_transfer1_posttrain"
         else:
-            job_name = f"CTRL_7Bv1pt3_lvg_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
+            job_name = f"CTRL_7Bv1pt3_v2w_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
             job_project = "cosmos_transfer1_posttrain"
 
     example_multiview_dataset_waymo = L(AVTransferDataset)(
@@ -139,7 +150,7 @@ def make_ctrlnet_config(
                     160,
                 ],
                 base_load_from=dict(
-                    load_path=os.path.join(ckpt_root, os.path.dirname(SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg), "checkpoints_tp",
+                    load_path=os.path.join(ckpt_root, os.path.dirname(SV2MV_t2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg if t2w else SV2MV_v2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg), "checkpoints_tp",
                                            "model_model_mp_*.pt")
                 ),
                 finetune_base_model=False,
@@ -147,12 +158,12 @@ def make_ctrlnet_config(
                 hint_dropout_rate=0.15,
                 conditioner=dict(
                     video_cond_bool=dict(
-                        condition_location="first_random_n",
+                        condition_location="first_cam" if t2w else "first_cam_and_random_n",
                         cfg_unconditional_type="zero_condition_region_condition_mask",
                         apply_corruption_to_condition_region="noise_with_sigma",
                         condition_on_augment_sigma=False,
                         dropout_rate=0.0,
-                        first_random_n_num_condition_t_max=0 if t2v else 2,
+                        first_random_n_num_condition_t_max=0 if t2w else 2,
                         normalize_condition_latent=False,
                         augment_sigma_sample_p_mean=-3.0,
                         augment_sigma_sample_p_std=2.0,
@@ -211,60 +222,55 @@ def make_ctrlnet_config(
     return ctrl_config
 
 
-def make_small_config(base_config: LazyDict, net_ctrl=False) -> LazyDict:
-    small_config = copy.deepcopy(base_config)
-    small_config["job"]["group"] = "debug"
-    small_config["job"]["name"] = f"{small_config['job']['name']}_SMALL"
-    num_blocks_small = 2
-    small_config["model"]["net"]["num_blocks"] = num_blocks_small
-    if net_ctrl:
-        small_config["model"]["net_ctrl"]["num_blocks"] = num_blocks_small
-        small_config["model"]["net_ctrl"]["layer_mask"] = [
-            True if (i >= num_blocks_small // 2) else False for i in range(num_blocks_small)
-        ]
-    small_config["model_parallel"]["tensor_model_parallel_size"] = 1
-    small_config["model_parallel"]["sequence_parallel"] = False
-    small_config["checkpoint"]["load_path"] = ""
-    small_config["model"]["base_load_from"]["load_path"] = ""
-    return small_config
-
-
 all_hint_key = [
     "control_input_hdmap",
     "control_input_lidar",
 ]
 
 for key in all_hint_key:
-    for num_frames in [57, 121]:
-        # Register experiments for pretraining from scratch
-        t2v_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                         pretrain_model_path="", t2v=True, num_frames=num_frames)
-        # Register experiments for pretraining from scratch
-        debug_config = make_small_config(t2v_config, net_ctrl=True)
-        cs.store(
-            group="experiment",
-            package="_global_",
-            name=t2v_config["job"]["name"],
-            node=t2v_config,
-        )
-        cs.store(
-            group="experiment",
-            package="_global_",
-            name=debug_config["job"]["name"],
-            node=debug_config,
-        )
-        # Register experiments for post-training from TP checkpoints.
-        hint_key_short = key.replace("control_input_", "")  # "control_input_vis" -> "vis"
-        pretrain_ckpt_path = mv_model_names[hint_key_short]
-        # note: The TP ckpt path are specified as <name>.pt to the script, but actually the <name>_model_mp_*.pt files will be loaded.
-        tp_ckpt_path = os.path.join(ckpt_root, os.path.dirname(pretrain_ckpt_path), "checkpoints_tp",
-                                    os.path.basename(pretrain_ckpt_path))
-        #tp_ckpt_path = os.path.join(ckpt_root, SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg)
-        config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                    pretrain_model_path=tp_ckpt_path, t2v=True, num_frames=num_frames)
-        cs.store(
-            group="experiment",
-            package="_global_",
-            name=config["job"]["name"],
-            node=config,
-        )
+
+    # Register experiments for pretraining from scratch
+    t2w_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
+                                     pretrain_model_path="", t2w=True, num_frames=num_frames)
+    v2w_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
+                                     pretrain_model_path="", t2w=False, num_frames=num_frames)
+
+    cs.store(
+        group="experiment",
+        package="_global_",
+        name=t2w_config["job"]["name"],
+        node=t2w_config,
+    )
+    cs.store(
+        group="experiment",
+        package="_global_",
+        name=v2w_config["job"]["name"],
+        node=v2w_config,
+    )
+    # Register experiments for post-training from TP checkpoints.
+    hint_key_short = key.replace("control_input_", "")  # "control_input_vis" -> "vis"
+    t2w_pretrain_ckpt_path = t2w_mv_model_names[hint_key_short]
+    v2w_pretrain_ckpt_path = v2w_mv_model_names[hint_key_short]
+    # note: The TP ckpt path are specified as <name>.pt to the script, but actually the <name>_model_mp_*.pt files will be loaded.
+    t2w_tp_ckpt_path = os.path.join(ckpt_root, os.path.dirname(t2w_pretrain_ckpt_path), "checkpoints_tp",
+                                os.path.basename(t2w_pretrain_ckpt_path))
+    v2w_tp_ckpt_path = os.path.join(ckpt_root, os.path.dirname(v2w_pretrain_ckpt_path), "checkpoints_tp",
+                                os.path.basename(v2w_pretrain_ckpt_path))
+    #tp_ckpt_path = os.path.join(ckpt_root, SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg)
+    t2w_posttrain_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
+                                pretrain_model_path=t2w_tp_ckpt_path, t2w=True, num_frames=num_frames)
+    v2w_posttrain_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
+                                 pretrain_model_path=v2w_tp_ckpt_path, t2w=False, num_frames=num_frames)
+    cs.store(
+        group="experiment",
+        package="_global_",
+        name=t2w_posttrain_config["job"]["name"],
+        node=t2w_posttrain_config,
+    )
+    cs.store(
+        group="experiment",
+        package="_global_",
+        name=v2w_posttrain_config["job"]["name"],
+        node=v2w_posttrain_config,
+    )
+
