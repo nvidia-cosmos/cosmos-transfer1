@@ -52,19 +52,19 @@ def make_ctrlnet_config(
     hint_key: str = "control_input_hdmap",
     num_control_blocks: int = 3,
     pretrain_model_path: str = "",
-    t2v: bool = True,
+    t2w: bool = True,
     num_frames=121,
 ) -> LazyDict:
     if pretrain_model_path == "":
-        if t2v:
-            job_name = f"CTRL_7Bv1pt3_t2v_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
+        if t2w:
+            job_name = f"CTRL_7Bv1pt3_t2w_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
             job_project = "cosmos_transfer1_pretrain"
         else:
             job_name = f"CTRL_7Bv1pt3_lvg_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
             job_project = "cosmos_transfer1_pretrain"
     else:
-        if t2v:
-            job_name = f"CTRL_7Bv1pt3_t2v_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
+        if t2w:
+            job_name = f"CTRL_7Bv1pt3_t2w_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
             job_project = "cosmos_transfer1_posttrain"
         else:
             job_name = f"CTRL_7Bv1pt3_lvg_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
@@ -149,7 +149,7 @@ def make_ctrlnet_config(
                         apply_corruption_to_condition_region="noise_with_sigma",
                         condition_on_augment_sigma=False,
                         dropout_rate=0.0,
-                        first_random_n_num_condition_t_max=0 if t2v else 2,
+                        first_random_n_num_condition_t_max=0 if t2w else 2,
                         normalize_condition_latent=False,
                         augment_sigma_sample_p_mean=-3.0,
                         augment_sigma_sample_p_std=2.0,
@@ -206,14 +206,14 @@ all_hint_key = [
 for key in all_hint_key:
     for num_frames in [57, 121]:
         # Register experiments for pretraining from scratch
-        t2v_config = make_ctrlnet_config(
-            hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path="", t2v=True, num_frames=num_frames
+        t2w_config = make_ctrlnet_config(
+            hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path="", t2w=True, num_frames=num_frames
         )
         cs.store(
             group="experiment",
             package="_global_",
-            name=t2v_config["job"]["name"],
-            node=t2v_config,
+            name=t2w_config["job"]["name"],
+            node=t2w_config,
         )
 
         # Register experiments for post-training from TP checkpoints.
@@ -227,7 +227,7 @@ for key in all_hint_key:
             hint_key=key,
             num_control_blocks=num_control_blocks,
             pretrain_model_path=tp_ckpt_path,
-            t2v=True,
+            t2w=True,
             num_frames=num_frames,
         )
         cs.store(
