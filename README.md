@@ -58,15 +58,14 @@ Please refer to [INSTALL.md](INSTALL.md) for general instructions on environment
 ### Post-train pre-trained Cosmos-Transfer1 models
 
 * [Post-train pre-trained Cosmos-Transfer1-7B [Depth | Edge | Keypoint | Segmentation | Vis]](examples/training_cosmos_transfer_7b.md) **[with multi-GPU support]**
-* Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV [LiDAR]: Coming soon
-* Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV [HDMap]: Coming soon
+* [Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV [LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
 * Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
 
 ### Build your own Cosmos-Transfer1 models from scratch
 
 * [Pre-train Cosmos-Transfer1-7B [Depth | Edge | Keypoint | Segmentation | Vis]](examples/training_cosmos_transfer_7b.md) **[with multi-GPU support]**
-* Pre-train Cosmos-Transfer1-7B-Sample-AV [LiDAR]: Coming soon
-* Pre-train Cosmos-Transfer1-7B-Sample-AV [HDMap]: Coming soon
+* [Pre-train Cosmos-Transfer1-7B-Sample-AV [LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
+* Pre-train Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
 
 ### Workflow
 
@@ -84,6 +83,8 @@ Please refer to [INSTALL.md](INSTALL.md) for general instructions on environment
 ## License and Contact
 
 This project will download and install additional third-party open source software projects. Review the license terms of these open source projects before use.
+
+This model includes safety and content moderation features powered by Llama Guard 3. Llama Guard 3 is used solely as a content input filter and is subject to its own license.
 
 NVIDIA Cosmos source code is released under the [Apache 2 License](https://www.apache.org/licenses/LICENSE-2.0).
 
