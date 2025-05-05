@@ -615,6 +615,7 @@ def generate_world_from_control(
     num_input_frames: int,
     sigma_max: float,
     x_sigma_max=None,
+    augment_sigma=None,
 ) -> Tuple[np.array, list, list]:
     """Generate video using a conditioning video/image input.
 
@@ -633,7 +634,9 @@ def generate_world_from_control(
         np.array: Generated video frames in shape [T,H,W,C], range [0,255]
     """
     assert not model.config.conditioner.video_cond_bool.sample_tokens_start_from_p_or_i, "not supported"
-    augment_sigma = DEFAULT_AUGMENT_SIGMA
+
+    if augment_sigma is None:
+        augment_sigma = DEFAULT_AUGMENT_SIGMA
 
     b, c, t, h, w = condition_latent.shape
     if condition_latent.shape[2] < state_shape[1]:

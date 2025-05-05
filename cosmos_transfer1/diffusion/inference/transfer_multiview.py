@@ -25,15 +25,14 @@ from io import BytesIO
 
 import torch
 
-from cosmos_transfer1.checkpoints import BASE_7B_CHECKPOINT_AV_SAMPLE_PATH, BASE_7B_CHECKPOINT_PATH, BASE_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH, SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg
+from cosmos_transfer1.checkpoints import BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
 from cosmos_transfer1.diffusion.inference.inference_utils import load_controlnet_specs, valid_hint_keys, default_model_names
 from cosmos_transfer1.diffusion.inference.preprocessors import Preprocessors
 from cosmos_transfer1.diffusion.inference.world_generation_pipeline import DiffusionControl2WorldMultiviewGenerationPipeline
 from cosmos_transfer1.utils import log, misc
-from cosmos_transfer1.utils.io import read_prompts_from_file, save_video
+from cosmos_transfer1.utils.io import save_video
 
 torch.enable_grad(False)
-#torch.serialization.add_safe_globals([BytesIO])
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -115,11 +114,6 @@ def parse_arguments() -> argparse.Namespace:
         default="outputs/",
         help="Output folder for generating a batch of videos",
     )
-    # parser.add_argument(
-    #     "--batch_input_path",
-    #     type=str,
-    #     help="Path to a JSONL file of input prompts for generating a batch of videos",
-    # )
     parser.add_argument("--num_steps", type=int, default=35, help="Number of diffusion sampling steps")
     parser.add_argument("--guidance", type=float, default=5, help="Classifier-free guidance scale value")
     parser.add_argument("--fps", type=int, default=24, help="FPS of the output video")
@@ -254,7 +248,7 @@ def demo(cfg, control_inputs):
 
     preprocessors = Preprocessors()
     prompts = [args.prompt, args.prompt_left,args.prompt_right, args.prompt_back, args.prompt_back_left, args.prompt_back_right]
-    checkpoint = "" #SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg
+    checkpoint = BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
 
     # Initialize transfer generation model pipeline
     pipeline = DiffusionControl2WorldMultiviewGenerationPipeline(
@@ -276,18 +270,9 @@ def demo(cfg, control_inputs):
         width=1024
     )
 
-    # if cfg.batch_input_path:
-    #     log.info(f"Reading batch inputs from path: {cfg.batch_input_path}")
-    #     prompts = read_prompts_from_file(cfg.batch_input_path)
-    # else:
-    #     # Single prompt case
-    #     prompts = [{"prompt": cfg.prompts,
-    #                 "visual_input": cfg.input_video_path}]
-
     os.makedirs(cfg.video_save_folder, exist_ok=True)
     for i, input_dict in enumerate([{},]):
-        #current_prompt = input_dict.get("prompt", None)
-        #current_video_path = input_dict.get("visual_input", None)
+
         current_prompt = prompts
         current_video_path = ""
         video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{i}")
@@ -316,10 +301,6 @@ def demo(cfg, control_inputs):
             continue
         video, prompt = generated_output
 
-        # if cfg.batch_input_path:
-        #     video_save_path = os.path.join(video_save_subfolder, "output.mp4")
-        #     prompt_save_path = os.path.join(video_save_subfolder, "prompt.txt")
-        # else:
         video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
         prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
 

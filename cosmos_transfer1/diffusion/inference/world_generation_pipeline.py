@@ -22,7 +22,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-#from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUpsampler
+from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUpsampler
 from cosmos_transfer1.checkpoints import (
     BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
     BASE_7B_CHECKPOINT_PATH,
@@ -35,11 +35,12 @@ from cosmos_transfer1.checkpoints import (
     SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
     VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg,
-    SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
-    SV2MV_t2v_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_i2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg,
-    SV2MV_i2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
+    BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+    BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.inference.inference_utils import (
     detect_aspect_ratio,
@@ -78,10 +79,9 @@ MODEL_NAME_DICT = {
     BASE_7B_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_t2v_121frames_control_input_hdmap_block3",
     HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_t2v_121frames_control_input_hdmap_block3",
     LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3",
-    SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg: "CTRL_7Bv1pt3_mv_t2v_57frames_control_input_hdmap_block3",
-    SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg: "CTRL_7Bv1pt3_mv_t2v_57frames_control_input_hdmap_block3",
-    SV2MV_i2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg: "CTRL_7Bv1pt3_mv_t2v_57frames_control_input_hdmap_block3",
-    "": "CTRL_7Bv1pt3_mv_t2v_57frames_control_input_hdmap_block3_SMALL",
+    BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_block3",
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_block3",
+    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_lidar_block3",
 }
 MODEL_CLASS_DICT = {
     BASE_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
@@ -94,10 +94,12 @@ MODEL_CLASS_DICT = {
     BASE_7B_CHECKPOINT_AV_SAMPLE_PATH: VideoDiffusionT2VModelWithCtrl,
     HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionT2VModelWithCtrl,
     LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionT2VModelWithCtrl,
-    SV2MV_t2v_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg: MultiVideoDiffusionModelWithCtrl,
-    SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg: MultiVideoDiffusionModelWithCtrl,
-    SV2MV_i2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg: MultiVideoDiffusionModelWithCtrl,
-    "": MultiVideoDiffusionModelWithCtrl
+    BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
 }
 
 
@@ -636,7 +638,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
 class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGenerationPipeline):
 
-    def _run_tokenizer_decoding(self, sample: torch.Tensor) -> np.ndarray:
+    def _run_tokenizer_decoding(self, sample: torch.Tensor):
         """Decode latent samples to video frames using the tokenizer decoder.
 
         Args:
@@ -673,7 +675,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         Args:
             prompt_embedding: Text embedding tensor from T5 encoder
             video_path: Path to input video
-            negative_prompt_embedding: Optional embedding for negative prompt guidance
+            control_inputs: Dictionary of control modalities and corresponding inputs
 
         Returns:
             np.ndarray: Generated world representation as numpy array
@@ -707,7 +709,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         Args:
             embedding: Text embedding tensor from T5 encoder
-            negative_prompt_embedding: Optional embedding for negative prompt guidance
+            control_inputs: Dictionary of control modalities and corresponding inputs
 
         Returns:
             Tensor of generated video frames
@@ -717,7 +719,6 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             if offloading is enabled.
         """
         # Get video batch and state shape
-        #model, prompt_embedding, height, width, fps, num_video_frames, frame_repeat_negative_condition
         assert len(embedding) == self.model.n_views
         data_batch, state_shape = get_video_batch_for_multiview_model(
             model=self.model,
@@ -728,12 +729,8 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             num_video_frames=self.num_video_frames * len(embedding),
             frame_repeat_negative_condition=0,
         )
-        requisite_input_views = [0]
         self.model.condition_location = "first_cam"
 
-        # view_condition_video, fps, aspect_ratio = read_and_resize_input(
-        #     video_path, num_total_frames=self.num_video_frames, interpolation=cv2.INTER_LINEAR
-        # )
         view_condition_video, fps = read_video_or_image_into_frames_BCTHW(
             video_path,
             normalize=False,  # s.t. output range is [0, 255]
@@ -744,27 +741,20 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         view_condition_video = torch.from_numpy(view_condition_video)
         total_T = view_condition_video.shape[2]
 
-        data_batch = get_ctrl_batch_mv( #model, data_batch, num_total_frames, control_inputs
+        data_batch = get_ctrl_batch_mv(
             self.height,
             self.width,
             data_batch,
-            total_T, #self.num_video_frames,
+            total_T,
             control_inputs
         )
         """
-        data_batch["control_weight"] = control_weights
-
         if len(control_inputs) > 1:  # Multicontrol enabled
             data_batch["hint_key"] = "control_input_multi"
             data_batch["control_input_multi"] = control_input
         else:  # Single-control case
             data_batch["hint_key"] = hint_key
             data_batch[hint_key] = control_input
-
-        data_batch["target_h"], data_batch["target_w"] = target_h // 8, target_w // 8
-        data_batch["video"] = torch.zeros((1, 3, 121, H, W), dtype=torch.uint8).cuda()  #?????
-        data_batch["image_size"] = torch.tensor([[H, W, H, W]] * 1, dtype=torch.bfloat16).cuda()
-        data_batch["padding_mask"] = torch.zeros((1, 1, H, W), dtype=torch.bfloat16).cuda()
         """
         hint_key = data_batch["hint_key"]
         input_video = None
@@ -839,14 +829,10 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 data_batch_i["control_weight"] = resize_control_weight_map(control_weight_t, (t, h // 2, w // 2))
 
             if i_clip == 0:
-                #num_condition_t = 0
                 num_input_frames = 0
-                #condition_video_augment_sigma_in_inference = 0.0
                 prev_frames = None
             else:
-                #num_condition_t = (self.num_input_frames - 1) // self.model.tokenizer.temporal_compression_factor + 1
                 num_input_frames = self.num_input_frames
-                #condition_video_augment_sigma_in_inference = 0.0
             condition_latent = self.get_condition_latent(state_shape, data_batch_i,
                                                            cond_video=condition_input_i,
                                                            prev_frames=prev_frames,
@@ -858,7 +844,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             latents = generate_world_from_control(
                 model=self.model,
                 state_shape=self.model.state_shape,
-                is_negative_prompt=True,
+                is_negative_prompt=False,
                 data_batch=data_batch_i,
                 guidance=self.guidance,
                 num_steps=self.num_steps,
@@ -867,6 +853,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 num_input_frames=num_input_frames,
                 sigma_max=self.sigma_max if x_sigma_max is not None else None,
                 x_sigma_max=x_sigma_max,
+                augment_sigma=0.0
             )
             torch.cuda.empty_cache()
             _, frames = self._run_tokenizer_decoding(latents)   # T H W C
@@ -1012,17 +999,16 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         log.info(f"Run with video path: {video_path}")
 
-        # Process prompts into multiview format
-        if False:
-            log.info("Run guardrail on prompt")
-            is_safe = self._run_guardrail_on_prompt_with_offload(prompt)
-            if not is_safe:
-                log.critical("Input text prompt is not safe")
-                return None
-            log.info("Pass guardrail on prompt")
-
         mv_prompts = self.build_mv_prompt(prompts, self.model.n_views)
         log.info(f"Run with prompt: {mv_prompts}")
+
+        # Process prompts into multiview format
+        log.info("Run guardrail on prompt")
+        is_safe = self._run_guardrail_on_prompt_with_offload(". ".join(mv_prompts))
+        if not is_safe:
+            log.critical("Input text prompt is not safe")
+            return None
+        log.info("Pass guardrail on prompt")
 
         prompt_embeddings, _ = self._run_text_embedding_on_prompt_with_offload(mv_prompts)
         prompt_embedding = torch.concat(prompt_embeddings, dim=0).cuda()
@@ -1038,13 +1024,12 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             control_inputs=control_inputs,
         )
         log.info("Finish generation")
-        if False:
-            log.info("Run guardrail on generated video")
-            video = self._run_guardrail_on_video_with_offload(video)
-            if video is None:
-                log.critical("Generated video is not safe")
-                raise ValueError("Guardrail check failed: Generated video is unsafe")
+        log.info("Run guardrail on generated video")
+        video = self._run_guardrail_on_video_with_offload(video)
+        if video is None:
+            log.critical("Generated video is not safe")
+            raise ValueError("Guardrail check failed: Generated video is unsafe")
 
-            log.info("Pass guardrail on generated video")
+        log.info("Pass guardrail on generated video")
 
         return video, mv_prompts
