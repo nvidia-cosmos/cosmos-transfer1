@@ -674,6 +674,8 @@ class GeneralDIT(nn.Module):
         original_shape,
         x_ctrl,
         return_features_early,
+        regional_contexts=None,
+        region_masks=None,
     ):
         features = []
         for name, block in self.blocks.items():
@@ -688,6 +690,8 @@ class GeneralDIT(nn.Module):
                 rope_emb_L_1_1_D=rope_emb_L_1_1_D,
                 adaln_lora_B_3D=adaln_lora_B_3D,
                 extra_per_block_pos_emb=extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+                regional_contexts=regional_contexts,
+                region_masks=region_masks,
             )
 
             # Extract features
@@ -753,6 +757,8 @@ class GeneralDIT(nn.Module):
         original_shape,
         x_ctrl,
         return_features_early,
+        regional_contexts=None,
+        region_masks=None,
     ):
         x_before_gate = 0
         x_skip = rearrange(x, "T H W B D -> (T H W) B D")
@@ -775,6 +781,8 @@ class GeneralDIT(nn.Module):
                 rope_emb_L_1_1_D=rope_emb_L_1_1_D,
                 adaln_lora_B_3D=adaln_lora_B_3D,
                 extra_per_block_pos_emb=extra_per_block_pos_emb,
+                regional_contexts=regional_contexts,
+                region_masks=region_masks
             )
 
             # Extract features.
