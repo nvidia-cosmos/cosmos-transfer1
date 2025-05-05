@@ -259,6 +259,7 @@ class ExampleTransferDataset(Dataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
+        return
 
     def __len__(self):
         return len(self.video_paths)
@@ -386,7 +387,7 @@ class AVTransferDataset(ExampleTransferDataset):
                     aspect_ratio = detect_aspect_ratio((video.shape[3], video.shape[2]))  # expects (W, H)
                     videos.append(video)
 
-                    if video_name.endswith("_0"):
+                    if video_name[-2] == '_' and video_name[-1].isdigit():
                         video_name_emb = video_name[:-2]
                     else:
                         video_name_emb = video_name
@@ -443,7 +444,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 data["t5_text_embeddings"] = t5_embedding
                 data["t5_text_mask"] = torch.cat(t5_masks)
                 data["view_indices"] = view_indices_conditioning.contiguous()
-
+                data["frame_repeat"] = torch.zeros(len(view_indices))
                 # Add metadata
                 data["fps"] = fps
                 data["frame_start"] = frame_ids[0]
@@ -473,7 +474,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
-
+        return
 
 if __name__ == "__main__":
     """
@@ -483,7 +484,7 @@ if __name__ == "__main__":
     visualize_control_input = True
 
     dataset = AVTransferDataset(
-        dataset_dir="datasets/waymo_transfer1", view_keys=["pinhole_front"], hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
+        dataset_dir="/home/tianshic/code/cosmos-predict1/cosmos-av-sample-toolkits/waymo_transfer", view_keys=["pinhole_front", "pinhole_front_left", "pinhole_front_right", "pinhole_side_left", "pinhole_side_right"], hint_key=control_input_key, num_frames=57, resolution="720", is_train=True, load_mv_emb=False
     )
     print("finished init dataset")
     indices = [0, 12, 100, -1]

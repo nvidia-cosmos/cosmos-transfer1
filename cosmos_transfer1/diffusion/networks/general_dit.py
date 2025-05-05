@@ -131,6 +131,7 @@ class GeneralDIT(nn.Module):
         self.model_channels = model_channels
         self.use_cross_attn_mask = use_cross_attn_mask
         self.concat_padding_mask = concat_padding_mask
+        self.block_config = block_config
         # positional embedding settings
         self.pos_emb_cls = pos_emb_cls
         self.pos_emb_learnable = pos_emb_learnable

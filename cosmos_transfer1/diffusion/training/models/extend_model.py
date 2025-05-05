@@ -66,7 +66,7 @@ class ExtendDiffusionModel(BaseModel):
 
     def get_data_and_condition(
         self, data_batch: dict[str, Tensor], num_condition_t: Union[int, None] = None
-    ) -> Tuple[Tensor, VideoExtendCondition]:
+    ) -> Tuple[Tensor, Tensor, VideoExtendCondition]:
         raw_state, latent_state, condition = super().get_data_and_condition(data_batch)
         if condition.data_type == DataType.VIDEO:
             if self.config.conditioner.video_cond_bool.sample_tokens_start_from_p_or_i:

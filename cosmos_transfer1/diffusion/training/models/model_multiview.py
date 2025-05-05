@@ -28,6 +28,23 @@ from cosmos_transfer1.diffusion.training.models.model_image import CosmosConditi
 from cosmos_transfer1.utils import log, misc
 
 
+def deepcopy_no_copy_model(obj):
+    """
+    We need to create a copy of the condition construct such that condition masks can be adjusted dynamically, but
+    the controlnet encoder plug-in also uses the condition construct to pass along the base_model object which cannot be
+    deep-copied, hence this funciton
+    """
+    if hasattr(obj, "base_model") and obj.base_model is not None:
+        my_base_model = obj.base_model
+        obj.base_model = None
+        copied_obj = copy.deepcopy(obj)
+        copied_obj.base_model = my_base_model
+        obj.base_model = my_base_model
+    else:
+        copied_obj = copy.deepcopy(obj)
+    return copied_obj
+
+
 class MultiviewDiffusionModel(DiffusionModel):
     def __init__(self, config):
         super().__init__(config)
