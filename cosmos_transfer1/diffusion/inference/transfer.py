@@ -153,7 +153,6 @@ def parse_arguments() -> argparse.Namespace:
 
     log.info(f"control_inputs: {json.dumps(control_inputs, indent=4)}")
     log.info(f"args in json: {json.dumps(json_args, indent=4)}")
-
     # if parameters not set on command line, use the ones from the controlnet_specs
     # if both not set use command line defaults
     for key in json_args:
@@ -228,7 +227,7 @@ def demo(cfg, control_inputs):
         canny_threshold=cfg.canny_threshold,
         upsample_prompt=cfg.upsample_prompt,
         offload_prompt_upsampler=cfg.offload_prompt_upsampler,
-        process_group=process_group,
+        process_group=process_group
     )
 
     if cfg.batch_input_path:
@@ -255,7 +254,29 @@ def demo(cfg, control_inputs):
                     log.warning(f"Ignoring unknown control key in override: {hint_key}")
 
         # if control inputs are not provided, run respective preprocessor (for seg and depth)
-        preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder)
+        preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder, args.regional_prompts)
+        log.info(f"regional_prompts after preprocessors: {args.regional_prompts}")
+
+        regional_prompts = []
+        region_definitions = []
+        if len(args.regional_prompts):
+            log.info(f"regional_prompts: {args.regional_prompts}")
+            for regional_prompt in args.regional_prompts:
+                regional_prompts.append(regional_prompt["prompt"])
+                if "region_definitions_path" in regional_prompt:
+                    log.info(f"region_definitions_path: {regional_prompt['region_definitions_path']}")
+                    region_definition_path = regional_prompt['region_definitions_path']
+                    if region_definition_path.endswith(".json"):
+                        with open(region_definition_path, "r") as f:
+                            region_definitions_json = json.load(f)
+                        region_definitions.extend(region_definitions_json)
+                    else:
+                        region_definitions.append(region_definition_path)
+
+        if hasattr(pipeline, "regional_prompts"):
+            pipeline.regional_prompts = regional_prompts
+        if hasattr(pipeline, "region_definitions"):
+            pipeline.region_definitions = region_definitions
 
         # Generate video
         generated_output = pipeline.generate(
@@ -263,7 +284,7 @@ def demo(cfg, control_inputs):
             video_path=current_video_path,
             negative_prompt=cfg.negative_prompt,
             control_inputs=current_control_inputs,
-            save_folder=video_save_subfolder,
+            save_folder=video_save_subfolder
         )
         if generated_output is None:
             log.critical("Guardrail blocked generation.")

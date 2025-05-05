@@ -145,6 +145,8 @@ class GeneralDITEncoder(GeneralDIT):
         control_weight: Optional[float] = 1.0,
         num_layers_to_use: Optional[int] = -1,
         condition_video_input_mask: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.Tensor | List[torch.Tensor] | Tuple[torch.Tensor, List[torch.Tensor]]:
         """
@@ -153,12 +155,17 @@ class GeneralDITEncoder(GeneralDIT):
             timesteps: (B, ) tensor of timesteps
             crossattn_emb: (B, N, D) tensor of cross-attention embeddings
             crossattn_mask: (B, N) tensor of cross-attention masks
+            regional_contexts: Optional list of regional context tensors
+            region_masks: Optional tensor of region masks
         """
         # record the input as they are replaced in this forward
         x_input = x
         crossattn_emb_input = crossattn_emb
         crossattn_mask_input = crossattn_mask
         condition_video_input_mask_input = condition_video_input_mask
+
+        regional_contexts_input = regional_contexts
+        region_masks_input = region_masks
 
         hint = kwargs.pop(hint_key)
         if hint is None:
@@ -173,6 +180,8 @@ class GeneralDITEncoder(GeneralDIT):
                 scalar_feature=scalar_feature,
                 data_type=data_type,
                 condition_video_input_mask=condition_video_input_mask_input,
+                regional_contexts=regional_contexts_input,
+                region_masks=region_masks_input,
                 **kwargs,
             )
         if hasattr(self, "hint_encoders"):  # for multicontrol
@@ -220,6 +229,10 @@ class GeneralDITEncoder(GeneralDIT):
         crossattn_emb = rearrange(crossattn_emb, "B M D -> M B D")
         if crossattn_mask:
             crossattn_mask = rearrange(crossattn_mask, "B M -> M B")
+        if regional_contexts is not None:
+            regional_contexts = rearrange(regional_contexts, "B R M D -> R M B D")
+        if region_masks is not None:
+            region_masks = rearrange(region_masks, "B R T H W -> R T H W B")
 
         outs = {}
 
@@ -293,6 +306,8 @@ class GeneralDITEncoder(GeneralDIT):
                     rope_emb_L_1_1_D=rope_emb_L_1_1_D,
                     adaln_lora_B_3D=adaln_lora_B_3D,
                     extra_per_block_pos_emb=extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+                    regional_contexts=regional_contexts,
+                    region_masks=region_masks,
                 )
                 if guided_hint is not None:
                     x = x + guided_hint
@@ -324,6 +339,8 @@ class GeneralDITEncoder(GeneralDIT):
             data_type=data_type,
             x_ctrl=outs,
             condition_video_input_mask=condition_video_input_mask_input,
+            regional_contexts=regional_contexts_input,
+            region_masks=region_masks_input,
             **kwargs,
         )
         return output

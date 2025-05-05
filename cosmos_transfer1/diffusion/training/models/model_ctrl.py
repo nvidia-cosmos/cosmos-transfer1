@@ -509,6 +509,18 @@ def video_ctrlnet_decorator(base_class: Type[T]) -> Type[T]:
             else:
                 setattr(uncondition, hint_key, latent_hint)
 
+            # Handle regional prompting information
+            if "regional_contexts" in data_batch:
+                setattr(condition, "regional_contexts", data_batch["regional_contexts"])
+                # For unconditioned generation, we still need the region masks but not the regional contexts
+                setattr(uncondition, "regional_contexts", None)  # No regional contexts for unconditioned generation
+            original_region_masks = None
+            if "region_masks" in data_batch:
+                original_region_masks = data_batch["region_masks"]
+                setattr(condition, "region_masks", data_batch["region_masks"])
+                # For unconditioned generation, we still need the region masks but not the regional contexts
+                setattr(uncondition, "region_masks", data_batch["region_masks"])
+
             to_cp = self.net.is_context_parallel_enabled
             # For inference, check if parallel_state is initialized
             if parallel_state.is_initialized() and not self.is_image_batch(data_batch):
@@ -517,6 +529,15 @@ def video_ctrlnet_decorator(base_class: Type[T]) -> Type[T]:
                 cp_group = parallel_state.get_context_parallel_group()
                 latent_hint = getattr(condition, hint_key)
                 latent_hint = split_inputs_cp(latent_hint, seq_dim=2, cp_group=cp_group)
+
+                if hasattr(condition, "regional_contexts") and getattr(condition, "regional_contexts") is not None:
+                    regional_contexts = getattr(condition, "regional_contexts")
+                    regional_contexts = split_inputs_cp(regional_contexts, seq_dim=2, cp_group=cp_group)
+                    setattr(condition, "regional_contexts", regional_contexts)
+                if hasattr(condition, "region_masks") and getattr(condition, "region_masks") is not None:
+                    region_masks = getattr(condition, "region_masks")
+                    region_masks = split_inputs_cp(region_masks, seq_dim=2, cp_group=cp_group)
+                    setattr(condition, "region_masks", region_masks)
 
             setattr(condition, "base_model", self.model.base_model)
             setattr(uncondition, "base_model", self.model.base_model)
