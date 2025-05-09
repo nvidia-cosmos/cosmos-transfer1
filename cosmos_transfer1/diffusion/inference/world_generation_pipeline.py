@@ -14,8 +14,10 @@
 # limitations under the License.
 
 import os
-from typing import Optional
+from typing import List, Optional, Union
 
+from cosmos_transfer1.diffusion.module.parallel import broadcast
+from cosmos_transfer1.utils.regional_prompting_utils import prepare_regional_prompts
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -104,6 +106,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         upsample_prompt: bool = False,
         offload_prompt_upsampler: bool = False,
         process_group: torch.distributed.ProcessGroup | None = None,
+        regional_prompts: List[str] = None,
+        region_definitions: Union[List[List[float]], torch.Tensor] = None
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -152,6 +156,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         self.fps = fps
         self.num_video_frames = num_video_frames
         self.seed = seed
+        self.regional_prompts = regional_prompts
+        self.region_definitions = region_definitions
 
         super().__init__(
             checkpoint_dir=checkpoint_dir,
@@ -390,7 +396,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         embedding: torch.Tensor,
         negative_prompt_embedding: torch.Tensor | None = None,
         video_path="",
-        control_inputs: dict = None,
+        control_inputs: dict = None
     ) -> torch.Tensor:
         """Generate video frames using the diffusion model.
 
@@ -405,6 +411,27 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             Model and tokenizer are automatically offloaded after inference
             if offloading is enabled.
         """
+
+        # Process regional prompts if provided
+        regional_embeddings, _ = self._run_text_embedding_on_prompt_with_offload(self.regional_prompts)
+        log.info(f"Regional contexts: {regional_embeddings}")
+        log.info(f"Type of regional_embeddings: {type(regional_embeddings)}")
+        regional_contexts = None
+        region_masks = None
+        if self.regional_prompts and self.region_definitions:
+            # Prepare regional prompts using the existing text embedding function
+            _, regional_contexts, region_masks = prepare_regional_prompts(
+                model=self.model,
+                global_prompt=embedding,  # Pass the already computed global embedding
+                regional_prompts=regional_embeddings,
+                region_definitions=self.region_definitions,
+                batch_size=1,  # Adjust based on your batch size
+                time_dim=self.num_video_frames,
+                height=self.height // self.model.tokenizer.spatial_compression_factor,
+                width=self.width // self.model.tokenizer.spatial_compression_factor,
+                device=torch.device("cuda")
+            )
+
         # Get video batch and state shape
         data_batch, _ = get_video_batch(
             model=self.model,
@@ -415,6 +442,11 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             fps=self.fps,
             num_video_frames=self.num_video_frames,
         )
+
+        if regional_contexts is not None:
+            data_batch["regional_contexts"] = regional_contexts
+            data_batch["region_masks"] = region_masks
+
         data_batch = get_ctrl_batch(
             self.model,
             data_batch,
@@ -481,6 +513,14 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 else:
                     latent_hint.append(self.model.encode_latent(data_batch_p))
             data_batch_i["latent_hint"] = latent_hint = torch.cat(latent_hint)
+
+            # if "regional_contexts" in data_batch_i:
+            #     data_batch_i["regional_contexts"] = broadcast(
+            #         data_batch_i["regional_contexts"], to_tp=True, to_cp=True
+            #     )
+            #     data_batch_i["region_masks"] = broadcast(
+            #         data_batch_i["region_masks"], to_tp=True, to_cp=True
+            #     )
 
             if isinstance(control_weight, torch.Tensor) and control_weight.ndim > 4:
                 control_weight_t = control_weight[..., start_frame:end_frame, :, :].cuda()
@@ -592,7 +632,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             prompt_embedding,
             negative_prompt_embedding=negative_prompt_embedding,
             video_path=video_path,
-            control_inputs=control_inputs,
+            control_inputs=control_inputs
         )
         log.info("Finish generation")
 

@@ -117,6 +117,8 @@ class BaseVideoCondition:
     image_size: Optional[torch.Tensor] = None
     scalar_feature: Optional[torch.Tensor] = None
     frame_repeat: Optional[torch.Tensor] = None
+    regional_contexts: Optional[torch.Tensor] = None
+    region_masks: Optional[torch.Tensor] = None
 
     def to_dict(self) -> Dict[str, Optional[torch.Tensor]]:
         return {f.name: getattr(self, f.name) for f in fields(self)}
@@ -313,6 +315,10 @@ class VideoConditioner(GeneralConditioner):
         override_dropout_rate: Optional[Dict[str, float]] = None,
     ) -> BaseVideoCondition:
         output = super()._forward(batch, override_dropout_rate)
+        if "regional_contexts" in batch:
+            output["regional_contexts"] = batch["regional_contexts"]
+        if "region_masks" in batch:
+            output["region_masks"] = batch["region_masks"]
         return BaseVideoCondition(**output)
 
 
