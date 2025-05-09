@@ -719,10 +719,12 @@ class VideoDiffusionModelWithCtrl(ExtendVideoDiffusionModel):
 class VideoDiffusionFSDPModelWithCtrl(ExtendVideoDiffusionModel):
     pass
 
+
 @video_ctrlnet_decorator
 @ctrlnet_decorator
 class ShortVideoDiffusionModelWithCtrl(VideoDiffusionModel):
     pass
+
 
 @diffusion_fsdp_class_decorator
 @video_ctrlnet_decorator

@@ -27,7 +27,6 @@ Example usage:
 """
 
 import copy
-from hydra.core.config_store import ConfigStore
 import os
 
 from hydra.core.config_store import ConfigStore

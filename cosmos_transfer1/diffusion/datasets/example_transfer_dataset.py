@@ -138,12 +138,11 @@ class ExampleTransferDataset(Dataset):
             elif self.ctrl_type == "lidar":
                 vr = VideoReader(ctrl_path, ctx=cpu(0))
                 # Ensure the lidar depth video has the same number of frames
-                assert len(vr) >= frame_ids[-1] + 1, \
-                    f"Lidar video {ctrl_path} has fewer frames than main video"
+                assert len(vr) >= frame_ids[-1] + 1, f"Lidar video {ctrl_path} has fewer frames than main video"
                 # Load the corresponding frames
-                lidar_frames = vr.get_batch(frame_ids).asnumpy() # [T,H,W,C]
+                lidar_frames = vr.get_batch(frame_ids).asnumpy()  # [T,H,W,C]
                 lidar_frames = torch.from_numpy(lidar_frames).permute(3, 0, 1, 2)  # [C,T,H,W], same as rgb video
-                data_dict["lidar"] = {  
+                data_dict["lidar"] = {
                     "video": lidar_frames,
                     "frame_start": frame_ids[0],
                     "frame_end": frame_ids[-1],
@@ -151,10 +150,9 @@ class ExampleTransferDataset(Dataset):
             elif self.ctrl_type == "hdmap":
                 vr = VideoReader(ctrl_path, ctx=cpu(0))
                 # Ensure the hdmap video has the same number of frames
-                assert len(vr) >= frame_ids[-1] + 1, \
-                    f"Hdmap video {ctrl_path} has fewer frames than main video"
-                # Load the corresponding frames 
-                hdmap_frames = vr.get_batch(frame_ids).asnumpy() # [T,H,W,C]
+                assert len(vr) >= frame_ids[-1] + 1, f"Hdmap video {ctrl_path} has fewer frames than main video"
+                # Load the corresponding frames
+                hdmap_frames = vr.get_batch(frame_ids).asnumpy()  # [T,H,W,C]
                 hdmap_frames = torch.from_numpy(hdmap_frames).permute(3, 0, 1, 2)  # [C,T,H,W], same as rgb video
                 data_dict["hdmap"] = {
                     "video": hdmap_frames,
@@ -190,7 +188,6 @@ class ExampleTransferDataset(Dataset):
                 # Basic data
                 data["video"] = video
                 data["aspect_ratio"] = aspect_ratio
-
 
                 # Load T5 embeddings
                 if self.ctrl_type in ["hdmap", "lidar"]:
@@ -268,10 +265,18 @@ class ExampleTransferDataset(Dataset):
 
 
 class AVTransferDataset(ExampleTransferDataset):
-    def __init__(self, dataset_dir, num_frames, resolution, view_keys, hint_key="control_input_hdmap",
-                 sample_n_views=-1, caption_view_idx_map=None,
-                 is_train=True,
-                 load_mv_emb=False):
+    def __init__(
+        self,
+        dataset_dir,
+        num_frames,
+        resolution,
+        view_keys,
+        hint_key="control_input_hdmap",
+        sample_n_views=-1,
+        caption_view_idx_map=None,
+        is_train=True,
+        load_mv_emb=False,
+    ):
         """Dataset class for loading video-text-to-video generation data with control inputs.
 
         Args:
@@ -336,7 +341,6 @@ class AVTransferDataset(ExampleTransferDataset):
             fps = 24
         return frame_data, fps
 
-
     def __getitem__(self, index):
         max_retries = 3
         for _ in range(max_retries):
@@ -353,8 +357,9 @@ class AVTransferDataset(ExampleTransferDataset):
                 view_indices_conditioning = []
                 if self.sample_n_views > 1:
                     sampled_idx = np.random.choice(
-                        np.arange(1, len(view_indices)), size=min(self.sample_n_views - 1, len(view_indices) - 1),
-                        replace=False
+                        np.arange(1, len(view_indices)),
+                        size=min(self.sample_n_views - 1, len(view_indices) - 1),
+                        replace=False,
                     )
                     sampled_idx = np.concatenate(
                         [
@@ -377,12 +382,13 @@ class AVTransferDataset(ExampleTransferDataset):
                             raise Exception("Failed to load frames")
 
                     else:
-                        frames, fps = self._load_video(os.path.join(self.dataset_dir, "videos", view_key,
-                                                                   os.path.basename(video_path)), frame_ids)
+                        frames, fps = self._load_video(
+                            os.path.join(self.dataset_dir, "videos", view_key, os.path.basename(video_path)), frame_ids
+                        )
                     # Process video frames
                     video = torch.from_numpy(frames)
 
-                    video = video.permute(3, 0, 1, 2) # Rearrange from [T, C, H, W] to [C, T, H, W]
+                    video = video.permute(3, 0, 1, 2)  # Rearrange from [T, C, H, W] to [C, T, H, W]
                     aspect_ratio = detect_aspect_ratio((video.shape[3], video.shape[2]))  # expects (W, H)
                     videos.append(video)
 
@@ -454,7 +460,6 @@ class AVTransferDataset(ExampleTransferDataset):
                 data[self.ctrl_type] = dict()
                 data[self.ctrl_type]["video"] = ctrl_videos
 
-
                 # The ctrl_data above is the 'raw' data loaded (e.g. a loaded lidar pkl).
                 # Next, we process it into the control input "video" tensor that the model expects.
                 # This is done in the augmentor.
@@ -483,7 +488,12 @@ if __name__ == "__main__":
     visualize_control_input = True
 
     dataset = AVTransferDataset(
-        dataset_dir="datasets/waymo_transfer1", view_keys=["pinhole_front"], hint_key=control_input_key, num_frames=121, resolution="720", is_train=True
+        dataset_dir="datasets/waymo_transfer1",
+        view_keys=["pinhole_front"],
+        hint_key=control_input_key,
+        num_frames=121,
+        resolution="720",
+        is_train=True,
     )
     print("finished init dataset")
     indices = [0, 12, 100, -1]

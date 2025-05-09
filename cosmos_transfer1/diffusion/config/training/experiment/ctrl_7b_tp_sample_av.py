@@ -1,16 +1,17 @@
-# -----------------------------------------------------------------------------
-# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This codebase constitutes NVIDIA proprietary technology and is strictly
-# confidential. Any unauthorized reproduction, distribution, or disclosure
-# of this code, in whole or in part, outside NVIDIA is strictly prohibited
-# without prior written consent.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# For inquiries regarding the use of this code in other NVIDIA proprietary
-# projects, please contact the Deep Imagination Research Team at
-# dir@exchange.nvidia.com.
-# -----------------------------------------------------------------------------
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """
 Usage:
@@ -20,37 +21,40 @@ Usage:
 
 import copy
 import os
-from megatron.core import parallel_state
 
 from hydra.core.config_store import ConfigStore
+from megatron.core import parallel_state
 from torch.utils.data import DataLoader, DistributedSampler
+
+from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT
+from cosmos_transfer1.diffusion.config.base.data import get_sampler
+from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
+from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import AVTransferDataset, ExampleTransferDataset
+from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
+from cosmos_transfer1.diffusion.training.models.model_ctrl import (  # this one has training support
+    ShortVideoDiffusionModelWithCtrl,
+    VideoDiffusionModelWithCtrl,
+)
+from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
+from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
-from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
-from cosmos_transfer1.diffusion.config.base.data import get_sampler
-from cosmos_transfer1.diffusion.training.models.model_ctrl import VideoDiffusionModelWithCtrl, ShortVideoDiffusionModelWithCtrl  # this one has training support
-from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
-from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
-from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
-from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT
-from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset, AVTransferDataset
-
 
 cs = ConfigStore.instance()
 
 num_blocks = 28
 num_control_blocks = 3
-ckpt_root = 'checkpoints/'
-data_root = 'datasets/waymo_transfer1/'
+ckpt_root = "checkpoints/"
+data_root = "datasets/waymo_transfer1/"
+
 
 def make_ctrlnet_config(
     hint_key: str = "control_input_hdmap",
     num_control_blocks: int = 3,
     pretrain_model_path: str = "",
-    t2v: bool=True,
-    num_frames=121
+    t2v: bool = True,
+    num_frames=121,
 ) -> LazyDict:
-
     if pretrain_model_path == "":
         if t2v:
             job_name = f"CTRL_7Bv1pt3_t2v_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
@@ -120,7 +124,7 @@ def make_ctrlnet_config(
             model=dict(
                 fsdp_enabled=False,
                 context_parallel_size=1,
-                loss_reduce='mean',
+                loss_reduce="mean",
                 latent_shape=[
                     16,
                     (num_frames - 1) // 8 + 1,
@@ -128,8 +132,12 @@ def make_ctrlnet_config(
                     160,
                 ],
                 base_load_from=dict(
-                    load_path=os.path.join(ckpt_root, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT, "checkpoints_tp",
-                                           "base_model_model_mp_*.pt")
+                    load_path=os.path.join(
+                        ckpt_root,
+                        COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT,
+                        "checkpoints_tp",
+                        "base_model_model_mp_*.pt",
+                    )
                 ),
                 finetune_base_model=False,
                 hint_mask=[True],
@@ -175,7 +183,7 @@ def make_ctrlnet_config(
                 batch_size=1,
                 drop_last=True,
                 pin_memory=True,
-                num_workers=8
+                num_workers=8,
             ),
             dataloader_val=L(DataLoader)(
                 dataset=example_multiview_dataset_waymo,
@@ -183,12 +191,11 @@ def make_ctrlnet_config(
                 batch_size=1,
                 drop_last=True,
                 pin_memory=True,
-                num_workers=8
+                num_workers=8,
             ),
         )
     )
     return ctrl_config
-
 
 
 all_hint_key = [
@@ -199,8 +206,9 @@ all_hint_key = [
 for key in all_hint_key:
     for num_frames in [57, 121]:
         # Register experiments for pretraining from scratch
-        t2v_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                         pretrain_model_path="", t2v=True, num_frames=num_frames)
+        t2v_config = make_ctrlnet_config(
+            hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path="", t2v=True, num_frames=num_frames
+        )
         cs.store(
             group="experiment",
             package="_global_",
@@ -212,10 +220,16 @@ for key in all_hint_key:
         hint_key_short = key.replace("control_input_", "")  # "control_input_vis" -> "vis"
         pretrain_ckpt_path = default_model_names[hint_key_short]
         # note: The TP ckpt path are specified as <name>.pt to the script, but actually the <name>_model_mp_*.pt files will be loaded.
-        tp_ckpt_path = os.path.join(ckpt_root, os.path.dirname(pretrain_ckpt_path), "checkpoints_tp",
-                                    os.path.basename(pretrain_ckpt_path))
-        config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                    pretrain_model_path=tp_ckpt_path, t2v=True, num_frames=num_frames)
+        tp_ckpt_path = os.path.join(
+            ckpt_root, os.path.dirname(pretrain_ckpt_path), "checkpoints_tp", os.path.basename(pretrain_ckpt_path)
+        )
+        config = make_ctrlnet_config(
+            hint_key=key,
+            num_control_blocks=num_control_blocks,
+            pretrain_model_path=tp_ckpt_path,
+            t2v=True,
+            num_frames=num_frames,
+        )
         cs.store(
             group="experiment",
             package="_global_",

@@ -49,7 +49,7 @@ class VideoContentSafetyFilter(ContentSafetyGuardrail):
         self.dtype = torch.float32
 
         # Initialize the SigLIP encoder
-        self.encoder = SigLIPEncoder(checkpoint_dir=checkpoint_dir, device=device, dtype=self.dtype)
+        self.encoder = SigLIPEncoder(checkpoint_dir=self.checkpoint_dir, device=device, dtype=self.dtype)
 
         # Use ModelConfig directly for inference configuration
         model_config = ModelConfig(input_size=1152, num_classes=7)
