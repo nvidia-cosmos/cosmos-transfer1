@@ -359,6 +359,18 @@ Note: in order to run Cosmos on low-memory GPUs, you can use model offloading. T
 
 Note: we support various aspect ratios, including 1:1 (960x960 for height and width), 4:3 (960x704), 3:4 (704x960), 16:9 (1280x704), and 9:16 (704x1280). If the input is not one of these five resolutions, it is first resized to one of them according to the nearest aspect ratio.
 
+
+
+### Examples 5: Robotics Augmentation Workflow: Mapping one robotics synthetic example to multiple realistic examples
+
+[Robotics Augmentation Workflow](/cosmos_transfer1/auxiliary/robot_augmentation/README.md)
+
+<video width="640" height="480" controls>
+  <source src="../../assets/robot_augmentation_example/example1/robot_augmentation_result.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+
 ## Safety Features
 
 The model uses a built-in safety guardrail system that cannot be disabled. Generating human faces is not allowed and will be blurred by the guardrail.
