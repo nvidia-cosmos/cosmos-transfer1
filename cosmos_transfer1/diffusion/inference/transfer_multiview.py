@@ -85,7 +85,7 @@ def parse_arguments() -> argparse.Namespace:
         type=int,
         default=1,
         help="Number of conditional frames for long video generation",
-        choices=[1],
+        choices=[1, 9],
     )
     parser.add_argument(
         "--controlnet_specs",

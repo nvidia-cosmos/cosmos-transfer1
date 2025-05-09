@@ -130,11 +130,6 @@ class MultiViewGeneralDIT(GeneralDIT):
             bias=False,
         )
 
-        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d)
-        # if self.legacy_patch_emb:
-        #     w = self.x_embedder.proj.weight.data
-        #     nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
-
     def build_pos_embed(self):
         if self.pos_emb_cls == "rope3d":
             cls_type = MultiCameraVideoRopePosition3DEmb
@@ -147,8 +142,6 @@ class MultiViewGeneralDIT(GeneralDIT):
             len_h=self.max_img_h // self.patch_spatial,
             len_w=self.max_img_w // self.patch_spatial,
             len_t=self.max_frames // self.patch_temporal,
-            # max_fps=self.max_fps,
-            # min_fps=self.min_fps,
             is_learnable=self.pos_emb_learnable,
             interpolation=self.pos_emb_interpolation,
             head_dim=self.model_channels // self.num_heads,
@@ -219,29 +212,9 @@ class MultiViewGeneralDIT(GeneralDIT):
 
         if scalar_feature is not None:
             raise NotImplementedError("Scalar feature is not implemented yet.")
-            timesteps_B_D = timesteps_B_D + scalar_feature.mean(dim=1)
-
-        # if self.additional_timestamp_channels:
-        #     additional_cond_B_D = self.prepare_additional_timestamp_embedder(
-        #         bs=x.shape[0],
-        #         fps=fps,
-        #         h=image_size[:, 0],
-        #         w=image_size[:, 1],
-        #         org_h=image_size[:, 2],
-        #         org_w=image_size[:, 3],
-        #     )
-        #
-        #     affline_emb_B_D += additional_cond_B_D
-        #     affline_scale_log_info["additional_cond_B_D"] = additional_cond_B_D.detach()
 
         affline_scale_log_info["affline_emb_B_D"] = affline_emb_B_D.detach()
         affline_emb_B_D = self.affline_norm(affline_emb_B_D)
-
-        # for logging purpose
-        # self.affline_scale_log_info = affline_scale_log_info
-        # self.affline_emb = affline_emb_B_D
-        # self.crossattn_emb = crossattn_emb
-        # self.crossattn_mask = crossattn_mask
 
         if self.use_cross_attn_mask:
             crossattn_mask = crossattn_mask[:, None, None, :].to(dtype=torch.bool)  # [B, 1, 1, length]
@@ -259,23 +232,6 @@ class MultiViewGeneralDIT(GeneralDIT):
             if crossattn_mask:
                 crossattn_mask = rearrange(crossattn_mask, "B M -> M B")
 
-            # if self.sequence_parallel:
-            #     tp_group = parallel_state.get_tensor_model_parallel_group()
-            #     # Sequence parallel requires the input tensor to be scattered along the first dimension.
-            #     assert self.block_config == "FA-CA-MLP"  # Only support this block config for now
-            #     T, H, W, B, D = x.shape
-            #     # variable name x_T_H_W_B_D is no longer valid. x is reshaped to THW*1*1*b*D and will be reshaped back in FinalLayer
-            #     x = x.view(T * H * W, 1, 1, B, D)
-            #     assert x.shape[0] % parallel_state.get_tensor_model_parallel_world_size() == 0
-            #     x = scatter_along_first_dim(x, tp_group)
-            #
-            #     if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
-            #         extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D.view(
-            #             T * H * W, 1, 1, B, D
-            #         )
-            #         extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = scatter_along_first_dim(
-            #             extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D, tp_group
-            #         )
 
         elif self.blocks["block0"].x_format == "BTHWD":
             x = x_B_T_H_W_D

@@ -37,10 +37,10 @@ from cosmos_transfer1.checkpoints import (
     SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
     VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_t2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_i2v_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_t2v_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_i2v_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.config.transfer.augmentors import BilateralOnlyBlurAugmentorConfig
 from cosmos_transfer1.diffusion.datasets.augmentors.control_input import get_augmentor_for_eval
@@ -217,7 +217,6 @@ def load_model_by_config(
     with skip_init_linear():
         model = model_class(config.model)
     return model
-
 
 def load_network_model(model: DiffusionT2WModel, ckpt_path: str):
     if ckpt_path:
