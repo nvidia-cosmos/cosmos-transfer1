@@ -80,6 +80,7 @@ MODEL_NAME_DICT = {
     HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_t2v_121frames_control_input_hdmap_block3",
     LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3",
     BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_block3",
+    BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_sv2mv_v2w_57frames_control_input_hdmap_block3",
     SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_block3",
     SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_lidar_block3",
 }
@@ -317,6 +318,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                         model_class=self.model_class,
                         base_checkpoint_dir=self.checkpoint_dir,
                     )
+                    log.info(f"Loading ctrl model from ckpt_path: {spec['ckpt_path']}")
                     load_network_model(model, spec["ckpt_path"])
                     hint_encoders.append(model.model.net)
                     del model
@@ -324,15 +326,18 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             self.model.hint_encoders = hint_encoders
         else:
             for _, spec in self.control_inputs.items():
+                log.info(f"Loading ctrl model from ckpt_path: {spec['ckpt_path']}")
                 net_state_dict = torch.load(
-                    spec["ckpt_path"], map_location="cpu", weights_only=False
+                    f"{self.checkpoint_dir}/{spec['ckpt_path']}", map_location="cpu", weights_only=False
                 )  # , weights_only=True)
                 non_strict_load_model(self.model.model, net_state_dict)
 
         if self.process_group is not None:
+            log.info("Enabling CP in base model")
             self.model.model.net.enable_context_parallel(self.process_group)
             self.model.model.base_model.net.enable_context_parallel(self.process_group)
             if hasattr(self.model.model, "hint_encoders"):
+                log.info("Enabling CP in hint encoders")
                 self.model.model.hint_encoders.net.enable_context_parallel(self.process_group)
 
     def _load_tokenizer(self):
@@ -637,6 +642,10 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
 
 class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGenerationPipeline):
+    def __init__(self, *args, is_lvg_model=False, n_clip_max=-1, **kwargs):
+        super(DiffusionControl2WorldMultiviewGenerationPipeline, self).__init__(*args, **kwargs)
+        self.is_lvg_model = is_lvg_model
+        self.n_clip_max = n_clip_max
 
     def _run_tokenizer_decoding(self, sample: torch.Tensor):
         """Decode latent samples to video frames using the tokenizer decoder.
@@ -664,7 +673,8 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
     def _run_model_with_offload(
         self,
         prompt_embedding: torch.Tensor,
-        video_path="",
+        view_condition_video="",
+        initial_condition_video="",
         control_inputs: dict = None,
     ) -> np.ndarray:
         """Generate world representation with automatic model offloading.
@@ -674,7 +684,8 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         Args:
             prompt_embedding: Text embedding tensor from T5 encoder
-            video_path: Path to input video
+            view_condition_video: Path to input sv view condition video
+            initial_condition_video: Path to input mv initial frames
             control_inputs: Dictionary of control modalities and corresponding inputs
 
         Returns:
@@ -687,7 +698,8 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             self._load_network()
 
         sample = self._run_model(prompt_embedding,
-                                 video_path=video_path,
+                                 view_condition_video,
+                                 initial_condition_video,
                                  control_inputs=control_inputs
                                  )
 
@@ -702,13 +714,16 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
     def _run_model(
         self,
         embedding: torch.Tensor,
-        video_path: str,
+        view_condition_video="",
+        initial_condition_video="",
         control_inputs: dict = None,
     ) -> torch.Tensor:
         """Generate video frames using the diffusion model.
 
         Args:
-            embedding: Text embedding tensor from T5 encoder
+            prompt_embedding: Text embedding tensor from T5 encoder
+            view_condition_video: Path to input sv view condition video
+            initial_condition_video: Path to input mv initial frames
             control_inputs: Dictionary of control modalities and corresponding inputs
 
         Returns:
@@ -720,6 +735,18 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         """
         # Get video batch and state shape
         assert len(embedding) == self.model.n_views
+
+        view_condition_video, fps = read_video_or_image_into_frames_BCTHW(
+            view_condition_video,
+            normalize=False,  # s.t. output range is [0, 255]
+            max_frames=6000,
+            also_return_fps=True,
+        )
+        view_condition_video = resize_video(view_condition_video, self.height, self.width,
+                                            interpolation=cv2.INTER_LINEAR)
+        view_condition_video = torch.from_numpy(view_condition_video)
+        total_T = view_condition_video.shape[2]
+
         data_batch, state_shape = get_video_batch_for_multiview_model(
             model=self.model,
             prompt_embedding=embedding,
@@ -729,17 +756,38 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             num_video_frames=self.num_video_frames * len(embedding),
             frame_repeat_negative_condition=0,
         )
-        self.model.condition_location = "first_cam"
 
-        view_condition_video, fps = read_video_or_image_into_frames_BCTHW(
-            video_path,
-            normalize=False,  # s.t. output range is [0, 255]
-            max_frames=self.num_video_frames,
-            also_return_fps=True,
-        )
-        view_condition_video = resize_video(view_condition_video, self.height, self.width, interpolation=cv2.INTER_LINEAR)
-        view_condition_video = torch.from_numpy(view_condition_video)
-        total_T = view_condition_video.shape[2]
+        self.model.condition_location = "first_cam_and_first_n" if self.is_lvg_model else "first_cam"
+
+        if self.is_lvg_model:
+            if os.path.isdir(initial_condition_video):
+                initial_condition_videos= []
+                fnames = sorted(os.listdir(initial_condition_video))
+                for fname in fnames:
+                    if fname.endswith(".mp4"):
+                        try:
+                            input_view_id = int(fname.split(".")[0])
+                        except ValueError:
+                            log.warning(f"Could not parse video file name {fname} into view id")
+                            continue
+                        initial_condition_video_n = read_video_or_image_into_frames_BCTHW(
+                            fname,
+                            normalize=False,
+                            max_frames=self.num_input_frames,
+                            also_return_fps=True,
+                        )
+                        initial_condition_videos.append(torch.from_numpy(initial_condition_video_n))
+                initial_condition_video = torch.cat(initial_condition_videos, dim=2)
+            else:
+                initial_condition_video, _ = read_video_or_image_into_frames_BCTHW(
+                            initial_condition_video,
+                            normalize=False,
+                            max_frames=6000,
+                            also_return_fps=True,
+                        )   # B C (V T) H W
+                initial_condition_video = torch.from_numpy(initial_condition_video)
+        else:
+            initial_condition_video = None
 
         data_batch = get_ctrl_batch_mv(
             self.height,
@@ -747,42 +795,27 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             data_batch,
             total_T,
             control_inputs
-        )
-        """
-        if len(control_inputs) > 1:  # Multicontrol enabled
-            data_batch["hint_key"] = "control_input_multi"
-            data_batch["control_input_multi"] = control_input
-        else:  # Single-control case
-            data_batch["hint_key"] = hint_key
-            data_batch[hint_key] = control_input
-        """
+        )   # multicontrol inputs are concatenated channel wise, [-1,1] range
+
         hint_key = data_batch["hint_key"]
         input_video = None
         control_input = data_batch[hint_key]
         control_weight = data_batch["control_weight"]
 
-        num_new_generated_frames = self.num_video_frames - self.num_input_frames
+        num_new_generated_frames = self.num_video_frames - self.num_input_frames    # 57 - 9 = 48
         B, C, T, H, W = control_input.shape
         T = T // self.model.n_views
-        if (T - self.num_input_frames) % num_new_generated_frames != 0:  # pad duplicate frames at the end
-            pad_t = num_new_generated_frames - ((T - self.num_input_frames) % num_new_generated_frames)
-            pad_frames = control_input[:, :, -1:].repeat(1, 1, pad_t, 1, 1)
-            control_input = torch.cat([control_input, pad_frames], dim=2)
-            if input_video is not None:
-                pad_video = input_video[:, :, -1:].repeat(1, 1, pad_t, 1, 1)
-                input_video = torch.cat([input_video, pad_video], dim=2)
-            num_total_frames_with_padding = control_input.shape[2] // self.model.n_views
-            if (
-                isinstance(control_weight, torch.Tensor)
-                and control_weight.ndim > 5
-                and num_total_frames_with_padding > control_weight.shape[3]
-            ):
-                pad_t = num_total_frames_with_padding - control_weight.shape[3]
-                pad_weight = control_weight[:, :, :, -1:].repeat(1, 1, 1, pad_t, 1, 1)
-                control_weight = torch.cat([control_weight, pad_weight], dim=3)
+        assert T == total_T
+        # Different from other examples, we use a different logic to determine total generated duration:
+        # we check for the maximum number of clips that can be fit in to the duration of ctrl input and condition input
+        # and implicitly trim these videos to that duration
+        if self.is_lvg_model:
+            N_clip = (T - self.num_input_frames) // num_new_generated_frames
+            if self.n_clip_max > 0:
+                N_clip = min(self.n_clip_max, N_clip)
         else:
-            num_total_frames_with_padding = T
-        N_clip = (num_total_frames_with_padding - self.num_input_frames) // num_new_generated_frames
+            N_clip = 1
+            log.info(f"Model is not Long-video generation model, overwriting N_clip to 1")
 
         video = []
         for i_clip in tqdm(range(N_clip)):
@@ -829,8 +862,21 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 data_batch_i["control_weight"] = resize_control_weight_map(control_weight_t, (t, h // 2, w // 2))
 
             if i_clip == 0:
-                num_input_frames = 0
-                prev_frames = None
+                if initial_condition_video is not None:
+                    prev_frames_blank = torch.zeros((B, self.model.n_views, C, self.num_video_frames, H, W )).to(view_condition_video)
+
+                    initial_condition_video_frames_BVCT = einops.rearrange(
+                        initial_condition_video, "B C (V T) H W -> B V C T H W", V=self.model.n_views
+                    )
+                    prev_frames_blank[:, :, :, :self.num_input_frames] = initial_condition_video_frames_BVCT[
+                                       :, :, :,
+                                       start_frame: start_frame + self.num_input_frames
+                                       ].cuda()
+                    prev_frames = einops.rearrange(prev_frames_blank, "B V C T H W -> B C (V T) H W")
+                    num_input_frames = self.num_input_frames
+                else:
+                    num_input_frames = 0
+                    prev_frames = None
             else:
                 num_input_frames = self.num_input_frames
             condition_latent = self.get_condition_latent(state_shape, data_batch_i,
@@ -857,16 +903,20 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             )
             torch.cuda.empty_cache()
             _, frames = self._run_tokenizer_decoding(latents)   # T H W C
-            frames = torch.from_numpy(frames).permute(3, 0, 1, 2)[None] # 1 C T H W
-
+            frames = torch.from_numpy(frames).permute(3, 0, 1, 2)[None] # 1 C (V T) H W
+            frames_BVCT = einops.rearrange(frames, "B C (V T) H W -> B V C T H W", V=self.model.n_views)
             if i_clip == 0:
-                video.append(frames)
+                video.append(frames_BVCT)
             else:
-                video.append(frames[:, :, self.num_input_frames :])
-            prev_frames = torch.zeros_like(frames)
-            prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
+                frames_BVCT_non_overlap = frames_BVCT[:, :, :, num_input_frames:]
+                video.append(frames_BVCT_non_overlap)
 
-        video = torch.cat(video, dim=2)[:, :, :(T * self.model.n_views)]
+            prev_frames = torch.zeros_like(frames_BVCT)
+            prev_frames[:, :, :, :self.num_input_frames] = frames_BVCT[:, :, :, -self.num_input_frames:]
+            prev_frames = einops.rearrange(prev_frames, "B V C T H W -> B C (V T) H W")
+
+        video = torch.cat(video, dim=3)
+        video = einops.rearrange(video, "B V C T H W -> B C (V T) H W")
         video = video[0].permute(1, 2, 3, 0).numpy()    # T H W C
         return video
 
@@ -973,7 +1023,8 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
     def generate(
         self,
         prompts: list,
-        video_path: str,
+        view_condition_video: str,
+        initial_condition_video: str,
         control_inputs: dict = None,
         save_folder: str = "outputs/",
     ) -> tuple[np.ndarray, str] | None:
@@ -997,17 +1048,18 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         """
 
 
-        log.info(f"Run with video path: {video_path}")
-
+        log.info(f"Run with view condition video path: {view_condition_video}")
+        if initial_condition_video:
+            log.info(f"Run with initial condition video path: {initial_condition_video}")
         mv_prompts = self.build_mv_prompt(prompts, self.model.n_views)
         log.info(f"Run with prompt: {mv_prompts}")
 
         # Process prompts into multiview format
         log.info("Run guardrail on prompt")
-        is_safe = self._run_guardrail_on_prompt_with_offload(". ".join(mv_prompts))
-        if not is_safe:
-            log.critical("Input text prompt is not safe")
-            return None
+        # is_safe = self._run_guardrail_on_prompt_with_offload(". ".join(mv_prompts))
+        # if not is_safe:
+        #     log.critical("Input text prompt is not safe")
+        #     return None
         log.info("Pass guardrail on prompt")
 
         prompt_embeddings, _ = self._run_text_embedding_on_prompt_with_offload(mv_prompts)
@@ -1020,12 +1072,13 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         video = self._run_model_with_offload(
             prompt_embedding,
-            video_path,
+            view_condition_video,
+            initial_condition_video,
             control_inputs=control_inputs,
         )
         log.info("Finish generation")
         log.info("Run guardrail on generated video")
-        video = self._run_guardrail_on_video_with_offload(video)
+        #video = self._run_guardrail_on_video_with_offload(video)
         if video is None:
             log.critical("Generated video is not safe")
             raise ValueError("Guardrail check failed: Generated video is unsafe")

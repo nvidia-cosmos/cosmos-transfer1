@@ -436,13 +436,11 @@ def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs):
                 cond_vid = resize_video(cond_vid, H, W,
                                                     interpolation=cv2.INTER_LINEAR)
                 cond_vid = torch.from_numpy(cond_vid[0])
-                # cond_vid, fps, aspect_ratio = read_and_resize_input(in_file, num_total_frames=num_total_frames,
-                #                                                     interpolation=cv2.INTER_LINEAR)
+
                 cond_videos.append(cond_vid)
 
             input_frames = torch.cat(cond_videos, dim=1)
-            control_input_dict[f"control_input_{hint_key}"] = input_frames#.numpy()
-            _, _, num_total_frames, H, W = control_input_dict["video"].shape
+            control_input_dict[f"control_input_{hint_key}"] = input_frames
             hint_keys.append(hint_key)
         control_weights.append(control_info["control_weight"])
 
@@ -471,7 +469,7 @@ def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs):
             data_batch[hint_key] = control_input
 
     data_batch["target_h"], data_batch["target_w"] = target_h // 8, target_w // 8
-    data_batch["video"] = torch.zeros((1, 3, 121, H, W), dtype=torch.uint8).cuda()  #?????
+    data_batch["video"] = torch.zeros((1, 3, 57, H, W), dtype=torch.uint8).cuda()  #?????
     data_batch["image_size"] = torch.tensor([[H, W, H, W]] * 1, dtype=torch.bfloat16).cuda()
     data_batch["padding_mask"] = torch.zeros((1, 1, H, W), dtype=torch.bfloat16).cuda()
 

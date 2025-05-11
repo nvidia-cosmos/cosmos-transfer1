@@ -16,8 +16,8 @@
 from hydra.core.config_store import ConfigStore
 
 from cosmos_transfer1.checkpoints import (BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
-                                          SV2MV_t2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg,
-                                          SV2MV_v2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg)
+                                          BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+                                          BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH)
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
 from cosmos_transfer1.diffusion.model.model_multi_camera_ctrl import MultiVideoDiffusionModelWithCtrl
@@ -143,6 +143,7 @@ def make_ctrlnet_config_7b_t2v(
 def make_ctrlnet_config_7b_mv(
     hint_key: str = "control_input_seg",
     num_control_blocks: int = 3,
+    t2w: bool = True,
 ) -> LazyDict:
     hint_mask = [True] * len(CTRL_HINT_KEYS_COMB[hint_key])
 
@@ -156,19 +157,19 @@ def make_ctrlnet_config_7b_mv(
             ],
             job=dict(
                 group="CTRL_7Bv1_mv",
-                name=f"CTRL_7Bv1pt3_sv2mv_t2w_57frames_{hint_key}_block{num_control_blocks}",
+                name=f"CTRL_7Bv1pt3_sv2mv_{'t2w' if t2w else 'v2w'}_57frames_{hint_key}_block{num_control_blocks}",
                 project="cosmos_ctrlnet1",
             ),
             model=dict(
                 n_views=6,
                 base_load_from=dict(
-                    load_path=f"checkpoints/{SV2MV_t2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg}",
+                    load_path=f"checkpoints/{BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}" if t2w else f"checkpoints/{BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}",
                 ),
                 hint_mask=hint_mask,
                 hint_dropout_rate=0.3,
                 conditioner=dict(
                     video_cond_bool=dict(
-                        condition_location="first_cam",
+                        condition_location="first_cam" if t2w else "first_cam_and_first_n",
                     )
                 ),
                 net=L(MultiViewVideoExtendGeneralDIT)(
@@ -221,6 +222,7 @@ for key in ["control_input_hdmap", "control_input_lidar"]:
 
 num_control_blocks = 3
 for key in ["control_input_hdmap", "control_input_lidar"]:
-    # Register 7B sv2mv configurations
-    config_7b = make_ctrlnet_config_7b_mv(hint_key=key, num_control_blocks=num_control_blocks)
-    cs.store(group="experiment", package="_global_", name=config_7b["job"]["name"], node=config_7b)
+    for t2w in [True, False]:
+        # Register 7B sv2mv configurations
+        config_7b = make_ctrlnet_config_7b_mv(hint_key=key, num_control_blocks=num_control_blocks, t2w=t2w)
+        cs.store(group="experiment", package="_global_", name=config_7b["job"]["name"], node=config_7b)

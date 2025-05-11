@@ -25,7 +25,7 @@ from io import BytesIO
 
 import torch
 
-from cosmos_transfer1.checkpoints import BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
+from cosmos_transfer1.checkpoints import BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH, BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
 from cosmos_transfer1.diffusion.inference.inference_utils import load_controlnet_specs, valid_hint_keys, default_model_names
 from cosmos_transfer1.diffusion.inference.preprocessors import Preprocessors
 from cosmos_transfer1.diffusion.inference.world_generation_pipeline import DiffusionControl2WorldMultiviewGenerationPipeline
@@ -75,10 +75,22 @@ def parse_arguments() -> argparse.Namespace:
         help="Text prompt for generating right camera view video",
     )
     parser.add_argument(
-        "--input_video_path",
+        "--view_condition_video",
         type=str,
         default="",
-        help="Optional input RGB video path",
+        help="We require that only a single condition view is specified and this video is treated as conditioning for that view. "
+             "This video/videos should have the same duration as control videos",
+    )
+    parser.add_argument(
+        "--initial_condition_video",
+        type=str,
+        default="",
+        help="Can be either a path to a mp4 or a directory. If it is a mp4, we assume"
+             "that it is a video temporally concatenated with the same number of views as the model. "
+             "If it is a directory, we assume that the file names evaluate to integers that correspond to a view index,"
+             " e.g. '000.mp4', '003.mp4', '004.mp4'."
+             "This video/videos should have at least num_input_frames number of frames for each view. Frames will be taken from the back"
+             "of the video(s) if the duration of the video in each view exceed num_input_frames",
     )
     parser.add_argument(
         "--num_input_frames",
@@ -118,6 +130,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--guidance", type=float, default=5, help="Classifier-free guidance scale value")
     parser.add_argument("--fps", type=int, default=24, help="FPS of the output video")
     parser.add_argument("--seed", type=int, default=1, help="Random seed")
+    parser.add_argument("--n_clip_max", type=int, default=-1, help="Maximum number of video extension loop")
     parser.add_argument("--num_gpus", type=int, default=1, help="Number of GPUs used to run inference in parallel.")
     parser.add_argument(
         "--offload_diffusion_transformer",
@@ -247,8 +260,14 @@ def demo(cfg, control_inputs):
         device_rank = distributed.get_rank(process_group)
 
     preprocessors = Preprocessors()
-    prompts = [args.prompt, args.prompt_left,args.prompt_right, args.prompt_back, args.prompt_back_left, args.prompt_back_right]
-    checkpoint = BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
+    prompts = [cfg.prompt, cfg.prompt_left, cfg.prompt_right, cfg.prompt_back, cfg.prompt_back_left, cfg.prompt_back_right]
+
+    if cfg.initial_condition_video:
+        cfg.is_lvg_model = True
+        checkpoint = BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
+    else:
+        cfg.is_lvg_model = False
+        checkpoint = BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
 
     # Initialize transfer generation model pipeline
     pipeline = DiffusionControl2WorldMultiviewGenerationPipeline(
@@ -267,61 +286,55 @@ def demo(cfg, control_inputs):
         num_video_frames=57,
         process_group=process_group,
         height=576,
-        width=1024
+        width=1024,
+        is_lvg_model=cfg.is_lvg_model,
+        n_clip_max=cfg.n_clip_max
     )
 
     os.makedirs(cfg.video_save_folder, exist_ok=True)
-    for i, input_dict in enumerate([{},]):
 
-        current_prompt = prompts
-        current_video_path = ""
-        video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{i}")
-        os.makedirs(video_save_subfolder, exist_ok=True)
-        current_control_inputs = copy.deepcopy(control_inputs)
+    current_prompt = prompts
+    current_video_path = ""
+    video_save_subfolder = os.path.join(cfg.video_save_folder, "video_0")
+    os.makedirs(video_save_subfolder, exist_ok=True)
+    current_control_inputs = copy.deepcopy(control_inputs)
 
-        if "control_overrides" in input_dict:
-            for hint_key, override in input_dict["control_overrides"].items():
-                if hint_key in current_control_inputs:
-                    current_control_inputs[hint_key].update(override)
-                else:
-                    log.warning(f"Ignoring unknown control key in override: {hint_key}")
+    # if control inputs are not provided, run respective preprocessor (for seg and depth)
+    preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder)
 
-        # if control inputs are not provided, run respective preprocessor (for seg and depth)
-        preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder)
+    # Generate video
+    generated_output = pipeline.generate(
+        prompts = current_prompt,
+        view_condition_video=cfg.view_condition_video,
+        initial_condition_video=cfg.initial_condition_video,
+        control_inputs=current_control_inputs,
+        save_folder=video_save_subfolder,
+    )
+    if generated_output is None:
+        log.critical("Guardrail blocked generation.")
+    video, prompt = generated_output
 
-        # Generate video
-        generated_output = pipeline.generate(
-            prompts = current_prompt,
-            video_path=cfg.input_video_path,
-            control_inputs=current_control_inputs,
-            save_folder=video_save_subfolder,
+    video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
+    prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
+
+    if device_rank == 0:
+        # Save video
+        os.makedirs(os.path.dirname(video_save_path), exist_ok=True)
+        save_video(
+            video=video,
+            fps=cfg.fps,
+            H=video.shape[1],
+            W=video.shape[2],
+            video_save_quality=7,
+            video_save_path=video_save_path,
         )
-        if generated_output is None:
-            log.critical("Guardrail blocked generation.")
-            continue
-        video, prompt = generated_output
 
-        video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
-        prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
+        # Save prompt to text file alongside video
+        with open(prompt_save_path, "wb") as f:
+            f.write(";".join(prompt).encode("utf-8"))
 
-        if device_rank == 0:
-            # Save video
-            os.makedirs(os.path.dirname(video_save_path), exist_ok=True)
-            save_video(
-                video=video,
-                fps=cfg.fps,
-                H=video.shape[1],
-                W=video.shape[2],
-                video_save_quality=7,
-                video_save_path=video_save_path,
-            )
-
-            # Save prompt to text file alongside video
-            with open(prompt_save_path, "wb") as f:
-                f.write(";".join(prompt).encode("utf-8"))
-
-            log.info(f"Saved video to {video_save_path}")
-            log.info(f"Saved prompt to {prompt_save_path}")
+        log.info(f"Saved video to {video_save_path}")
+        log.info(f"Saved prompt to {prompt_save_path}")
 
     # clean up properly
     if cfg.num_gpus > 1:
