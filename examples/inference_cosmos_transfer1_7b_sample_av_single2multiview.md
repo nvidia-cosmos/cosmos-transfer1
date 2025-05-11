@@ -77,11 +77,9 @@ checkpoints/
 
 For a general overview of how to use the model see [this guide](/examples/inference_cosmos_transfer1_7b.md).
 
-This is an example of running Cosmos-Transfer1 Single2Multiview using autonomous vehicle (AV) data. Here we provide two controlnets, `hdmap` and `lidar`, that allow transfering from those domains to the real world.
+This is an example of running Cosmos-Transfer1-Sample-AVSingle2Multiview using autonomous vehicle (AV) data. Here we provide multiview `hdmap` as conditioning, transferring virtual worlds demarcated by map elements to the real world.
 
 Ensure you are at the root of the repository before executing the following to launch `transfer_multiview.py` and configures the controlnets for inference according to `assets/sample_av_hdmap_multiview_spec.json`:
-
-:
 
 ```bash
 #!/bin/bash
@@ -90,13 +88,39 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPUS=1
 CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} cosmos_transfer1/diffusion/inference/transfer_multiview.py \
- --checkpoint_dir checkpoints \
- --video_save_name output_video\
- --video_save_folder outputs/sample_av_multiview \
- --offload_text_encoder_model \
- --guidance 3 \
- --controlnet_specs assets/sample_av_hdmap_multiview_spec.json --num_gpus ${NUM_GPUS} --num_steps 35 \
- --input_video_path assets/sample_av_mv_input_rgb.mp4 \
- --prompt "$PROMPT"
+--checkpoint_dir checkpoints \
+--video_save_name output_video_1_30_0 \
+--video_save_folder outputs/sample_av_multiview \
+--offload_text_encoder_model \
+--guidance 3 \
+--controlnet_specs assets/sample_av_hdmap_multiview_spec.json --num_gpus ${NUM_GPUS} --num_steps 30 \
+--view_condition_video assets/sample_av_mv_input_rgb.mp4 \
+--prompt $PROMPT
 ```
+
+We can further extend the video we've just generated with the Cosmos-Transfer1-Sample-AV-Single2Multiview-Video2World model using this command:
+
+```bash
+#!/bin/bash
+export PROMPT="The video is captured from a camera mounted on a car. The camera is facing forward. The video showcases a scenic golden-hour drive through a suburban area, bathed in the warm, golden hues of the setting sun. The dashboard camera captures the play of light and shadow as the sun’s rays filter through the trees, casting elongated patterns onto the road. The streetlights remain off, as the golden glow of the late afternoon sun provides ample illumination. The two-lane road appears to shimmer under the soft light, while the concrete barrier on the left side of the road reflects subtle warm tones. The stone wall on the right, adorned with lush greenery, stands out vibrantly under the golden light, with the palm trees swaying gently in the evening breeze. Several parked vehicles, including white sedans and vans, are seen on the left side of the road, their surfaces reflecting the amber hues of the sunset. The trees, now highlighted in a golden halo, cast intricate shadows onto the pavement. Further ahead, houses with red-tiled roofs glow warmly in the fading light, standing out against the sky, which transitions from deep orange to soft pastel blue. As the vehicle continues, a white sedan is seen driving in the same lane, while a black sedan and a white van move further ahead. The road markings are crisp, and the entire setting radiates a peaceful, almost cinematic beauty. The golden light, combined with the quiet suburban landscape, creates an atmosphere of tranquility and warmth, making for a mesmerizing and soothing drive."
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+export NUM_GPUS=1
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} cosmos_transfer1/diffusion/inference/transfer_multiview.py \
+--checkpoint_dir checkpoints \
+--video_save_name output_video_extension \
+--video_save_folder outputs/sample_av_multiview \
+--offload_text_encoder_model \
+--guidance 3 \
+--controlnet_specs assets/sample_av_hdmap_multiview_lvg_spec.json --num_gpus ${NUM_GPUS} --num_steps 30 \
+--view_condition_video assets/sample_av_mv_input_rgb.mp4 \
+--prompt $PROMPT \
+--n_clip_max 3 --num_input_frames 9 --initial_condition_video outputs/sample_av_multiview/output_video.mp4 
+```
+Video extension is achieved by looping the v2w model to generate multiple 57-frame clips. Three additional arguments are provided to enable video extension:
+1. `--n_clip_max` control the number of clips. The model cannot generate more frames than that is present in `--view_contion_video`, hence setting `n_clip_max` to values higher than the number of clips that can fit in `view_condition_video` has no effect.
+2. `--num_input_frames` controls the number of overlapping frames between each clip, creating smooth transition between clips. This can be set to either `1` or `9`.
+3. `--initial_condition_video` is the video generated in the first example using the `t2w` model.
+
+We also provide `lidar` controled examples that can be tested by modifying the `--controlnet_specs` to `assets/sample_av_lidar_multiview_spec.json` in the above commands.
 
