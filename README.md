@@ -48,10 +48,10 @@ Please refer to [INSTALL.md](INSTALL.md) for general instructions on environment
 * [Inference with pre-trained Cosmos-Transfer1-7B](/examples/inference_cosmos_transfer1_7b.md) **[with multi-GPU support]**
 * [Inference with pre-trained Cosmos-Transfer1-7B-Sample-AV](/examples/inference_cosmos_transfer1_7b_sample_av.md) **[with multi-GPU support]**
 * [Inference with pre-trained Cosmos-Transfer1-7B-4KUpscaler](/examples/inference_cosmos_transfer1_7b_4kupscaler.md) **[with multi-GPU support]**
-* [Inference with pre-trained Cosmos-Transfer1-7B [Depth]](examples/inference_cosmos_transfer1_7b_depth.md)
-* Inference with pre-trained Cosmos-Transfer1-7B [Segmentation]: Coming soon
-* Inference with pre-trained Cosmos-Transfer1-7B [Edge]: Coming soon
-* Inference with pre-trained Cosmos-Transfer1-7B [Vis]: Coming soon
+* [Inference with pre-trained Cosmos-Transfer1-7B (Depth)](examples/inference_cosmos_transfer1_7b_depth.md)
+* [Inference with pre-trained Cosmos-Transfer1-7B (Segmentation)](examples/inference_cosmos_transfer1_7b_seg.md)
+* [Inference with pre-trained Cosmos-Transfer1-7B (Edge)](examples/inference_cosmos_transfer1_7b.md#example-1-single-control-edge)
+* [Inference with pre-trained Cosmos-Transfer1-7B (Vis)](examples/inference_cosmos_transfer1_7b_vis.md)
 * [Inference with pre-trained Cosmos-Transfer1pt1-7B [Keypoint]](/examples/inference_cosmos_transfer1pt1_7b_keypoint.md)
 * Inference with pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
 
