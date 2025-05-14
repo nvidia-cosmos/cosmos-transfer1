@@ -366,6 +366,91 @@ def read_and_resize_input(input_control_path, num_total_frames, interpolation):
     return control_input, fps, aspect_ratio
 
 
+def get_batched_ctrl_batch(
+    model,
+    prompt_embeddings,  # [B, ...]
+    negative_prompt_embeddings,  # [B, ...] or None
+    height,
+    width,
+    fps,
+    num_video_frames,
+    input_video_paths,  # List[str], length B
+    control_inputs_list,  # List[dict], length B
+    blur_strength,
+    canny_threshold,
+):
+    """
+    Create a fully batched data_batch for video generation, including all control and video inputs.
+
+    Args:
+        model: The diffusion model instance.
+        prompt_embeddings: [B, ...] tensor of prompt embeddings.
+        negative_prompt_embeddings: [B, ...] tensor of negative prompt embeddings or None.
+        height, width, fps, num_video_frames: Video parameters.
+        input_video_paths: List of input video paths, length B.
+        control_inputs_list: List of control input dicts, length B.
+        blur_strength, canny_threshold: ControlNet augmentation parameters.
+
+    Returns:
+        data_batch: Dict with all fields batched along dim 0 (batch dimension).
+        state_shape: List describing the latent state shape.
+    """
+    B = len(input_video_paths)
+
+    def prepare_single_data_batch(b):
+        data_batch = {
+            "video": torch.zeros((1, 3, num_video_frames, height, width), dtype=torch.uint8).cuda(),
+            "t5_text_mask": torch.ones(1, 512, dtype=torch.bfloat16).cuda(),
+            "image_size": torch.tensor([[height, width, height, width]], dtype=torch.bfloat16).cuda(),
+            "fps": torch.tensor([fps], dtype=torch.bfloat16).cuda(),
+            "num_frames": torch.tensor([num_video_frames], dtype=torch.bfloat16).cuda(),
+            "padding_mask": torch.zeros((1, 1, height, width), dtype=torch.bfloat16).cuda(),
+            "t5_text_embeddings": prompt_embeddings[b : b + 1].to(dtype=torch.bfloat16).cuda(),
+        }
+        if negative_prompt_embeddings is not None:
+            data_batch["neg_t5_text_embeddings"] = negative_prompt_embeddings[b : b + 1].to(dtype=torch.bfloat16).cuda()
+            data_batch["neg_t5_text_mask"] = torch.ones(1, 512, dtype=torch.bfloat16).cuda()
+        return data_batch
+
+    # Prepare and process each sample
+    single_batches = []
+    for b in range(B):
+        single_data_batch = prepare_single_data_batch(b)
+        processed = get_ctrl_batch(
+            model,
+            single_data_batch,
+            num_video_frames,
+            input_video_paths[b],
+            control_inputs_list[b],
+            blur_strength,
+            canny_threshold,
+        )
+        single_batches.append(processed)
+
+    # Merge all single-sample batches into a batched data_batch
+    batched_data_batch = {}
+    for k in single_batches[0]:
+        if isinstance(single_batches[0][k], torch.Tensor):
+            if k == "control_weight" and single_batches[0][k].ndim == 6:
+                # [num_controls, 1, 1, T, H, W] per sample
+                # Stack along dim=1 to get [num_controls, B, 1, T, H, W]
+                batched_data_batch[k] = torch.cat([d[k] for d in single_batches], dim=1)
+            else:
+                # Concatenate along batch dimension (dim=0) for other tensors
+                batched_data_batch[k] = torch.cat([d[k] for d in single_batches], dim=0)
+        else:
+            batched_data_batch[k] = single_batches[0][k]  # assume they're the same for now
+
+    state_shape = [
+        model.tokenizer.channel,
+        model.tokenizer.get_latent_num_frames(num_video_frames),
+        height // model.tokenizer.spatial_compression_factor,
+        width // model.tokenizer.spatial_compression_factor,
+    ]
+
+    return batched_data_batch, state_shape
+
+
 def get_ctrl_batch(
     model, data_batch, num_video_frames, input_video_path, control_inputs, blur_strength, canny_threshold
 ):
@@ -825,7 +910,7 @@ def load_spatial_temporal_weights(weight_paths, B, T, H, W, patch_h, patch_w):
         weights_tensor = weights_tensor / (weights_tensor.sum().clip(1))
         return weights_tensor.cuda()
 
-    weights = torch.stack(weights, dim=0)
+    weights = torch.stack(weights, dim=0).cuda()
     weights = weights / (weights.sum(dim=0, keepdim=True).clip(1))
 
     # Split into patches if needed

@@ -80,7 +80,8 @@ class DiffusionV2WModel(DiffusionT2WModel):
             log.debug("augment_sigma larger than sigma or other frame, remove condition")
             condition.condition_video_indicator = condition.condition_video_indicator * 0
 
-        augment_sigma = torch.tensor([augment_sigma], **self.tensor_kwargs)
+        B = gt_latent.shape[0]
+        augment_sigma = torch.full((B,), augment_sigma, **self.tensor_kwargs)
 
         # Now apply the augment_sigma to the gt_latent
 

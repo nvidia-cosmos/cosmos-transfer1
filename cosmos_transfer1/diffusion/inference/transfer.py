@@ -115,6 +115,7 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         help="Path to a JSONL file of input prompts for generating a batch of videos",
     )
+    parser.add_argument("--batch_size", type=int, default=1, help="Batch size")
     parser.add_argument("--num_steps", type=int, default=35, help="Number of diffusion sampling steps")
     parser.add_argument("--guidance", type=float, default=5, help="Classifier-free guidance scale value")
     parser.add_argument("--fps", type=int, default=24, help="FPS of the output video")
@@ -238,63 +239,80 @@ def demo(cfg, control_inputs):
         # Single prompt case
         prompts = [{"prompt": cfg.prompt, "visual_input": cfg.input_video_path}]
 
+    batch_size = cfg.batch_size if hasattr(cfg, "batch_size") else 1
     os.makedirs(cfg.video_save_folder, exist_ok=True)
-    for i, input_dict in enumerate(prompts):
-        current_prompt = input_dict.get("prompt", None)
-        current_video_path = input_dict.get("visual_input", None)
+    for batch_start in range(0, len(prompts), batch_size):
+        # Get current batch
+        batch_prompts = prompts[batch_start : batch_start + batch_size]
+        actual_batch_size = len(batch_prompts)
+        # Extract batch data
+        batch_prompt_texts = [p.get("prompt", None) for p in batch_prompts]
+        batch_video_paths = [p.get("visual_input", None) for p in batch_prompts]
 
-        video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{i}")
-        os.makedirs(video_save_subfolder, exist_ok=True)
-        current_control_inputs = copy.deepcopy(control_inputs)
+        batch_control_inputs = []
+        for i, input_dict in enumerate(batch_prompts):
+            current_prompt = input_dict.get("prompt", None)
+            current_video_path = input_dict.get("visual_input", None)
 
-        if "control_overrides" in input_dict:
-            for hint_key, override in input_dict["control_overrides"].items():
-                if hint_key in current_control_inputs:
-                    current_control_inputs[hint_key].update(override)
-                else:
-                    log.warning(f"Ignoring unknown control key in override: {hint_key}")
+            if cfg.batch_input_path:
+                video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{batch_start+i}")
+                os.makedirs(video_save_subfolder, exist_ok=True)
+            else:
+                video_save_subfolder = cfg.video_save_folder
 
-        # if control inputs are not provided, run respective preprocessor (for seg and depth)
-        preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder)
+            current_control_inputs = copy.deepcopy(control_inputs)
 
-        # Generate video
-        generated_output = pipeline.generate(
-            prompt=current_prompt,
-            video_path=current_video_path,
+            if "control_overrides" in input_dict:
+                for hint_key, override in input_dict["control_overrides"].items():
+                    if hint_key in current_control_inputs:
+                        current_control_inputs[hint_key].update(override)
+                    else:
+                        log.warning(f"Ignoring unknown control key in override: {hint_key}")
+
+            # if control inputs are not provided, run respective preprocessor (for seg and depth)
+            preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder)
+            batch_control_inputs.append(current_control_inputs)
+
+        # Generate videos in batch
+        batch_outputs = pipeline.generate(
+            prompt=batch_prompt_texts,
+            video_path=batch_video_paths,
             negative_prompt=cfg.negative_prompt,
-            control_inputs=current_control_inputs,
+            control_inputs=batch_control_inputs,
             save_folder=video_save_subfolder,
+            batch_size=actual_batch_size,
         )
-        if generated_output is None:
-            log.critical("Guardrail blocked generation.")
+        if batch_outputs is None:
+            log.critical("Guardrail blocked generation for entire batch.")
             continue
-        video, prompt = generated_output
 
-        if cfg.batch_input_path:
-            video_save_path = os.path.join(video_save_subfolder, "output.mp4")
-            prompt_save_path = os.path.join(video_save_subfolder, "prompt.txt")
-        else:
-            video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
-            prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
+        videos, final_prompts = batch_outputs
+        for i, (video, prompt) in enumerate(zip(videos, final_prompts)):
+            if cfg.batch_input_path:
+                video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{batch_start+i}")
+                video_save_path = os.path.join(video_save_subfolder, "output.mp4")
+                prompt_save_path = os.path.join(video_save_subfolder, "prompt.txt")
+            else:
+                video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
+                prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
+            # Save video and prompt
+            if device_rank == 0:
+                os.makedirs(os.path.dirname(video_save_path), exist_ok=True)
+                save_video(
+                    video=video,
+                    fps=cfg.fps,
+                    H=video.shape[1],
+                    W=video.shape[2],
+                    video_save_quality=5,
+                    video_save_path=video_save_path,
+                )
 
-        if device_rank == 0:
-            # Save video
-            os.makedirs(os.path.dirname(video_save_path), exist_ok=True)
-            save_video(
-                video=video,
-                fps=cfg.fps,
-                H=video.shape[1],
-                W=video.shape[2],
-                video_save_quality=5,
-                video_save_path=video_save_path,
-            )
+                # Save prompt to text file alongside video
+                with open(prompt_save_path, "wb") as f:
+                    f.write(prompt.encode("utf-8"))
 
-            # Save prompt to text file alongside video
-            with open(prompt_save_path, "wb") as f:
-                f.write(prompt.encode("utf-8"))
-
-            log.info(f"Saved video to {video_save_path}")
-            log.info(f"Saved prompt to {prompt_save_path}")
+                log.info(f"Saved video to {video_save_path}")
+                log.info(f"Saved prompt to {prompt_save_path}")
 
     # clean up properly
     if cfg.num_gpus > 1:
