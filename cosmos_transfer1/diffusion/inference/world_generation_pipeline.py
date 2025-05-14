@@ -104,6 +104,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         upsample_prompt: bool = False,
         offload_prompt_upsampler: bool = False,
         process_group: torch.distributed.ProcessGroup | None = None,
+        cutoff_frame: int = -1,
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -152,6 +153,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         self.fps = fps
         self.num_video_frames = num_video_frames
         self.seed = seed
+        self.cutoff_frame = cutoff_frame
 
         super().__init__(
             checkpoint_dir=checkpoint_dir,
@@ -375,7 +377,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         if self.offload_network:
             self._load_network()
 
-        sample = self._run_model(prompt_embedding, negative_prompt_embedding, video_path, control_inputs)
+        sample, intermediates = self._run_model(prompt_embedding, negative_prompt_embedding, video_path, control_inputs)
 
         if self.offload_network:
             self._offload_network()
@@ -383,7 +385,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         if self.offload_tokenizer:
             self._offload_tokenizer()
 
-        return sample
+        return sample, intermediates
 
     def _run_model(
         self,
@@ -423,6 +425,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             control_inputs,
             self.blur_strength,
             self.canny_threshold,
+            self.cutoff_frame,
         )
 
         hint_key = data_batch["hint_key"]
@@ -431,6 +434,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         control_weight = data_batch["control_weight"]
         num_new_generated_frames = self.num_video_frames - self.num_input_frames
         B, C, T, H, W = control_input.shape
+
         if (T - self.num_input_frames) % num_new_generated_frames != 0:  # pad duplicate frames at the end
             pad_t = num_new_generated_frames - ((T - self.num_input_frames) % num_new_generated_frames)
             pad_frames = control_input[:, :, -1:].repeat(1, 1, pad_t, 1, 1)
@@ -452,6 +456,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         N_clip = (num_total_frames_with_padding - self.num_input_frames) // num_new_generated_frames
 
         video = []
+        intermediate_videos = [[] for _ in range(self.num_steps)]
+
         for i_clip in tqdm(range(N_clip)):
             data_batch_i = {k: v for k, v in data_batch.items()}
             start_frame = num_new_generated_frames * i_clip
@@ -461,8 +467,12 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 x_sigma_max = []
                 for b in range(B):
                     input_frames = input_video[b : b + 1, :, start_frame:end_frame].cuda()
+                    print(f">>>>>>>>>> input_frames shape: {input_frames.shape}")
                     x0 = self.model.encode(input_frames).contiguous()
-                    x_sigma_max.append(self.model.get_x_from_clean(x0, self.sigma_max, seed=(self.seed + i_clip)))
+                    x0_noisy = self.model.get_x_from_clean(
+                        x0, self.sigma_max, seed=(self.seed + i_clip), cutoff_frame=self.cutoff_frame
+                    )
+                    x_sigma_max.append(x0_noisy)
                 x_sigma_max = torch.cat(x_sigma_max)
             else:
                 x_sigma_max = None
@@ -501,7 +511,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 condition_latent = torch.cat(condition_latent)
 
             # Generate video frames
-            latents = generate_world_from_control(
+            latents, intermediates = generate_world_from_control(
                 model=self.model,
                 state_shape=self.model.state_shape,
                 is_negative_prompt=True,
@@ -516,17 +526,33 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             )
             frames = self._run_tokenizer_decoding(latents)
             frames = torch.from_numpy(frames).permute(3, 0, 1, 2)[None]
+            intermediate_frames = []
+            for intermediate in intermediates:
+                temp = self._run_tokenizer_decoding(intermediate)
+                temp = torch.from_numpy(temp).permute(3, 0, 1, 2)[None]
+                intermediate_frames.append(temp)
+
+            print(f"Intermediate frames: {len(intermediate_frames)}")
 
             if i_clip == 0:
                 video.append(frames)
+                for i in range(self.num_steps):
+                    intermediate_videos[i].append(intermediate_frames[i])
             else:
                 video.append(frames[:, :, self.num_input_frames :])
+                for i in range(self.num_steps):
+                    intermediate_videos[i].append(intermediate_frames[i][:, :, self.num_input_frames :])
             prev_frames = torch.zeros_like(frames)
             prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
 
         video = torch.cat(video, dim=2)[:, :, :T]
         video = video[0].permute(1, 2, 3, 0).numpy()
-        return video
+
+        for i in range(self.num_steps):
+            intermediate_videos[i] = torch.cat(intermediate_videos[i], dim=2)[:, :, :T]
+            intermediate_videos[i] = intermediate_videos[i][0].permute(1, 2, 3, 0).numpy()
+
+        return video, intermediate_videos
 
     def generate(
         self,
@@ -588,7 +614,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         # Generate video
         log.info("Run generation")
-        video = self._run_model_with_offload(
+        video, intermediate_videos = self._run_model_with_offload(
             prompt_embedding,
             negative_prompt_embedding=negative_prompt_embedding,
             video_path=video_path,
@@ -604,4 +630,4 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         log.info("Pass guardrail on generated video")
 
-        return video, prompt
+        return video, intermediate_videos, prompt
