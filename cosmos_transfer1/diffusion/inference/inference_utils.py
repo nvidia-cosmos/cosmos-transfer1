@@ -967,6 +967,7 @@ def validate_controlnet_specs(cfg, controlnet_specs) -> Dict[str, Any]:
         if "ckpt_path" not in config:
             log.info(f"No checkpoint path specified for {hint_key}. Using default.")
             config["ckpt_path"] = os.path.join(checkpoint_dir, default_model_names[hint_key])
+            log.info(f"Using default checkpoint path: {config['ckpt_path']}")
 
         # Regardless whether "control_weight_prompt" is provided (i.e. whether we automatically
         # generate spatiotemporal control weight binary masks), control_weight is needed to.

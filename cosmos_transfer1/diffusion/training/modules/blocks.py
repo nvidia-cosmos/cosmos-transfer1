@@ -602,6 +602,8 @@ class DITBuildingBlock(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ):
         del crossattn_mask
         assert isinstance(self.block, VideoAttn), "only support VideoAttn impl"
@@ -661,9 +663,14 @@ class DITBuildingBlock(nn.Module):
             assert (
                 q.shape[seq_dim] > 1 and k.shape[seq_dim] > 1
             ), "Seqlen must be larger than 1 for TE Attention starting with 1.8 TE version."
-            return self.block.attn.attn_op(
-                q, k, v, core_attention_bias_type="no_bias", core_attention_bias=None
-            )  # [B, Mq, H, V]
+            if regional_contexts is not None and region_masks is not None:
+                return self.block.attn.regional_attn_op(
+                    q, k, v, core_attention_bias_type="no_bias", core_attention_bias=None
+                )  # [B, Mq, H, V]
+            else:
+                return self.block.attn.attn_op(
+                    q, k, v, core_attention_bias_type="no_bias", core_attention_bias=None
+                )  # [B, Mq, H, V]
 
         assert self.block.attn.backend == "transformer_engine", "Only support transformer_engine backend for now."
 
@@ -692,6 +699,8 @@ class DITBuildingBlock(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ):
         del crossattn_mask
         assert isinstance(self.block, VideoAttn)
@@ -748,10 +757,16 @@ class DITBuildingBlock(nn.Module):
             assert (
                 q.shape[seq_dim] > 1 and k.shape[seq_dim] > 1
             ), "Seqlen must be larger than 1 for TE Attention starting with 1.8 TE version."
-            softmax_attn_output = self.block.attn.attn_op(
-                q, k, v, core_attention_bias_type="no_bias", core_attention_bias=None
-            )  # [B, Mq, H, V]
-            return self.block.attn.to_out(softmax_attn_output)
+            if regional_contexts is not None and region_masks is not None:
+                softmax_attn_output = self.block.attn.regional_attn_op(
+                    q, k, v, core_attention_bias_type="no_bias", core_attention_bias=None
+                )
+                return self.block.attn.to_out(softmax_attn_output)
+            else:
+                softmax_attn_output = self.block.attn.attn_op(
+                    q, k, v, core_attention_bias_type="no_bias", core_attention_bias=None
+                )
+                return self.block.attn.to_out(softmax_attn_output)
 
         assert self.block.attn.backend == "transformer_engine", "Only support transformer_engine backend for now."
 
@@ -769,8 +784,10 @@ class DITBuildingBlock(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ):
-        del crossattn_emb, crossattn_mask, rope_emb_L_1_1_D
+        del crossattn_emb, crossattn_mask, rope_emb_L_1_1_D, regional_contexts, region_masks
         assert isinstance(self.block, GPT2FeedForward)
         if self.use_adaln_lora:
             shift_B_D, scale_B_D, gate_B_D = (self.adaLN_modulation(emb_B_D) + adaln_lora_B_3D).chunk(
@@ -821,8 +838,10 @@ class DITBuildingBlock(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None
     ):
-        del crossattn_emb, crossattn_mask, rope_emb_L_1_1_D
+        del crossattn_emb, crossattn_mask, rope_emb_L_1_1_D, regional_contexts, region_masks
         assert isinstance(self.block, GPT2FeedForward)
         if self.use_adaln_lora:
             shift_B_D, scale_B_D, gate_B_D = (self.adaLN_modulation(emb_B_D) + adaln_lora_B_3D).chunk(
@@ -871,6 +890,8 @@ class DITBuildingBlock(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None
     ):
         if isinstance(self.block, VideoAttn):
             if self.block.attn.is_selfattn:
@@ -900,6 +921,8 @@ class DITBuildingBlock(nn.Module):
         crossattn_mask: Optional[torch.Tensor] = None,
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Forward pass for dynamically configured blocks with adaptive normalization.
@@ -910,6 +933,9 @@ class DITBuildingBlock(nn.Module):
             crossattn_emb (Tensor): Tensor for cross-attention blocks.
             crossattn_mask (Optional[Tensor]): Optional mask for cross-attention.
             rope_emb_L_1_1_D (Optional[Tensor]): Rotary positional embedding tensor of shape (L, 1, 1, D). L == THW for current video training. transformer_engine format
+            adaln_lora_B_3D (Optional[Tensor]): Additional embedding for adaptive layer norm.
+            regional_contexts (Optional[List[Tensor]]): List of regional context tensors.
+            region_masks (Optional[Tensor]): Region masks of shape (B, R, THW).
 
         Returns:
             Tensor: The output tensor after processing through the configured block and adaptive normalization.
@@ -939,10 +965,14 @@ class DITBuildingBlock(nn.Module):
                     rope_emb_L_1_1_D=rope_emb_L_1_1_D,
                 )
             elif self.block_type in ["cross_attn", "ca"]:
+                normalized_x = self.norm_state(x) * (1 + scale_B_1_1_1_D) + shift_B_1_1_1_D
                 x = x + gate_B_1_1_1_D * self.block(
-                    self.norm_state(x) * (1 + scale_B_1_1_1_D) + shift_B_1_1_1_D,
+                    normalized_x,
                     crossattn_emb,
                     crossattn_mask,
+                    rope_emb_L_1_1_D,
+                    regional_contexts=regional_contexts,
+                    region_masks=region_masks,
                 )
             elif self.block_type in ["mlp", "ff"]:
                 x = x + gate_B_1_1_1_D * self.block(
@@ -1040,6 +1070,8 @@ class GeneralDITTransformerBlock(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         if self.use_checkpoint:
             return torch.utils.checkpoint.checkpoint(
@@ -1051,10 +1083,21 @@ class GeneralDITTransformerBlock(nn.Module):
                 rope_emb_L_1_1_D,
                 adaln_lora_B_3D,
                 extra_per_block_pos_emb,
+                regional_contexts,
+                region_masks,
+                use_reentrant=False,
             )
         else:
             return self._forward(
-                x, emb_B_D, crossattn_emb, crossattn_mask, rope_emb_L_1_1_D, adaln_lora_B_3D, extra_per_block_pos_emb
+                x,
+                emb_B_D,
+                crossattn_emb,
+                crossattn_mask,
+                rope_emb_L_1_1_D,
+                adaln_lora_B_3D,
+                extra_per_block_pos_emb,
+                regional_contexts,
+                region_masks,
             )
 
     def _forward(
@@ -1066,6 +1109,8 @@ class GeneralDITTransformerBlock(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         if extra_per_block_pos_emb is not None:
             x = x + extra_per_block_pos_emb
@@ -1077,6 +1122,8 @@ class GeneralDITTransformerBlock(nn.Module):
                 crossattn_mask,
                 rope_emb_L_1_1_D=rope_emb_L_1_1_D,
                 adaln_lora_B_3D=adaln_lora_B_3D,
+                regional_contexts=regional_contexts,
+                region_masks=region_masks,
             )
         return x
 
@@ -1101,6 +1148,8 @@ class GeneralDITTransformerBlock(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ):
         for block in self.blocks:
             gate_L_B_D, x_before_gate, x_skip = block.forward(
@@ -1113,6 +1162,8 @@ class GeneralDITTransformerBlock(nn.Module):
                 rope_emb_L_1_1_D,
                 adaln_lora_B_3D,
                 extra_per_block_pos_emb,
+                regional_contexts=regional_contexts,
+                region_masks=region_masks,
             )
             extra_per_block_pos_emb = None
         return gate_L_B_D, x_before_gate, x_skip

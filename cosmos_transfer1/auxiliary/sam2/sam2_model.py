@@ -22,7 +22,7 @@ import torch
 
 from cosmos_transfer1.utils import log
 
-sys.path.append("third_party/sam2")
+sys.path.append("cosmos_transfer1/auxiliary")
 
 import tempfile
 
