@@ -30,6 +30,7 @@ from cosmos_transfer1.diffusion.inference.inference_utils import load_controlnet
 from cosmos_transfer1.diffusion.inference.preprocessors import Preprocessors
 from cosmos_transfer1.diffusion.inference.world_generation_pipeline import DiffusionControl2WorldGenerationPipeline
 from cosmos_transfer1.utils import log, misc
+from cosmos_transfer1.utils.combined_gif import create_gif
 from cosmos_transfer1.utils.io import read_prompts_from_file, save_video
 
 torch.enable_grad(False)
@@ -63,7 +64,6 @@ def parse_arguments() -> argparse.Namespace:
         type=int,
         default=1,
         help="Number of conditional frames for long video generation",
-        choices=[1],
     )
     parser.add_argument("--sigma_max", type=float, default=70.0, help="sigma_max for partial denoising")
     parser.add_argument(
@@ -144,6 +144,12 @@ def parse_arguments() -> argparse.Namespace:
         "--offload_prompt_upsampler",
         action="store_true",
         help="Offload prompt upsampler model after inference",
+    )
+    parser.add_argument(
+        "--cutoff_frame", type=int, default=-1, help="Cutoff frame between the past and future frames for AV model"
+    )
+    parser.add_argument(
+        "--save_intermediates", action="store_true", help="Save intermediate videos from the diffusion steps"
     )
 
     cmd_args = parser.parse_args()
@@ -229,6 +235,7 @@ def demo(cfg, control_inputs):
         upsample_prompt=cfg.upsample_prompt,
         offload_prompt_upsampler=cfg.offload_prompt_upsampler,
         process_group=process_group,
+        cutoff_frame=cfg.cutoff_frame,
     )
 
     if cfg.batch_input_path:
@@ -268,7 +275,7 @@ def demo(cfg, control_inputs):
         if generated_output is None:
             log.critical("Guardrail blocked generation.")
             continue
-        video, prompt = generated_output
+        video, intermediate_videos, prompt = generated_output
 
         if cfg.batch_input_path:
             video_save_path = os.path.join(video_save_subfolder, "output.mp4")
@@ -288,6 +295,27 @@ def demo(cfg, control_inputs):
                 video_save_quality=5,
                 video_save_path=video_save_path,
             )
+
+            if cfg.save_intermediates:
+                for i in range(len(intermediate_videos)):
+                    intermediate_video_save_folder = os.path.join(cfg.video_save_folder, cfg.video_save_name)
+                    intermediate_video_save_path = os.path.join(intermediate_video_save_folder, f"intermediate_{i}.mp4")
+                    os.makedirs(intermediate_video_save_folder, exist_ok=True)
+                    save_video(
+                        video=intermediate_videos[i],
+                        fps=cfg.fps,
+                        H=intermediate_videos[i].shape[1],
+                        W=intermediate_videos[i].shape[2],
+                        video_save_quality=5,
+                        video_save_path=intermediate_video_save_path,
+                    )
+                # Create GIF of intermediate videos
+                create_gif(
+                    intermediate_video_save_folder,
+                    os.path.join(intermediate_video_save_folder, "diffusion_intermediates.gif"),
+                    (1080, 720),
+                    10,
+                )
 
             # Save prompt to text file alongside video
             with open(prompt_save_path, "wb") as f:
