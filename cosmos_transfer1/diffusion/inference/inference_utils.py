@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import importlib
 import json
 import os
@@ -367,7 +368,7 @@ def read_and_resize_input(input_control_path, num_total_frames, interpolation):
 
 
 def get_ctrl_batch(
-    model, data_batch, num_video_frames, input_video_path, control_inputs, blur_strength, canny_threshold
+    model, data_batch, num_video_frames, input_video_path, control_inputs, blur_strength, canny_threshold, cutoff_frame
 ):
     """Prepare complete input batch for video generation including latent dimensions.
 
@@ -391,9 +392,46 @@ def get_ctrl_batch(
         input_frames, fps, aspect_ratio = read_and_resize_input(
             input_video_path, num_total_frames=num_total_frames, interpolation=cv2.INTER_AREA
         )
+        if cutoff_frame != -1:
+            # Truncate the frames to the cutoff frame and add noise to the remaining frames
+            noise_frames = torch.randint(0, 255, input_frames.shape)
+            input_frames = input_frames[:, :cutoff_frame, :, :]
+            noise_frames = noise_frames[:, cutoff_frame:, :, :]
+            input_frames = torch.cat((input_frames, noise_frames), dim=1)
+
+            # save input_frames as a video
+            # frames = input_frames.numpy()
+            # save_frames = copy.deepcopy(frames)
+            # save_frames = save_frames.transpose((1, 2, 3, 0)).astype(np.uint8) # C T H W -> T H W C
+            # save_video(frames=save_frames, fps=fps, filepath="input_video_modified.mp4")
+
         _, num_total_frames, H, W = input_frames.shape
         control_input_dict["video"] = input_frames.numpy()  # CTHW
         data_batch["input_video"] = input_frames.bfloat16()[None] / 255 * 2 - 1  # BCTHW
+        print
+
+        if cutoff_frame != -1:
+            _, T, H, W = input_frames.shape
+
+            # Logic for calculating the latent cutoff frame
+            # 121 frames --> 16 latent frames
+            # 1st frame --> 1st latent frame
+            # next 120 frames --> 15 latent frames ( 8 video frames --> 1 latent frame)
+
+            latent_cutoff_frame = 1 + ((T - 1 - cutoff_frame) // 8) if cutoff_frame > 1 else 1
+            log.info(
+                f"Using latent cutoff frame {latent_cutoff_frame} corresponding to the cutoff frame {cutoff_frame} in the input video"
+            )
+
+            latent_sample = model.encode(data_batch["input_video"].cuda()).contiguous()
+
+            data_batch["guided_image"] = latent_sample
+            guided_mask = torch.zeros_like(latent_sample)
+
+            # Guide_mask is 1 for the first latent_cutoff_frame and 0 for the rest
+            guided_mask[:, :, :latent_cutoff_frame] = 1
+            data_batch["guided_mask"] = guided_mask
+
     else:
         data_batch["input_video"] = None
     target_w, target_h = W, H
@@ -432,6 +470,7 @@ def get_ctrl_batch(
             if cur_key in control_input_dict:
                 control_input_dict[cur_key] = control_input_dict[cur_key][:, :num_total_frames]
     if input_video_path:
+        print(f"input_video_path: {input_video_path}")
         control_input_dict["video"] = control_input_dict["video"][:, :num_total_frames]
         data_batch["input_video"] = data_batch["input_video"][:, :, :num_total_frames]
 
@@ -534,7 +573,7 @@ def generate_world_from_control(
         ).contiguous()
     num_of_latent_condition = compute_num_latent_frames(model, num_input_frames)
 
-    sample = model.generate_samples_from_batch(
+    sample, intermediates = model.generate_samples_from_batch(
         data_batch,
         guidance=guidance,
         state_shape=[c, t, h, w],
@@ -551,7 +590,7 @@ def generate_world_from_control(
         patch_h=h,
         patch_w=w,
     )
-    return sample
+    return sample, intermediates
 
 
 def read_video_or_image_into_frames_BCTHW(
@@ -562,6 +601,7 @@ def read_video_or_image_into_frames_BCTHW(
     normalize: bool = True,
     max_frames: int = -1,
     also_return_fps: bool = False,
+    cutoff_frame: int = -1,
 ) -> torch.Tensor:
     """Read video or image file and convert to tensor format.
 
@@ -601,6 +641,7 @@ def read_video_or_image_into_frames_BCTHW(
         fps = int(meta_data.get("fps"))
     if max_frames != -1:
         frames = frames[:max_frames]
+
     input_tensor = np.stack(frames, axis=0)
     input_tensor = einops.rearrange(input_tensor, "t h w c -> t c h w")
     if normalize:
