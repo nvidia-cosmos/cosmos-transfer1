@@ -100,7 +100,7 @@ Checkpoint Requirements:
 There are 3 steps to train a Cosmos-Transfer1-Sample-AV model: preparing a dataset, prepare checkpoints, and launch training.
 
 ### 1. Dataset Download and Preprocessing
-In the example below, we use a subset of [Waymo Open Dataset](https://waymo.com/open/) dataset to demonstrate the steps for preparing the data and launching training. 
+In the example below, we use a subset of [Waymo Open Dataset](https://waymo.com/open/) dataset to demonstrate the steps for preparing the data and launching training.
 Please follow the [instructions](https://github.com/nv-tlabs/cosmos-av-sample-toolkits/blob/main/docs/processing_waymo_for_transfer1.md) in [cosmos-av-sample-toolkits](https://github.com/nv-tlabs/cosmos-av-sample-toolkits) to download and convert the Waymo Open Dataset.
 
 

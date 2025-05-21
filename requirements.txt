@@ -33,6 +33,7 @@ nltk==3.9.1
 numpy==1.26.4
 nvidia-ml-py==12.535.133
 omegaconf==2.3.0
+onnxruntime
 opencv-contrib-python==4.10.0.84
 pandas==2.2.3
 peft==0.14.0

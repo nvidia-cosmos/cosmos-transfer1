@@ -1268,10 +1268,10 @@ class AddControlInputKeypoint(Augmentor):
         }
         Note that for the same person, their idx in the per-frame list isn't guaranteed to be consistent.
         """
-        if "control_input_human_kpts" in data_dict:
+        if "control_input_keypoint" in data_dict:
             # already processed
             log.info(
-                f"control_input_human_kpts already processed, shape={data_dict['control_input_human_kpts'].shape}, dtype={data_dict['control_input_human_kpts'].dtype}, value range: {data_dict['control_input_human_kpts'].min()}, {data_dict['control_input_human_kpts'].max()}"
+                f"control_input_human_kpts already processed, shape={data_dict['control_input_keypoint'].shape}, dtype={data_dict['control_input_keypoint'].dtype}, value range: {data_dict['control_input_keypoint'].min()}, {data_dict['control_input_keypoint'].max()}"
             )
             return data_dict
 
