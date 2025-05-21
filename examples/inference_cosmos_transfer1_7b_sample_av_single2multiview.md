@@ -118,7 +118,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} 
 --n_clip_max 3 --num_input_frames 9 --initial_condition_video outputs/sample_av_multiview/output_video.mp4 
 ```
 Video extension is achieved by looping the Cosmos-Transfer1-Sample-AV-Single2Multiview model to generate multiple 57-frame clips. Three additional arguments are provided to enable video extension:
-1. `--n_clip_max` control the number of clips. The model cannot generate more frames than that is present in `--view_contion_video`, hence setting `n_clip_max` to values higher than the number of clips that can fit in `view_condition_video` has no effect.
+1. `--n_clip_max` control the number of clips. it does not control the number of frames generated per clip. The model cannot generate more frames than that is present in `--view_contion_video`.
 2. `--num_input_frames` controls the number of overlapping frames between each clip, creating smooth transition between clips. This can be set to either `1` or `9`.
 3. `--initial_condition_video` is the video generated in the first example using the `t2w` model.
 
