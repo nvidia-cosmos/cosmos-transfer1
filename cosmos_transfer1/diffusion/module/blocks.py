@@ -529,7 +529,7 @@ class GeneralDITTransformerBlock(nn.Module):
                     x_format=self.x_format,
                     use_adaln_lora=use_adaln_lora,
                     adaln_lora_dim=adaln_lora_dim,
-                    n_views=n_views
+                    n_views=n_views,
                 )
             )
 

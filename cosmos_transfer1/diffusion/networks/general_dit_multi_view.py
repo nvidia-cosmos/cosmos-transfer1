@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 import torch
 from einops import rearrange
 from megatron.core import parallel_state
-from torch import nn, DictType
+from torch import DictType, nn
 from torchvision import transforms
 
 from cosmos_transfer1.diffusion.conditioner import DataType
@@ -30,11 +30,13 @@ from cosmos_transfer1.diffusion.module.blocks import (
     TimestepEmbedding,
     Timesteps,
 )
-from cosmos_transfer1.diffusion.module.position_embedding import MultiCameraSinCosPosEmbAxis, MultiCameraVideoRopePosition3DEmb
-from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
-
+from cosmos_transfer1.diffusion.module.position_embedding import (
+    MultiCameraSinCosPosEmbAxis,
+    MultiCameraVideoRopePosition3DEmb,
+)
 from cosmos_transfer1.diffusion.networks.general_dit import GeneralDIT
+from cosmos_transfer1.utils import log
 
 
 class MultiViewGeneralDIT(GeneralDIT):
@@ -60,7 +62,7 @@ class MultiViewGeneralDIT(GeneralDIT):
             self.n_views_emb = n_views_emb
 
         self.camera_condition_dim = camera_condition_dim
-        self.traj_condition_dim= traj_condition_dim
+        self.traj_condition_dim = traj_condition_dim
         self.concat_camera_embedding = concat_camera_embedding
         self.concat_traj_embedding = concat_traj_embedding
         self.add_repeat_frame_embedding = add_repeat_frame_embedding
@@ -233,7 +235,6 @@ class MultiViewGeneralDIT(GeneralDIT):
             if crossattn_mask:
                 crossattn_mask = rearrange(crossattn_mask, "B M -> M B")
 
-
         elif self.blocks["block0"].x_format == "BTHWD":
             x = x_B_T_H_W_D
         else:
@@ -294,9 +295,7 @@ class MultiViewGeneralDIT(GeneralDIT):
             )
 
         if view_indices_B_T is None:
-            view_indices = torch.arange(self.n_views).clamp(
-                max=self.n_views_emb - 1
-            )  # View indices [0, 1, ..., V-1]
+            view_indices = torch.arange(self.n_views).clamp(max=self.n_views_emb - 1)  # View indices [0, 1, ..., V-1]
             view_indices = view_indices.to(x_B_C_T_H_W.device)
             view_embedding = self.view_embeddings(view_indices)  # Shape: [V, embedding_dim]
             view_embedding = rearrange(view_embedding, "V D -> D V")
@@ -368,7 +367,7 @@ class MultiViewVideoExtendGeneralDIT(MultiViewGeneralDIT):
     def __init__(self, *args, in_channels=17, add_augment_sigma_embedding=False, **kwargs):
         self.add_augment_sigma_embedding = add_augment_sigma_embedding
         # extra channel for video condition mask
-        super().__init__(*args, in_channels=in_channels , **kwargs)
+        super().__init__(*args, in_channels=in_channels, **kwargs)
         log.info(f"VideoExtendGeneralDIT in_channels: {in_channels}")
 
     def forward(

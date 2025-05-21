@@ -38,8 +38,8 @@ from cosmos_transfer1.checkpoints import (
     UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
     VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.config.transfer.augmentors import BilateralOnlyBlurAugmentorConfig
@@ -217,6 +217,7 @@ def load_model_by_config(
     with skip_init_linear():
         model = model_class(config.model)
     return model
+
 
 def load_network_model(model: DiffusionT2WModel, ckpt_path: str):
     if ckpt_path:
@@ -414,8 +415,8 @@ def get_video_batch_for_multiview_model(
     ]
     return raw_video_batch, state_shape
 
-def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs):
 
+def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs):
     # Initialize control input dictionary
     control_input_dict = {k: v for k, v in data_batch.items()}
     control_weights = []
@@ -433,8 +434,7 @@ def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs):
                     max_frames=num_total_frames,
                     also_return_fps=True,
                 )
-                cond_vid = resize_video(cond_vid, H, W,
-                                                    interpolation=cv2.INTER_LINEAR)
+                cond_vid = resize_video(cond_vid, H, W, interpolation=cv2.INTER_LINEAR)
                 cond_vid = torch.from_numpy(cond_vid[0])
 
                 cond_videos.append(cond_vid)
@@ -446,10 +446,7 @@ def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs):
 
     target_w, target_h = W, H
     hint_key = "control_input_" + "_".join(hint_keys)
-    add_control_input = get_augmentor_for_eval(
-        input_key="video",
-        output_key=hint_key
-    )
+    add_control_input = get_augmentor_for_eval(input_key="video", output_key=hint_key)
 
     if len(control_input_dict):
         control_input = add_control_input(control_input_dict)[hint_key]
@@ -469,11 +466,12 @@ def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs):
             data_batch[hint_key] = control_input
 
     data_batch["target_h"], data_batch["target_w"] = target_h // 8, target_w // 8
-    data_batch["video"] = torch.zeros((1, 3, 57, H, W), dtype=torch.uint8).cuda()  #?????
+    data_batch["video"] = torch.zeros((1, 3, 57, H, W), dtype=torch.uint8).cuda()  # ?????
     data_batch["image_size"] = torch.tensor([[H, W, H, W]] * 1, dtype=torch.bfloat16).cuda()
     data_batch["padding_mask"] = torch.zeros((1, 1, H, W), dtype=torch.bfloat16).cuda()
 
     return data_batch
+
 
 def get_batched_ctrl_batch(
     model,
@@ -917,8 +915,10 @@ def create_condition_latent_from_input_frames(
         # treat as single view video
         latent = model.tokenizer.encode(encode_input_frames) * model.sigma_data
     else:
-        raise ValueError(f"First dimension of encode_input_frames {encode_input_frames.shape[0]} does not match "
-                         f"model.n_views or model.n_views is not defined and first dimension is not 1")
+        raise ValueError(
+            f"First dimension of encode_input_frames {encode_input_frames.shape[0]} does not match "
+            f"model.n_views or model.n_views is not defined and first dimension is not 1"
+        )
     return latent, encode_input_frames
 
 
@@ -949,6 +949,7 @@ def compute_num_frames_condition(model: DiffusionV2WModel, num_of_latent_overlap
 
     return num_frames_condition
 
+
 def get_condition_latent(
     model: DiffusionV2WModel,
     input_image_or_video_path: str,
@@ -957,7 +958,7 @@ def get_condition_latent(
     frame_index: int = 0,
     frame_stride: int = 1,
     from_back: bool = True,
-    start_frame: int=0
+    start_frame: int = 0,
 ) -> torch.Tensor:
     """Get condition latent from input image/video file.
 
@@ -1002,8 +1003,9 @@ def get_condition_latent(
         condition_latent = condition_latent.to(torch.bfloat16)
         return condition_latent
     input_frames = input_frames[:, :, start_frame:, :, :]
-    condition_latent, _ = create_condition_latent_from_input_frames(model, input_frames, num_input_frames,
-                                                                    from_back=from_back)
+    condition_latent, _ = create_condition_latent_from_input_frames(
+        model, input_frames, num_input_frames, from_back=from_back
+    )
     condition_latent = condition_latent.to(torch.bfloat16)
 
     return condition_latent

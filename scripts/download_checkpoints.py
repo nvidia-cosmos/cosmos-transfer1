@@ -134,7 +134,10 @@ def main():
             ]:
                 if args.model == "7b" and name == "COSMOS_TRANSFER1_7B_CHECKPOINT":
                     checkpoint_vars.append(obj)
-                elif args.model == "7b_av" and name in ["COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT", "COSMOS_TRANSFER1_7B_MV_SAMPLE_AV_CHECKPOINT"]:
+                elif args.model == "7b_av" and name in [
+                    "COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT",
+                    "COSMOS_TRANSFER1_7B_MV_SAMPLE_AV_CHECKPOINT",
+                ]:
                     checkpoint_vars.append(obj)
             else:
                 checkpoint_vars.append(obj)

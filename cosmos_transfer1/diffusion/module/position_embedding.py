@@ -903,4 +903,3 @@ class MultiCameraSinCosPosEmbAxis(MultiCameraVideoPositionEmb):
             return emb
 
         raise ValueError(f"Unknown interpolation method {self.interpolation}")
-

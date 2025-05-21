@@ -392,7 +392,7 @@ class AVTransferDataset(ExampleTransferDataset):
                     aspect_ratio = detect_aspect_ratio((video.shape[3], video.shape[2]))  # expects (W, H)
                     videos.append(video)
 
-                    if video_name[-2] == '_' and video_name[-1].isdigit():
+                    if video_name[-2] == "_" and video_name[-1].isdigit():
                         video_name_emb = video_name[:-2]
                     else:
                         video_name_emb = video_name

@@ -115,7 +115,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} 
 --controlnet_specs assets/sample_av_hdmap_multiview_lvg_spec.json --num_gpus ${NUM_GPUS} --num_steps 30 \
 --view_condition_video assets/sample_av_mv_input_rgb.mp4 \
 --prompt "$PROMPT" \
---n_clip_max 3 --num_input_frames 9 --initial_condition_video outputs/sample_av_multiview/output_video.mp4 
+--n_clip_max 3 --num_input_frames 9 --initial_condition_video outputs/sample_av_multiview/output_video.mp4
 ```
 Video extension is achieved by looping the Cosmos-Transfer1-Sample-AV-Single2Multiview model to generate multiple 57-frame clips. Three additional arguments are provided to enable video extension:
 1. `--n_clip_max` control the number of clips. it does not control the number of frames generated per clip. The model cannot generate more frames than that is present in `--view_contion_video`.
@@ -123,4 +123,3 @@ Video extension is achieved by looping the Cosmos-Transfer1-Sample-AV-Single2Mul
 3. `--initial_condition_video` is the video generated in the first example using the `t2w` model.
 
 We also provide `lidar` controled examples that can be tested by modifying the `--controlnet_specs` to `assets/sample_av_lidar_multiview_spec.json` in the above commands.
-

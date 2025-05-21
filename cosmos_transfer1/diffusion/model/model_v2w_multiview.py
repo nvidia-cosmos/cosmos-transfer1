@@ -27,7 +27,7 @@ from cosmos_transfer1.diffusion.config.base.conditioner import VideoCondBoolConf
 from cosmos_transfer1.diffusion.diffusion.functional.batch_ops import batch_mul
 from cosmos_transfer1.diffusion.model.model_t2w import broadcast_condition
 from cosmos_transfer1.diffusion.model.model_v2w import DiffusionV2WModel
-from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp, broadcast
+from cosmos_transfer1.diffusion.module.parallel import broadcast, cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.utils import log, misc
 
 
@@ -46,6 +46,7 @@ def deepcopy_no_copy_model(obj):
     else:
         copied_obj = copy.deepcopy(obj)
     return copied_obj
+
 
 @dataclass
 class VideoDenoisePrediction:
@@ -387,16 +388,14 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
         condition_video_indicator = torch.zeros(1, 1, T, 1, 1, device=latent_state.device).type(
             latent_dtype
         )  # 1 for condition region
-        condition_video_indicator = rearrange(
-            condition_video_indicator, "B C (V T) H W -> B V C T H W", V=self.n_views
-        )
-        if self.config.conditioner.video_cond_bool.condition_location  == "first_cam":
+        condition_video_indicator = rearrange(condition_video_indicator, "B C (V T) H W -> B V C T H W", V=self.n_views)
+        if self.config.conditioner.video_cond_bool.condition_location == "first_cam":
             # condition on first cam
             condition_video_indicator[:, 0, :, :, :, :] += 1.0
 
-        elif self.config.conditioner.video_cond_bool.condition_location .startswith("fixed_cam_and_first_n"):
+        elif self.config.conditioner.video_cond_bool.condition_location.startswith("fixed_cam_and_first_n"):
             # condition on a list of cameras specified through the string
-            cond_vids = [int(c) for c in self.config.conditioner.video_cond_bool.condition_location .split("_")[5:]]
+            cond_vids = [int(c) for c in self.config.conditioner.video_cond_bool.condition_location.split("_")[5:]]
 
             for vidx in cond_vids:
                 condition_video_indicator[:, vidx, :, :, :, :] += 1.0
@@ -404,15 +403,15 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
             condition_video_indicator[:, :, :, :num_condition_t] += 1.0
             condition_video_indicator = condition_video_indicator.clamp(max=1.0)
 
-        elif self.config.conditioner.video_cond_bool.condition_location .startswith("fixed_cam"):
+        elif self.config.conditioner.video_cond_bool.condition_location.startswith("fixed_cam"):
             # condition on a list of cameras specified through the string
-            cond_vids = [int(c) for c in self.config.conditioner.video_cond_bool.condition_location .split("_")[2:]]
+            cond_vids = [int(c) for c in self.config.conditioner.video_cond_bool.condition_location.split("_")[2:]]
 
             for vidx in cond_vids:
                 condition_video_indicator[:, vidx, :, :, :, :] += 1.0
             condition_video_indicator = torch.clamp(condition_video_indicator, 0, 1)
 
-        elif self.config.conditioner.video_cond_bool.condition_location  == "first_cam_and_first_n":
+        elif self.config.conditioner.video_cond_bool.condition_location == "first_cam_and_first_n":
             # condition on first cam
             condition_video_indicator[:, 0, :, :, :, :] += 1.0
             condition_video_indicator[:, :, :, :num_condition_t] += 1.0
@@ -437,7 +436,7 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
         # The input mask indicate whether the input is conditional region or not
         if condition.video_cond_bool:  # Condition one given video frames
             condition.condition_video_input_mask = (
-                    condition_video_indicator * ones_padding + (1 - condition_video_indicator) * zeros_padding
+                condition_video_indicator * ones_padding + (1 - condition_video_indicator) * zeros_padding
             )
         else:  # Unconditional case, use for cfg
             condition.condition_video_input_mask = zeros_padding

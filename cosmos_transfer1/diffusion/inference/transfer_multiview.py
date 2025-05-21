@@ -25,10 +25,19 @@ from io import BytesIO
 
 import torch
 
-from cosmos_transfer1.checkpoints import BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH, BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
-from cosmos_transfer1.diffusion.inference.inference_utils import load_controlnet_specs, valid_hint_keys, default_model_names
+from cosmos_transfer1.checkpoints import (
+    BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+    BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+)
+from cosmos_transfer1.diffusion.inference.inference_utils import (
+    default_model_names,
+    load_controlnet_specs,
+    valid_hint_keys,
+)
 from cosmos_transfer1.diffusion.inference.preprocessors import Preprocessors
-from cosmos_transfer1.diffusion.inference.world_generation_pipeline import DiffusionControl2WorldMultiviewGenerationPipeline
+from cosmos_transfer1.diffusion.inference.world_generation_pipeline import (
+    DiffusionControl2WorldMultiviewGenerationPipeline,
+)
 from cosmos_transfer1.utils import log, misc
 from cosmos_transfer1.utils.io import save_video
 
@@ -79,18 +88,18 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         default="",
         help="We require that only a single condition view is specified and this video is treated as conditioning for that view. "
-             "This video/videos should have the same duration as control videos",
+        "This video/videos should have the same duration as control videos",
     )
     parser.add_argument(
         "--initial_condition_video",
         type=str,
         default="",
         help="Can be either a path to a mp4 or a directory. If it is a mp4, we assume"
-             "that it is a video temporally concatenated with the same number of views as the model. "
-             "If it is a directory, we assume that the file names evaluate to integers that correspond to a view index,"
-             " e.g. '000.mp4', '003.mp4', '004.mp4'."
-             "This video/videos should have at least num_input_frames number of frames for each view. Frames will be taken from the back"
-             "of the video(s) if the duration of the video in each view exceed num_input_frames",
+        "that it is a video temporally concatenated with the same number of views as the model. "
+        "If it is a directory, we assume that the file names evaluate to integers that correspond to a view index,"
+        " e.g. '000.mp4', '003.mp4', '004.mp4'."
+        "This video/videos should have at least num_input_frames number of frames for each view. Frames will be taken from the back"
+        "of the video(s) if the duration of the video in each view exceed num_input_frames",
     )
     parser.add_argument(
         "--num_input_frames",
@@ -176,6 +185,7 @@ def parse_arguments() -> argparse.Namespace:
 
     return cmd_args, control_inputs
 
+
 def validate_controlnet_specs(cfg, controlnet_specs):
     """
     Load and validate controlnet specifications from a JSON file.
@@ -217,6 +227,7 @@ def validate_controlnet_specs(cfg, controlnet_specs):
                         )
 
     return controlnet_specs
+
 
 def demo(cfg, control_inputs):
     """Run control-to-world generation demo.
@@ -260,7 +271,14 @@ def demo(cfg, control_inputs):
         device_rank = distributed.get_rank(process_group)
 
     preprocessors = Preprocessors()
-    prompts = [cfg.prompt, cfg.prompt_left, cfg.prompt_right, cfg.prompt_back, cfg.prompt_back_left, cfg.prompt_back_right]
+    prompts = [
+        cfg.prompt,
+        cfg.prompt_left,
+        cfg.prompt_right,
+        cfg.prompt_back,
+        cfg.prompt_back_left,
+        cfg.prompt_back_right,
+    ]
 
     if cfg.initial_condition_video:
         cfg.is_lvg_model = True
@@ -282,13 +300,13 @@ def demo(cfg, control_inputs):
         seed=cfg.seed,
         num_input_frames=cfg.num_input_frames,
         control_inputs=control_inputs,
-        sigma_max=80.,
+        sigma_max=80.0,
         num_video_frames=57,
         process_group=process_group,
         height=576,
         width=1024,
         is_lvg_model=cfg.is_lvg_model,
-        n_clip_max=cfg.n_clip_max
+        n_clip_max=cfg.n_clip_max,
     )
 
     os.makedirs(cfg.video_save_folder, exist_ok=True)
@@ -304,7 +322,7 @@ def demo(cfg, control_inputs):
 
     # Generate video
     generated_output = pipeline.generate(
-        prompts = current_prompt,
+        prompts=current_prompt,
         view_condition_video=cfg.view_condition_video,
         initial_condition_video=cfg.initial_condition_video,
         control_inputs=current_control_inputs,

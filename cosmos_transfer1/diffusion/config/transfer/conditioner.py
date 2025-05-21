@@ -12,8 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import attrs
-from cosmos_transfer1.diffusion.conditioner import VideoConditionerWithCtrl, ViewConditionedVideoConditionerWithCtrl, FrameRepeatAttr
+
+from cosmos_transfer1.diffusion.conditioner import (
+    FrameRepeatAttr,
+    VideoConditionerWithCtrl,
+    ViewConditionedVideoConditionerWithCtrl,
+)
 from cosmos_transfer1.diffusion.config.base.conditioner import (
     FPSConfig,
     ImageSizeConfig,
@@ -72,11 +78,13 @@ CTRL_AUG_KEYS = {
     "keypoint": "keypoint",
 }
 
+
 @attrs.define(slots=False)
 class FrameRepeatConfig:
     obj: LazyDict = L(FrameRepeatAttr)()
     dropout_rate: float = 0.0
     input_key: str = "frame_repeat"
+
 
 BaseVideoConditionerWithCtrlConfig: LazyDict = L(VideoConditionerWithCtrl)(
     text=TextConfig(),

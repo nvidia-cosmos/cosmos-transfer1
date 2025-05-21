@@ -13,24 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Dict, Optional, Tuple, Union, TypeVar
+from typing import Callable, Dict, Optional, Tuple, TypeVar, Union
 
 import torch
 from einops import rearrange
 from megatron.core import parallel_state
 from torch import Tensor
 
-
-from cosmos_transfer1.utils import log, misc
-from cosmos_transfer1.diffusion.conditioner import VideoConditionerWithCtrl, DataType
-from cosmos_transfer1.diffusion.module.parallel import broadcast, cat_outputs_cp, split_inputs_cp
+from cosmos_transfer1.diffusion.conditioner import DataType, VideoConditionerWithCtrl
 from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel, broadcast_condition
 from cosmos_transfer1.diffusion.model.model_v2w import DiffusionV2WModel
 from cosmos_transfer1.diffusion.model.model_v2w_multiview import DiffusionV2WMultiviewModel
-
+from cosmos_transfer1.diffusion.module.parallel import broadcast, cat_outputs_cp, split_inputs_cp
+from cosmos_transfer1.utils import log, misc
 from cosmos_transfer1.utils.lazy_config import instantiate as lazy_instantiate
+
 T = TypeVar("T")
 IS_PREPROCESSED_KEY = "is_preprocessed"
+
 
 class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
     def build_model(self) -> torch.nn.ModuleDict:
@@ -181,7 +181,7 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
 
         to_cp = self.net.is_context_parallel_enabled
         # For inference, check if parallel_state is initialized
-        if parallel_state.is_initialized():# and not self.is_image_batch(data_batch):
+        if parallel_state.is_initialized():  # and not self.is_image_batch(data_batch):
             condition = broadcast_condition(condition, to_tp=False, to_cp=to_cp)
             uncondition = broadcast_condition(uncondition, to_tp=False, to_cp=to_cp)
 
@@ -204,14 +204,14 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
                 sigma,
                 condition,
                 condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                seed=seed
+                seed=seed,
             ).x0_pred_replaced
             uncond_x0 = self.denoise(
                 noise_x,
                 sigma,
                 uncondition,
                 condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                seed=seed
+                seed=seed,
             ).x0_pred_replaced
             return cond_x0 + guidance * (cond_x0 - uncond_x0)
 
@@ -245,20 +245,9 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
             condition_latent (Optional[torch.Tensor]): latent tensor in shape B,C,T,H,W as condition to generate video.
             num_condition_t (Optional[int]): number of condition latent T, if None, will use the whole first half
         """
-        #self._normalize_video_databatch_inplace(data_batch)
-        #self._augment_image_dim_inplace(data_batch)
-        is_image_batch = False #self.is_image_batch(data_batch)
-        # if is_image_batch:
-        #     log.debug("image batch, call base model generate_samples_from_batch")
-        #     return super(MultiVideoDiffusionModelWithCtrl, self).generate_samples_from_batch(
-        #         data_batch,
-        #         guidance=guidance,
-        #         seed=seed,
-        #         state_shape=state_shape,
-        #         n_sample=n_sample,
-        #         is_negative_prompt=is_negative_prompt,
-        #         num_steps=num_steps,
-        #     )
+
+        is_image_batch = False  # self.is_image_batch(data_batch)
+
         if n_sample is None:
             input_key = self.input_image_key if is_image_batch else self.input_data_key
             n_sample = data_batch[input_key].shape[0]
@@ -268,11 +257,6 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
             else:
                 log.debug(f"Default Video state shape is used. {self.state_shape}")
                 state_shape = self.state_shape
-
-        # assert condition_latent is not None, "condition_latent should be provided"
-
-        # if self.net.is_context_parallel_enabled:
-        #     data_batch["latent_hint"] = split_inputs_cp(x=data_batch["latent_hint"], seq_dim=2, cp_group=self.net.cp_group)
 
         x0_fn = self.get_x0_fn_from_batch(
             data_batch,
@@ -303,9 +287,7 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
             x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
             x_sigma_max = rearrange(x_sigma_max, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
 
-        samples = self.sampler(
-            x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max
-        )
+        samples = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
 
         if self.net.is_context_parallel_enabled:
             samples = rearrange(samples, "B C (V T) H W -> (B V) C T H W", V=self.n_views).contiguous()

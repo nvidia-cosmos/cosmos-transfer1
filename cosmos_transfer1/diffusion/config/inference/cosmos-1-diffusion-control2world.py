@@ -15,14 +15,16 @@
 
 from hydra.core.config_store import ConfigStore
 
-from cosmos_transfer1.checkpoints import (BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
-                                          BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
-                                          BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH)
+from cosmos_transfer1.checkpoints import (
+    BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
+    BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+    BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+)
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
 from cosmos_transfer1.diffusion.model.model_multi_camera_ctrl import MultiVideoDiffusionModelWithCtrl
-from cosmos_transfer1.diffusion.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
 from cosmos_transfer1.diffusion.networks.general_dit_multi_view import MultiViewVideoExtendGeneralDIT
+from cosmos_transfer1.diffusion.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
 
@@ -140,6 +142,7 @@ def make_ctrlnet_config_7b_t2v(
         )
     )
 
+
 def make_ctrlnet_config_7b_mv(
     hint_key: str = "control_input_seg",
     num_control_blocks: int = 3,
@@ -163,7 +166,9 @@ def make_ctrlnet_config_7b_mv(
             model=dict(
                 n_views=6,
                 base_load_from=dict(
-                    load_path=f"checkpoints/{BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}" if t2w else f"checkpoints/{BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}",
+                    load_path=f"checkpoints/{BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}"
+                    if t2w
+                    else f"checkpoints/{BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}",
                 ),
                 hint_mask=hint_mask,
                 hint_dropout_rate=0.3,

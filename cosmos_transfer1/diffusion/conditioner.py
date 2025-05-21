@@ -105,6 +105,7 @@ class TextAttr(BaseConditionEntry):
             return in_tensor
         return super().random_dropout_input(in_tensor, dropout_rate, key)
 
+
 class FrameRepeatAttr(BaseConditionEntry):
     def __init__(self):
         super().__init__()
@@ -354,12 +355,14 @@ class BaseWithCtrlCondition(VideoExtendCondition):
     control_weight: Optional[float] = 1.0
     num_layers_to_use: Optional[int] = -1
 
+
 @dataclass
 class ViewConditionedWithCtrlCondition(BaseWithCtrlCondition):
     # view index indicating camera, used to index nn.Embedding
     view_indices_B_T: Optional[torch.Tensor] = None
     # number of cameras in this cond data
     data_n_views: Optional[int] = -1
+
 
 class VideoConditionerWithCtrl(VideoExtendConditioner):
     def forward(

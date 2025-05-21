@@ -26,23 +26,23 @@ from megatron.core import parallel_state
 from torch import nn
 from torchvision import transforms
 
-
 from cosmos_transfer1.diffusion.conditioner import DataType
 from cosmos_transfer1.diffusion.module.attention import get_normalization
 from cosmos_transfer1.diffusion.module.blocks import (
     FinalLayer,
     GeneralDITTransformerBlock,
     PatchEmbed,
-    zero_module,
     TimestepEmbedding,
     Timesteps,
+    zero_module,
 )
-from cosmos_transfer1.diffusion.module.position_embedding import MultiCameraSinCosPosEmbAxis, MultiCameraVideoRopePosition3DEmb
-from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
-
+from cosmos_transfer1.diffusion.module.position_embedding import (
+    MultiCameraSinCosPosEmbAxis,
+    MultiCameraVideoRopePosition3DEmb,
+)
 from cosmos_transfer1.diffusion.networks.general_dit_multi_view import MultiViewGeneralDIT
-
+from cosmos_transfer1.utils import log
 
 
 class GeneralDITMultiviewEncoder(MultiViewGeneralDIT):
@@ -367,7 +367,7 @@ class GeneralDITMultiviewEncoder(MultiViewGeneralDIT):
 
                 gate = control_gate_per_layer[idx]
                 if isinstance(control_weight[i], (float, int)) or control_weight[i].ndim < 2:
-                    hint_val = zero_blocks[name](x) * control_weight[i] * gate #coin_flip * gate
+                    hint_val = zero_blocks[name](x) * control_weight[i] * gate  # coin_flip * gate
                 else:  # Spatial-temporal weights [num_controls, B, 1, T, H, W]
                     control_feat = zero_blocks[name](x)
 
@@ -380,7 +380,7 @@ class GeneralDITMultiviewEncoder(MultiViewGeneralDIT):
 
                     else:  # BTHWD format
                         raise NotImplementedError("BTHWD format for weight map is not implemented yet.")
-                    hint_val = control_feat * weight_map * gate # * coin_flip
+                    hint_val = control_feat * weight_map * gate  # * coin_flip
 
                 if name not in outs:
                     outs[name] = hint_val
@@ -405,4 +405,3 @@ class GeneralDITMultiviewEncoder(MultiViewGeneralDIT):
             **kwargs,
         )
         return output
-
