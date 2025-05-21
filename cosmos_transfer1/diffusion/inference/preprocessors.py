@@ -19,8 +19,8 @@ import os
 from cosmos_transfer1.auxiliary.depth_anything.model.depth_anything import DepthAnythingModel
 from cosmos_transfer1.auxiliary.human_keypoint.human_keypoint import HumanKeypointModel
 from cosmos_transfer1.auxiliary.sam2.sam2_model import VideoSegmentationModel
-from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.inference.inference_utils import valid_hint_keys
+from cosmos_transfer1.utils import log
 
 
 class Preprocessors:
