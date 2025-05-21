@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Dict, Tuple, Union
 import copy
+from typing import Callable, Dict, Tuple, Union
 
 import torch
 from einops import rearrange
@@ -93,12 +93,12 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
         return output_batch, kendall_loss, pred_mse, edm_loss
 
     def denoise(
-            self,
-            noise_x: Tensor,
-            sigma: Tensor,
-            condition: VideoExtendCondition,
-            condition_video_augment_sigma_in_inference: float = 0.001,
-            seed_inference: int = 1,
+        self,
+        noise_x: Tensor,
+        sigma: Tensor,
+        condition: VideoExtendCondition,
+        condition_video_augment_sigma_in_inference: float = 0.001,
+        seed_inference: int = 1,
     ) -> VideoDenoisePrediction:
         """
         Denoise the noisy input tensor.
@@ -136,7 +136,12 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
 
             # Augment the latent with different sigma value, and add the augment_sigma to the condition object if needed
             condition, augment_latent = self.augment_conditional_latent_frames(
-                condition, cfg_video_cond_bool, condition_latent, condition_video_augment_sigma_in_inference, sigma, seed_inference
+                condition,
+                cfg_video_cond_bool,
+                condition_latent,
+                condition_video_augment_sigma_in_inference,
+                sigma,
+                seed_inference,
             )
             condition_video_indicator = condition.condition_video_indicator  # [B, 1, T, 1, 1]
             if parallel_state.get_context_parallel_world_size() > 1:
@@ -188,7 +193,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             )
 
     def add_condition_video_indicator_and_video_input_mask(
-            self, latent_state: torch.Tensor, condition: VideoExtendCondition, num_condition_t: Union[int, None] = None
+        self, latent_state: torch.Tensor, condition: VideoExtendCondition, num_condition_t: Union[int, None] = None
     ) -> VideoExtendCondition:
         """Add condition_video_indicator and condition_video_input_mask to the condition object for video conditioning.
         condition_video_indicator is a binary tensor indicating the condition region in the latent state. 1x1xTx1x1 tensor.
@@ -223,7 +228,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             # Only in training
             num_condition_t_max = self.config.conditioner.video_cond_bool.first_random_n_num_condition_t_max
             assert (
-                    num_condition_t_max <= T
+                num_condition_t_max <= T
             ), f"num_condition_t_max should be less than T, get {num_condition_t_max}, {T}"
             num_condition_t = torch.randint(0, num_condition_t_max + 1, (1,)).item()
             condition_video_indicator[:, :, :num_condition_t] += 1.0
@@ -280,7 +285,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
 
             num_condition_t_max = self.config.conditioner.video_cond_bool.first_random_n_num_condition_t_max
             assert (
-                    num_condition_t_max <= T
+                num_condition_t_max <= T
             ), f"num_condition_t_max should be less than T, get {num_condition_t_max}, {T}"
             num_condition_t = torch.randint(0, num_condition_t_max + 1, (1,)).item()
             condition_video_indicator[:, :, :num_condition_t] += 1.0
@@ -331,7 +336,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             # and condition on first few cams
             num_condition_t_max = self.config.conditioner.video_cond_bool.first_random_n_num_condition_t_max
             assert (
-                    num_condition_t_max <= T
+                num_condition_t_max <= T
             ), f"num_condition_t_max should be less than T, get {num_condition_t_max}, {T}"
             num_condition_t = torch.randint(0, num_condition_t_max + 1, (1,)).item()
             condition_video_indicator[:, :, :num_condition_t] += 1.0
@@ -374,7 +379,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
         # The input mask indicate whether the input is conditional region or not
         if condition.video_cond_bool:  # Condition one given video frames
             condition.condition_video_input_mask = (
-                    condition_video_indicator * ones_padding + (1 - condition_video_indicator) * zeros_padding
+                condition_video_indicator * ones_padding + (1 - condition_video_indicator) * zeros_padding
             )
         else:  # Unconditional case, use for cfg
             condition.condition_video_input_mask = zeros_padding
@@ -555,7 +560,9 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
         self, data_batch: dict[str, Tensor], num_condition_t: Union[int, None] = None
     ) -> Tuple[Tensor, Tensor, ViewConditionedVideoExtendCondition]:
         if self.config.conditioner.video_cond_bool.sample_tokens_start_from_p_or_i:
-            raise NotImplementedError("sample_tokens_start_from_p_or_i is not implemented for multiview extension diffusion model")
+            raise NotImplementedError(
+                "sample_tokens_start_from_p_or_i is not implemented for multiview extension diffusion model"
+            )
         raw_state, latent_state, condition = super().get_data_and_condition(data_batch, num_condition_t=num_condition_t)
         if condition.data_type == DataType.VIDEO and "view_indices" in data_batch:
             comp_factor = self.vae.temporal_compression_factor
@@ -568,6 +575,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             condition.data_n_views = self.n_views
             log.debug(f"condition.data_n_views {self.n_views}")
         return raw_state, latent_state, condition
+
 
 @diffusion_fsdp_class_decorator
 class FSDPExtendDiffusionModel(MultiviewExtendDiffusionModel):

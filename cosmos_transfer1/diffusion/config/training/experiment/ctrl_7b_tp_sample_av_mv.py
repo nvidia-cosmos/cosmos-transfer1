@@ -1,16 +1,17 @@
-# -----------------------------------------------------------------------------
-# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This codebase constitutes NVIDIA proprietary technology and is strictly
-# confidential. Any unauthorized reproduction, distribution, or disclosure
-# of this code, in whole or in part, outside NVIDIA is strictly prohibited
-# without prior written consent.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# For inquiries regarding the use of this code in other NVIDIA proprietary
-# projects, please contact the Deep Imagination Research Team at
-# dir@exchange.nvidia.com.
-# -----------------------------------------------------------------------------
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """
 Usage:
@@ -20,54 +21,56 @@ Usage:
 
 import copy
 import os
-from megatron.core import parallel_state
 
 from hydra.core.config_store import ConfigStore
+from megatron.core import parallel_state
 from torch.utils.data import DataLoader, DistributedSampler
-from cosmos_transfer1.utils.lazy_config import LazyCall as L
-from cosmos_transfer1.utils.lazy_config import LazyDict
-from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
-from cosmos_transfer1.diffusion.config.base.data import get_sampler
-from cosmos_transfer1.diffusion.training.models.extend_model_multiview_ctrl import FSDPMultiVideoDiffusionModelWithCtrl, MultiVideoDiffusionModelWithCtrl
-from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
-from cosmos_transfer1.diffusion.training.networks.general_dit_multi_camera import VideoExtendGeneralDIT
 
 from cosmos_transfer1.checkpoints import (
-                                          SV2MV_v2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg,
-                                          SV2MV_t2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg,
-                                          SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
-                                          SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
-                                          SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
-                                          SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
-                                          )
+    BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+    BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+)
+from cosmos_transfer1.diffusion.config.base.data import get_sampler
+from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
 from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import AVTransferDataset
-
+from cosmos_transfer1.diffusion.training.models.extend_model_multiview_ctrl import (
+    FSDPMultiVideoDiffusionModelWithCtrl,
+    MultiVideoDiffusionModelWithCtrl,
+)
+from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
+from cosmos_transfer1.diffusion.training.networks.general_dit_multi_camera import VideoExtendGeneralDIT
+from cosmos_transfer1.utils.lazy_config import LazyCall as L
+from cosmos_transfer1.utils.lazy_config import LazyDict
 
 cs = ConfigStore.instance()
 
 num_blocks = 28
 num_frames = 57
 num_control_blocks = 3
-ckpt_root = 'checkpoints/'
-data_root = 'datasets/waymo_transfer/'
+ckpt_root = "checkpoints/"
+data_root = "datasets/waymo_transfer/"
 
 t2w_mv_model_names = {
-    "hdmap": SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
-    "lidar": SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
+    "hdmap": SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    "lidar": SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 }
 v2w_mv_model_names = {
-    "hdmap": SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg,
-    "lidar": SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg
+    "hdmap": SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    "lidar": SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 }
+
 
 def make_ctrlnet_config(
     hint_key: str = "control_input_hdmap",
     num_control_blocks: int = 3,
     pretrain_model_path: str = "",
-    t2w: bool=True,
-    num_frames=121
+    t2w: bool = True,
+    num_frames=121,
 ) -> LazyDict:
-
     if pretrain_model_path == "":
         if t2w:
             job_name = f"CTRL_7Bv1pt3_t2w_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_pretrain"
@@ -82,15 +85,37 @@ def make_ctrlnet_config(
         else:
             job_name = f"CTRL_7Bv1pt3_v2w_sv2mv_{num_frames}frames_{hint_key}_block{num_control_blocks}_posttrain"
             job_project = "cosmos_transfer1_posttrain"
-
+    if t2w:
+        base_load_path = os.path.join(
+            ckpt_root,
+            os.path.dirname(
+                BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH if t2w else BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
+            ),
+            "checkpoints_tp",
+            "t2w_base_model_model_mp_*.pt",
+        )
+    else:
+        base_load_path = os.path.join(
+            ckpt_root,
+            os.path.dirname(
+                BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH if t2w else BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
+            ),
+            "checkpoints_tp",
+            "v2w_base_model_model_mp_*.pt",
+        )
     example_multiview_dataset_waymo = L(AVTransferDataset)(
         dataset_dir=data_root,
         num_frames=num_frames,
         hint_key=hint_key,
         resolution="720",
-        view_keys=["pinhole_front", "pinhole_front_left", "pinhole_front_right", "pinhole_side_left",
-                   "pinhole_side_right"],
-        caption_view_idx_map={0:0, 1:1, 2:2,3:4,4:5},
+        view_keys=[
+            "pinhole_front",
+            "pinhole_front_left",
+            "pinhole_front_right",
+            "pinhole_side_left",
+            "pinhole_side_right",
+        ],
+        caption_view_idx_map={0: 0, 1: 1, 2: 2, 3: 4, 4: 5},
         sample_n_views=3,
         load_mv_emb=False,
         is_train=True,
@@ -142,17 +167,14 @@ def make_ctrlnet_config(
                 fsdp_enabled=False,
                 n_views=3,
                 context_parallel_size=1,
-                loss_reduce='mean',
+                loss_reduce="mean",
                 latent_shape=[
                     16,
                     (num_frames - 1) // 8 + 1,
                     88,
                     160,
                 ],
-                base_load_from=dict(
-                    load_path=os.path.join(ckpt_root, os.path.dirname(SV2MV_t2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg if t2w else SV2MV_v2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg), "checkpoints_tp",
-                                           "model_model_mp_*.pt")
-                ),
+                base_load_from=dict(load_path=base_load_path),
                 finetune_base_model=False,
                 hint_mask=[True],
                 hint_dropout_rate=0.15,
@@ -207,7 +229,7 @@ def make_ctrlnet_config(
                 batch_size=1,
                 drop_last=True,
                 pin_memory=True,
-                num_workers=8
+                num_workers=8,
             ),
             dataloader_val=L(DataLoader)(
                 dataset=example_multiview_dataset_waymo,
@@ -215,7 +237,7 @@ def make_ctrlnet_config(
                 batch_size=1,
                 drop_last=True,
                 pin_memory=True,
-                num_workers=8
+                num_workers=8,
             ),
         )
     )
@@ -228,12 +250,13 @@ all_hint_key = [
 ]
 
 for key in all_hint_key:
-
     # Register experiments for pretraining from scratch
-    t2w_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                     pretrain_model_path="", t2w=True, num_frames=num_frames)
-    v2w_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                     pretrain_model_path="", t2w=False, num_frames=num_frames)
+    t2w_config = make_ctrlnet_config(
+        hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path="", t2w=True, num_frames=num_frames
+    )
+    v2w_config = make_ctrlnet_config(
+        hint_key=key, num_control_blocks=num_control_blocks, pretrain_model_path="", t2w=False, num_frames=num_frames
+    )
 
     cs.store(
         group="experiment",
@@ -252,15 +275,27 @@ for key in all_hint_key:
     t2w_pretrain_ckpt_path = t2w_mv_model_names[hint_key_short]
     v2w_pretrain_ckpt_path = v2w_mv_model_names[hint_key_short]
     # note: The TP ckpt path are specified as <name>.pt to the script, but actually the <name>_model_mp_*.pt files will be loaded.
-    t2w_tp_ckpt_path = os.path.join(ckpt_root, os.path.dirname(t2w_pretrain_ckpt_path), "checkpoints_tp",
-                                os.path.basename(t2w_pretrain_ckpt_path))
-    v2w_tp_ckpt_path = os.path.join(ckpt_root, os.path.dirname(v2w_pretrain_ckpt_path), "checkpoints_tp",
-                                os.path.basename(v2w_pretrain_ckpt_path))
-    #tp_ckpt_path = os.path.join(ckpt_root, SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg)
-    t2w_posttrain_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                pretrain_model_path=t2w_tp_ckpt_path, t2w=True, num_frames=num_frames)
-    v2w_posttrain_config = make_ctrlnet_config(hint_key=key, num_control_blocks=num_control_blocks,
-                                 pretrain_model_path=v2w_tp_ckpt_path, t2w=False, num_frames=num_frames)
+    t2w_tp_ckpt_path = os.path.join(
+        ckpt_root, os.path.dirname(t2w_pretrain_ckpt_path), "checkpoints_tp", os.path.basename(t2w_pretrain_ckpt_path)
+    )
+    v2w_tp_ckpt_path = os.path.join(
+        ckpt_root, os.path.dirname(v2w_pretrain_ckpt_path), "checkpoints_tp", os.path.basename(v2w_pretrain_ckpt_path)
+    )
+    # tp_ckpt_path = os.path.join(ckpt_root, SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg)
+    t2w_posttrain_config = make_ctrlnet_config(
+        hint_key=key,
+        num_control_blocks=num_control_blocks,
+        pretrain_model_path=t2w_tp_ckpt_path,
+        t2w=True,
+        num_frames=num_frames,
+    )
+    v2w_posttrain_config = make_ctrlnet_config(
+        hint_key=key,
+        num_control_blocks=num_control_blocks,
+        pretrain_model_path=v2w_tp_ckpt_path,
+        t2w=False,
+        num_frames=num_frames,
+    )
     cs.store(
         group="experiment",
         package="_global_",
@@ -273,4 +308,3 @@ for key in all_hint_key:
         name=v2w_posttrain_config["job"]["name"],
         node=v2w_posttrain_config,
     )
-

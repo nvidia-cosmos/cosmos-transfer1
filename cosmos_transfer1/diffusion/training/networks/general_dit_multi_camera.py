@@ -1,16 +1,17 @@
-# -----------------------------------------------------------------------------
-# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This codebase constitutes NVIDIA proprietary technology and is strictly
-# confidential. Any unauthorized reproduction, distribution, or disclosure
-# of this code, in whole or in part, outside NVIDIA is strictly prohibited
-# without prior written consent.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# For inquiries regarding the use of this code in other NVIDIA proprietary
-# projects, please contact the Deep Imagination Research Team at
-# dir@exchange.nvidia.com.
-# -----------------------------------------------------------------------------
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from typing import Optional, Tuple
 
@@ -22,23 +23,27 @@ from torchvision import transforms
 
 from cosmos_transfer1.diffusion.conditioner import DataType
 from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
-from cosmos_transfer1.diffusion.training.modules.blocks import SDXLTimestepEmbedding, SDXLTimesteps, GeneralDITTransformerBlock, PatchEmbed
 from cosmos_transfer1.diffusion.module.position_embedding import (
     LearnableEmb3D,
     LearnableEmb3D_FPS_Aware,
     LearnablePosEmbAxis,
+    MultiCameraSinCosPosEmbAxis,
+    MultiCameraVideoRopePosition3DEmb,
     SinCosPosEmb,
     SinCosPosEmb_FPS_Aware,
     SinCosPosEmbAxis,
     VideoRopePosition3DEmb,
     VideoRopePositionEmb,
-    MultiCameraSinCosPosEmbAxis,
-    MultiCameraVideoRopePosition3DEmb
+)
+from cosmos_transfer1.diffusion.training.modules.blocks import (
+    GeneralDITTransformerBlock,
+    PatchEmbed,
+    SDXLTimestepEmbedding,
+    SDXLTimesteps,
 )
 from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
 from cosmos_transfer1.diffusion.training.tensor_parallel import scatter_along_first_dim
 from cosmos_transfer1.utils import log
-
 
 
 class MultiCameraGeneralDIT(GeneralDIT):
@@ -343,9 +348,7 @@ class MultiCameraGeneralDIT(GeneralDIT):
             )
 
         if view_indices_B_T is None:
-            view_indices = torch.arange(self.n_views).clamp(
-                max=self.n_views_emb - 1
-            )  # View indices [0, 1, ..., V-1]
+            view_indices = torch.arange(self.n_views).clamp(max=self.n_views_emb - 1)  # View indices [0, 1, ..., V-1]
             view_indices = view_indices.to(x_B_C_T_H_W.device)
             view_embedding = self.view_embeddings(view_indices)  # Shape: [V, embedding_dim]
             view_embedding = rearrange(view_embedding, "V D -> D V")

@@ -482,6 +482,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 index = np.random.randint(len(self.video_paths))
         return
 
+
 if __name__ == "__main__":
     """
     Sanity check for the dataset.

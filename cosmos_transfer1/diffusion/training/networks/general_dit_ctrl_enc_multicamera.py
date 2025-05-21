@@ -1,16 +1,17 @@
-# -----------------------------------------------------------------------------
-# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This codebase constitutes NVIDIA proprietary technology and is strictly
-# confidential. Any unauthorized reproduction, distribution, or disclosure
-# of this code, in whole or in part, outside NVIDIA is strictly prohibited
-# without prior written consent.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# For inquiries regarding the use of this code in other NVIDIA proprietary
-# projects, please contact the Deep Imagination Research Team at
-# dir@exchange.nvidia.com.
-# -----------------------------------------------------------------------------
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 """
 ControlNet Encoder based on GeneralDIT
@@ -25,13 +26,13 @@ from megatron.core import parallel_state
 from torch import nn
 from torchvision import transforms
 
-from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.conditioner import DataType
 from cosmos_transfer1.diffusion.module.blocks import zero_module
 from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
 from cosmos_transfer1.diffusion.training.modules.blocks import PatchEmbed
 from cosmos_transfer1.diffusion.training.networks.general_dit_multi_camera import MultiCameraGeneralDIT
 from cosmos_transfer1.diffusion.training.tensor_parallel import scatter_along_first_dim
+from cosmos_transfer1.utils import log
 
 
 class GeneralDITMulticamEncoder(MultiCameraGeneralDIT):
@@ -370,7 +371,6 @@ class GeneralDITMulticamEncoder(MultiCameraGeneralDIT):
             # for logging purpose
             self.affline_scale_log_info = affline_scale_log_info
             self.affline_emb = affline_emb_B_D
-
 
             x = rearrange(x_B_T_H_W_D, "B T H W D -> T H W B D")
             if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:

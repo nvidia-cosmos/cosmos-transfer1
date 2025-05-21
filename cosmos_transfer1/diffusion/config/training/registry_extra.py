@@ -29,7 +29,7 @@ from cosmos_transfer1.diffusion.config.transfer.conditioner import (
     CTRL_HINT_KEYS,
     BaseVideoConditionerWithCtrlConfig,
     VideoConditionerFpsSizePaddingWithCtrlConfig,
-    ViewConditionedVideoConditionerFpsSizePaddingWithCtrlConfig
+    ViewConditionedVideoConditionerFpsSizePaddingWithCtrlConfig,
 )
 from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
 from cosmos_transfer1.diffusion.training.networks.general_dit_ctrl_enc import GeneralDITEncoder
@@ -72,6 +72,7 @@ num_blocks = FADITV2ConfigTrain["num_blocks"]
 FADITV2MultiCamEncoderConfig = copy.deepcopy(FADITV2ConfigTrain)
 FADITV2MultiCamEncoderConfig["_target_"] = GeneralDITMulticamEncoder
 FADITV2MultiCamEncoderConfig["layer_mask"] = [True if i > num_blocks // 2 else False for i in range(num_blocks)]
+
 
 def register_net_train(cs):
     cs.store(

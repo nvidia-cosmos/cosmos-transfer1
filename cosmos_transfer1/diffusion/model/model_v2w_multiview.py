@@ -31,8 +31,6 @@ from cosmos_transfer1.diffusion.module.parallel import broadcast, cat_outputs_cp
 from cosmos_transfer1.utils import log, misc
 
 
-
-
 @dataclass
 class VideoDenoisePrediction:
     x0: torch.Tensor  # clean data prediction

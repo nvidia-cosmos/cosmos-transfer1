@@ -149,12 +149,14 @@ class VideoExtendCondition(BaseVideoCondition):
     # pose conditional input, will be concat with the input tensor
     condition_video_pose: Optional[torch.Tensor] = None
 
+
 @dataclass
 class ViewConditionedVideoExtendCondition(VideoExtendCondition):
     # view index indicating camera, used to index nn.Embedding
     view_indices_B_T: Optional[torch.Tensor] = None
     # number of cameras in this cond data
     data_n_cameras: Optional[int] = -1
+
 
 class GeneralConditioner(nn.Module, ABC):
     """
@@ -344,6 +346,7 @@ class VideoExtendConditioner(GeneralConditioner):
         output = super()._forward(batch, override_dropout_rate)
         return VideoExtendCondition(**output)
 
+
 class ViewConditionedVideoExtendConditioner(GeneralConditioner):
     def forward(
         self,
@@ -352,6 +355,7 @@ class ViewConditionedVideoExtendConditioner(GeneralConditioner):
     ) -> ViewConditionedVideoExtendCondition:
         output = super()._forward(batch, override_dropout_rate)
         return ViewConditionedVideoExtendCondition(**output)
+
 
 @dataclass
 class BaseWithCtrlCondition(VideoExtendCondition):
