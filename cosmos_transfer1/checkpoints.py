@@ -39,16 +39,8 @@ BASE_7B_CHECKPOINT_AV_SAMPLE_PATH = f"{COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT}
 HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH = f"{COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT}/hdmap_control.pt"
 LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH = f"{COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT}/lidar_control.pt"
 
-# Currently the models are available at these locations:
-SV2MV_t2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg = "nvidia/sv2mv_t2v/iter_000005000_ema_model.pt"
-SV2MV_v2w_BASE_CHECKPOINT_AV_SAMPLE_PATH_dbg = "nvidia/sv2mv_i2v/iter_000054000_ema_model.pt"
-SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg = "nvidia/hdmap_sv2mv_t2v_cont_train/fsdp_checkpoints/iter_000018000_ema_model_only.pt"
-SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg = "nvidia/hdmap_sv2mv_i2v/fsdp_checkpoints/iter_000019200_ema_model_only.pt"
-SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg = "nvidia/lidar_sv2mv_t2v/fsdp_checkpoints/iter_000018600_ema_model_only.pt"
-SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH_dbg = "nvidia/lidar_sv2mv_i2v/fsdp_checkpoints/iter_000015000_ema_model_only.pt"
-
-#Eventually we want the model to be at these locations:
-COSMOS_TRANSFER1_7B_MV_SAMPLE_AV_CHECKPOINT = "nvidia/Cosmos-Transfer1-7B-SingleToMultiview-Sample-AV"
+#Transfer1-7B-SV2MV-Sample-AV checkpoints
+COSMOS_TRANSFER1_7B_MV_SAMPLE_AV_CHECKPOINT = "nvidia/Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV"
 BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH = f"{COSMOS_TRANSFER1_7B_MV_SAMPLE_AV_CHECKPOINT}/t2w_base_model.pt"
 BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH = f"{COSMOS_TRANSFER1_7B_MV_SAMPLE_AV_CHECKPOINT}/v2w_base_model.pt"
 SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH = f"{COSMOS_TRANSFER1_7B_MV_SAMPLE_AV_CHECKPOINT}/t2w_hdmap_control.pt"
