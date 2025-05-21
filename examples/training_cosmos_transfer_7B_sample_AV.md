@@ -155,13 +155,14 @@ Explanation of the command:
 
 ### 4. Launch Training
 
-**Example A: Cosmos-Transfer1-7B-Sample-AV Lidar.** Now we can start a real training job! Removing the `--dryrun` and set `--nproc_per_node=8` will start a real training job on 8 GPUs:
+#### 4.a Launch Training of Cosmos-Transfer1-7B-Sample-AV
+Now we can start a real training job! Removing the `--dryrun` and set `--nproc_per_node=8` will start a real training job on 8 GPUs, using Lidar conditioning:
 
 ```bash
 torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain
 ```
-
-**Example B: Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV Hdmap.**
+#### 4.b Launch Training of Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV
+In this example, we instead launch a training run of the SingleToMultiView model with HDMap condition:
 
 ```bash
 torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_sv2mv_57frames_control_input_hdmap_block3_pretrain

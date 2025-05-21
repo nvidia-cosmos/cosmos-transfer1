@@ -53,19 +53,19 @@ Please refer to [INSTALL.md](INSTALL.md) for general instructions on environment
 * [Inference with pre-trained Cosmos-Transfer1-7B (Edge)](examples/inference_cosmos_transfer1_7b.md#example-1-single-control-edge)
 * [Inference with pre-trained Cosmos-Transfer1-7B (Vis)](examples/inference_cosmos_transfer1_7b_vis.md)
 * [Inference with pre-trained Cosmos-Transfer1pt1-7B [Keypoint]](/examples/inference_cosmos_transfer1pt1_7b_keypoint.md)
-* Inference with pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
+* [Inference with pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview](/examples/inference_cosmos_transfer1_7b_sample_av_single2multiview.md)
 
 ### Post-train pre-trained Cosmos-Transfer1 models
 
 * [Post-train pre-trained Cosmos-Transfer1-7B [Depth | Edge | Keypoint | Segmentation | Vis]](examples/training_cosmos_transfer_7b.md) **[with multi-GPU support]**
 * [Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV [LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
-* Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
+* [Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview[LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
 
 ### Build your own Cosmos-Transfer1 models from scratch
 
 * [Pre-train Cosmos-Transfer1-7B [Depth | Edge | Keypoint | Segmentation | Vis]](examples/training_cosmos_transfer_7b.md) **[with multi-GPU support]**
 * [Pre-train Cosmos-Transfer1-7B-Sample-AV [LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
-* Pre-train Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
+* [Pre-train Cosmos-Transfer1-7B-Sample-AV-Multiview[LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
 
 ### Workflow
 
