@@ -879,7 +879,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 N_clip = min(self.n_clip_max, N_clip)
         else:
             N_clip = 1
-            log.info(f"Model is not Long-video generation model, overwriting N_clip to 1")
+            log.info("Model is not Long-video generation model, overwriting N_clip to 1")
 
         video = []
         for i_clip in tqdm(range(N_clip)):
