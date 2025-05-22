@@ -7,7 +7,12 @@
     "regional_prompts": [
         {
             "prompt": "blue dress",
-            "mask_prompt": "woman . left"
+            "mask_prompt": "woman on the right"
+        },
+        {
+            "prompt": "red dress",
+            "region_definitions_path": "assets/regionprompt_test/regionprompt_test_left.json"
         }
+
     ]
 }
