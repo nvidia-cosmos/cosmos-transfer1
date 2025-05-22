@@ -16,8 +16,6 @@
 import os
 from typing import List, Optional, Union
 
-from cosmos_transfer1.diffusion.module.parallel import broadcast
-from cosmos_transfer1.utils.regional_prompting_utils import prepare_regional_prompts
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -52,8 +50,10 @@ from cosmos_transfer1.diffusion.inference.inference_utils import (
     split_video_into_patches,
 )
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
+from cosmos_transfer1.diffusion.module.parallel import broadcast
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.utils.base_world_generation_pipeline import BaseWorldGenerationPipeline
+from cosmos_transfer1.utils.regional_prompting_utils import prepare_regional_prompts
 
 MODEL_NAME_DICT = {
     BASE_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3",
@@ -107,7 +107,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         offload_prompt_upsampler: bool = False,
         process_group: torch.distributed.ProcessGroup | None = None,
         regional_prompts: List[str] = None,
-        region_definitions: Union[List[List[float]], torch.Tensor] = None
+        region_definitions: Union[List[List[float]], torch.Tensor] = None,
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -396,7 +396,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         embedding: torch.Tensor,
         negative_prompt_embedding: torch.Tensor | None = None,
         video_path="",
-        control_inputs: dict = None
+        control_inputs: dict = None,
     ) -> torch.Tensor:
         """Generate video frames using the diffusion model.
 
@@ -430,7 +430,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 height=self.height // self.model.tokenizer.spatial_compression_factor,
                 width=self.width // self.model.tokenizer.spatial_compression_factor,
                 device=torch.device("cuda"),
-                compression_factor=self.model.tokenizer.spatial_compression_factor
+                compression_factor=self.model.tokenizer.spatial_compression_factor,
             )
 
         # Get video batch and state shape
@@ -518,12 +518,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             data_batch_i["latent_hint"] = latent_hint = torch.cat(latent_hint)
 
             if "regional_contexts" in data_batch_i:
-                data_batch_i["regional_contexts"] = broadcast(
-                    data_batch_i["regional_contexts"], to_tp=True, to_cp=True
-                )
-                data_batch_i["region_masks"] = broadcast(
-                    data_batch_i["region_masks"], to_tp=True, to_cp=True
-                )
+                data_batch_i["regional_contexts"] = broadcast(data_batch_i["regional_contexts"], to_tp=True, to_cp=True)
+                data_batch_i["region_masks"] = broadcast(data_batch_i["region_masks"], to_tp=True, to_cp=True)
 
             if isinstance(control_weight, torch.Tensor) and control_weight.ndim > 4:
                 control_weight_t = control_weight[..., start_frame:end_frame, :, :].cuda()
@@ -635,7 +631,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             prompt_embedding,
             negative_prompt_embedding=negative_prompt_embedding,
             video_path=video_path,
-            control_inputs=control_inputs
+            control_inputs=control_inputs,
         )
         log.info("Finish generation")
 

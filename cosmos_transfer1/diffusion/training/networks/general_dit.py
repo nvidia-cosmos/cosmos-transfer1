@@ -782,7 +782,7 @@ class GeneralDIT(nn.Module):
                 adaln_lora_B_3D=adaln_lora_B_3D,
                 extra_per_block_pos_emb=extra_per_block_pos_emb,
                 regional_contexts=regional_contexts,
-                region_masks=region_masks
+                region_masks=region_masks,
             )
 
             # Extract features.

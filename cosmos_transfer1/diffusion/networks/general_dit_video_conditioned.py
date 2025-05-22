@@ -217,6 +217,6 @@ class VideoExtendGeneralDIT(GeneralDIT):
             "original_shape": original_shape,
             "extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D": extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
             "regional_contexts": regional_contexts,
-            "region_masks": region_masks
+            "region_masks": region_masks,
         }
         return output

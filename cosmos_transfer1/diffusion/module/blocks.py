@@ -332,7 +332,7 @@ class VideoAttn(nn.Module):
             crossattn_mask,
             rope_emb=rope_emb_L_1_1_D,
             regional_contexts=regional_contexts,
-            region_masks=region_masks
+            region_masks=region_masks,
         )
         x_T_H_W_B_D = rearrange(x_THW_B_D, "(t h w) b d -> t h w b d", h=H, w=W)
         return x_T_H_W_B_D
@@ -560,7 +560,7 @@ class GeneralDITTransformerBlock(nn.Module):
                 rope_emb_L_1_1_D=rope_emb_L_1_1_D,
                 adaln_lora_B_3D=adaln_lora_B_3D,
                 regional_contexts=regional_contexts,
-                region_masks=region_masks
+                region_masks=region_masks,
             )
         return x
 

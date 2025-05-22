@@ -19,7 +19,7 @@ import numpy as np
 import torch
 import transformer_engine as te
 from einops import rearrange
-from torch import nn, Tensor
+from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint
 from transformer_engine.pytorch.attention import DotProductAttention, apply_rotary_pos_emb
 
@@ -136,6 +136,7 @@ def get_normalization(name: str, channels: int):
 class BaseAttentionOp(nn.Module):
     def __init__(self):
         super().__init__()
+
 
 class RegionalAttentionOp(BaseAttentionOp):
     def __init__(
@@ -282,6 +283,7 @@ class RegionalAttentionOp(BaseAttentionOp):
 
         return output
 
+
 class Attention(nn.Module):
     """
     Generalized attention impl.
@@ -383,7 +385,7 @@ class Attention(nn.Module):
                 num_gqa_groups=self.heads,
                 attention_dropout=0,
                 qkv_format=qkv_format,
-                attn_mask_type="arbitrary"
+                attn_mask_type="arbitrary",
             )
         else:
             raise ValueError(f"Backend {backend} not found")

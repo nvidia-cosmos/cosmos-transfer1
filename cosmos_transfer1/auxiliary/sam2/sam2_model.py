@@ -378,7 +378,7 @@ class VideoSegmentationModel:
                     input_data=input_data,
                     save_dir=str(temp_output_dir),
                     visualize=True,
-                    legacy_mask=legacy_mask
+                    legacy_mask=legacy_mask,
                 )
                 if output_video:
                     os.makedirs(os.path.dirname(output_video), exist_ok=True)
