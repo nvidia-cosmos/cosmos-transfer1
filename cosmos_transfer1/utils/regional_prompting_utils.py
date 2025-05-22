@@ -1,22 +1,25 @@
-# -----------------------------------------------------------------------------
-# Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This codebase constitutes NVIDIA proprietary technology and is strictly
-# confidential. Any unauthorized reproduction, distribution, or disclosure
-# of this code, in whole or in part, outside NVIDIA is strictly prohibited
-# without prior written consent.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# For inquiries regarding the use of this code in other NVIDIA proprietary
-# projects, please contact the Deep Imagination Research Team at
-# dir@exchange.nvidia.com.
-# -----------------------------------------------------------------------------
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from typing import List, Tuple, Union
 
 import matplotlib.pyplot as plt
-from cosmos_transfer1.utils import log
 import torch
+
+from cosmos_transfer1.utils import log
+
 
 class RegionalPromptProcessor:
     """
@@ -117,6 +120,7 @@ class RegionalPromptProcessor:
         plt.savefig(save_path)
         plt.close()
 
+
 def compress_segmentation_map(segmentation_map, compression_factor):
     # Add batch and channel dimensions [1, 1, T, H, W]
     expanded_map = segmentation_map.unsqueeze(0).unsqueeze(0)
@@ -125,13 +129,11 @@ def compress_segmentation_map(segmentation_map, compression_factor):
     new_W = W // compression_factor
 
     compressed_map = torch.nn.functional.interpolate(
-        expanded_map,
-        size=(T, new_H, new_W),
-        mode='trilinear',
-        align_corners=False
+        expanded_map, size=(T, new_H, new_W), mode="trilinear", align_corners=False
     )
 
     return compressed_map.squeeze(0).squeeze(0)
+
 
 def prepare_regional_prompts(
     model,
@@ -147,7 +149,7 @@ def prepare_regional_prompts(
     local_files_only: bool = False,
     visualize_masks: bool = False,
     visualization_path: str = None,
-    compression_factor: int = 1
+    compression_factor: int = 1,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Prepare regional prompts and masks for inference.
@@ -176,12 +178,14 @@ def prepare_regional_prompts(
 
     # Validate that we have matching number of prompts and region definitions
     if len(regional_prompts) != len(region_definitions):
-        raise ValueError(f"Number of regional prompts ({len(regional_prompts)}) must match "
-                         f"total number of region definitions ({len(region_definitions)})")
+        raise ValueError(
+            f"Number of regional prompts ({len(regional_prompts)}) must match "
+            f"total number of region definitions ({len(region_definitions)})"
+        )
 
     # Track which prompts correspond to which region types while maintaining order
     box_prompts = []
-    seg_prompts = [] 
+    seg_prompts = []
     prompt_idx = 0
 
     segmentation_maps: List[torch.Tensor] = []

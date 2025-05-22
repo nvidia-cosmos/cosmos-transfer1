@@ -839,7 +839,7 @@ class DITBuildingBlock(nn.Module):
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
         regional_contexts: Optional[torch.Tensor] = None,
-        region_masks: Optional[torch.Tensor] = None
+        region_masks: Optional[torch.Tensor] = None,
     ):
         del crossattn_emb, crossattn_mask, rope_emb_L_1_1_D, regional_contexts, region_masks
         assert isinstance(self.block, GPT2FeedForward)
@@ -891,7 +891,7 @@ class DITBuildingBlock(nn.Module):
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
         regional_contexts: Optional[torch.Tensor] = None,
-        region_masks: Optional[torch.Tensor] = None
+        region_masks: Optional[torch.Tensor] = None,
     ):
         if isinstance(self.block, VideoAttn):
             if self.block.attn.is_selfattn:

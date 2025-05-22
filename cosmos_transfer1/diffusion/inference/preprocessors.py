@@ -32,7 +32,6 @@ class Preprocessors:
         self.keypoint_model = None
 
     def __call__(self, input_video, input_prompt, control_inputs, output_folder, regional_prompts=None):
-
         for hint_key in control_inputs:
             if hint_key in valid_hint_keys:
                 if hint_key in ["depth", "seg", "keypoint"]:
@@ -132,7 +131,7 @@ class Preprocessors:
         out_tensor=None,
         weight_scaler=None,
         binarize_video=False,
-        legacy_mask=False
+        legacy_mask=False,
     ):
         if self.seg_model is None:
             self.seg_model = VideoSegmentationModel()
@@ -143,7 +142,7 @@ class Preprocessors:
             prompt=prompt,
             weight_scaler=weight_scaler,
             binarize_video=binarize_video,
-            legacy_mask=legacy_mask
+            legacy_mask=legacy_mask,
         )
 
 

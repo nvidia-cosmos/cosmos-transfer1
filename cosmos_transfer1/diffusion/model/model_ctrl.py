@@ -230,7 +230,7 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
         else:
             setattr(uncondition, hint_key, latent_hint)
 
-        # Add extra conditions for ctrlnet. 
+        # Add extra conditions for ctrlnet.
         # Handle regional prompting information
         if "regional_contexts" in data_batch and "region_masks" in data_batch:
             setattr(condition, "regional_contexts", data_batch["regional_contexts"])

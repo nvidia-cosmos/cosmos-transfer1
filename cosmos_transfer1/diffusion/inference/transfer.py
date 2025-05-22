@@ -228,7 +228,7 @@ def demo(cfg, control_inputs):
         canny_threshold=cfg.canny_threshold,
         upsample_prompt=cfg.upsample_prompt,
         offload_prompt_upsampler=cfg.offload_prompt_upsampler,
-        process_group=process_group
+        process_group=process_group,
     )
 
     if cfg.batch_input_path:
@@ -280,7 +280,7 @@ def demo(cfg, control_inputs):
                 regional_prompts.append(regional_prompt["prompt"])
                 if "region_definitions_path" in regional_prompt:
                     log.info(f"region_definitions_path: {regional_prompt['region_definitions_path']}")
-                    region_definition_path = regional_prompt['region_definitions_path']
+                    region_definition_path = regional_prompt["region_definitions_path"]
                     if region_definition_path.endswith(".json"):
                         with open(region_definition_path, "r") as f:
                             region_definitions_json = json.load(f)
