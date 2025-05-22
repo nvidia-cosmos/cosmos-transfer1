@@ -30,6 +30,7 @@ from cosmos_transfer1.diffusion.inference.inference_utils import load_controlnet
 from cosmos_transfer1.diffusion.inference.preprocessors import Preprocessors
 from cosmos_transfer1.diffusion.inference.world_generation_pipeline import DiffusionControl2WorldGenerationPipeline
 from cosmos_transfer1.utils import log, misc
+from cosmos_transfer1.utils.intermediates import SAVE_INTERMEDIATES, create_gif
 from cosmos_transfer1.utils.io import read_prompts_from_file, save_video
 
 torch.enable_grad(False)
@@ -145,6 +146,12 @@ def parse_arguments() -> argparse.Namespace:
         "--offload_prompt_upsampler",
         action="store_true",
         help="Offload prompt upsampler model after inference",
+    )
+    parser.add_argument(
+        "--local-rank",
+        type=int,
+        default=0,
+        help="Local rank for distributed training",
     )
 
     cmd_args = parser.parse_args()
@@ -307,15 +314,25 @@ def demo(cfg, control_inputs):
             log.critical("Guardrail blocked generation for entire batch.")
             continue
 
-        videos, final_prompts = batch_outputs
-        for i, (video, prompt) in enumerate(zip(videos, final_prompts)):
+        videos, final_prompts, all_intermediates = batch_outputs
+        if all_intermediates is None:
+            all_intermediates = [None] * len(videos)
+
+        for i, (video, prompt, intermediate_videos) in enumerate(zip(videos, final_prompts, all_intermediates)):
             if cfg.batch_input_path:
                 video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{batch_start+i}")
                 video_save_path = os.path.join(video_save_subfolder, "output.mp4")
                 prompt_save_path = os.path.join(video_save_subfolder, "prompt.txt")
+                if SAVE_INTERMEDIATES:
+                    intermediate_video_save_subfolder = os.path.join(video_save_subfolder, "intermediate_videos")
+                    os.makedirs(intermediate_video_save_subfolder, exist_ok=True)
             else:
                 video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
                 prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
+                if SAVE_INTERMEDIATES:
+                    intermediate_video_save_subfolder = os.path.join(cfg.video_save_folder, "intermediate_videos")
+                    os.makedirs(intermediate_video_save_subfolder, exist_ok=True)
+
             # Save video and prompt
             if device_rank == 0:
                 os.makedirs(os.path.dirname(video_save_path), exist_ok=True)
@@ -331,6 +348,27 @@ def demo(cfg, control_inputs):
                 # Save prompt to text file alongside video
                 with open(prompt_save_path, "wb") as f:
                     f.write(prompt.encode("utf-8"))
+
+                if SAVE_INTERMEDIATES:
+                    for j, intermediate_video in enumerate(intermediate_videos):
+                        intermediate_video_save_path = os.path.join(
+                            intermediate_video_save_subfolder, f"intermediate_video_{j}.mp4"
+                        )
+                        save_video(
+                            video=intermediate_video,
+                            fps=cfg.fps,
+                            H=intermediate_video.shape[1],
+                            W=intermediate_video.shape[2],
+                            video_save_quality=5,
+                            video_save_path=intermediate_video_save_path,
+                        )
+                    # Create GIF of intermediate videos
+                    create_gif(
+                        intermediate_video_save_subfolder,
+                        os.path.join(intermediate_video_save_subfolder, "diffusion_intermediates.gif"),
+                        (1080, 720),
+                        10,
+                    )
 
                 log.info(f"Saved video to {video_save_path}")
                 log.info(f"Saved prompt to {prompt_save_path}")
