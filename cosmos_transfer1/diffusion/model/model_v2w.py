@@ -182,7 +182,7 @@ class DiffusionV2WModel(DiffusionT2WModel):
         add_input_frames_guidance: bool = False,
         x_sigma_max: Optional[torch.Tensor] = None,
         sigma_max: Optional[float] = None,
-    ) -> Tensor:
+    ) -> Tuple[Tensor, Tensor]:
         """Generates video samples conditioned on input frames.
 
         Args:
@@ -238,12 +238,18 @@ class DiffusionV2WModel(DiffusionT2WModel):
         if self.net.is_context_parallel_enabled:
             x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
 
-        samples = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
+        samples, intermediates = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
+        print(f"V2W device: {samples.device}, samples.shape: {samples.shape}")
+        print(f"V2W device: {intermediates.device}, intermediates.shape: {intermediates.shape}")
 
         if self.net.is_context_parallel_enabled:
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
+            intermediates = cat_outputs_cp(intermediates, seq_dim=3, cp_group=self.net.cp_group)
 
-        return samples
+        print(f"After : CTRL device: {samples.device}, samples.shape: {samples.shape}")
+        print(f"After : CTRL device: {intermediates.device}, intermediates.shape: {intermediates.shape}")
+
+        return samples, intermediates
 
     def get_x0_fn_from_batch_with_condition_latent(
         self,

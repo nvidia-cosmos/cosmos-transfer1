@@ -322,34 +322,6 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             np.ndarray: Decoded video frames as uint8 numpy array [T, H, W, C]
                         with values in range [0, 255]
         """
-        # Decode video
-        # if sample.shape[0] == 1:
-        #     video = (1.0 + self.model.decode(sample)).clamp(0, 2) / 2  # [B, 3, T, H, W]
-        # else:
-        #     # Do decoding for each batch sequentially to prevent OOM.
-        #     samples = []
-        #     for sample_i in sample:
-        #         samples += [self.model.decode(sample_i.unsqueeze(0)).cpu()]
-        #     samples = (torch.cat(samples) + 1).clamp(0, 2) / 2
-
-        #     # Stitch the patches together to form the final video.
-        #     patch_h, patch_w = samples.shape[-2:]
-        #     orig_size = (patch_w, patch_h)
-        #     aspect_ratio = detect_aspect_ratio(orig_size)
-        #     stitch_w, stitch_h = get_upscale_size(orig_size, aspect_ratio, upscale_factor=3)
-        #     n_img_w = (stitch_w - 1) // patch_w + 1
-        #     n_img_h = (stitch_h - 1) // patch_h + 1
-        #     overlap_size_w = overlap_size_h = 0
-        #     if n_img_w > 1:
-        #         overlap_size_w = (n_img_w * patch_w - stitch_w) // (n_img_w - 1)
-        #     if n_img_h > 1:
-        #         overlap_size_h = (n_img_h * patch_h - stitch_h) // (n_img_h - 1)
-        #     from einops import rearrange
-        #     samples = rearrange(samples, "(n t) b ... -> (b n t) ...", n=n_img_h, t=n_img_w)
-        #     video = merge_patches_into_video(samples, overlap_size_h, overlap_size_w, n_img_h, n_img_w)
-        #     video = torch.nn.functional.interpolate(video[0], size=(patch_h * 3, patch_w * 3), mode="bicubic")[None]
-        #     video = video.clamp(0, 1)
-        # video = (video[0].permute(1, 2, 3, 0) * 255).to(torch.uint8).cpu().numpy()
 
         video = (1.0 + self.model.decode(sample)).clamp(0, 2) / 2  # [B, 3, T, H, W]
         video = (video * 255).to(torch.uint8).cpu()
@@ -361,7 +333,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         video_paths: list[str],
         negative_prompt_embeddings: Optional[list[torch.Tensor]] = None,
         control_inputs_list: list[dict] = None,
-    ) -> list[np.ndarray]:
+    ) -> tuple[list[np.ndarray], list[list[np.ndarray]]]:
         """Generate world representation with automatic model offloading.
 
         Wraps the core generation process with model loading/offloading logic
@@ -386,7 +358,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         if negative_prompt_embeddings is not None:
             negative_prompt_embeddings = torch.cat(negative_prompt_embeddings)
 
-        samples = self._run_model(
+        samples, intermediate_videos = self._run_model(
             prompt_embeddings=prompt_embeddings,
             negative_prompt_embeddings=negative_prompt_embeddings,
             video_paths=video_paths,
@@ -399,7 +371,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         if self.offload_tokenizer:
             self._offload_tokenizer()
 
-        return samples
+        return samples, intermediate_videos
 
     def _run_model(
         self,
@@ -462,7 +434,9 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         N_clip = (num_total_frames_with_padding - self.num_input_frames) // num_new_generated_frames
 
         video = []
+        intermediate_videos = [[] for _ in range(self.num_steps)]
         prev_frames = None
+
         for i_clip in tqdm(range(N_clip)):
             # data_batch_i = {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in data_batch.items()}
             data_batch_i = {k: v for k, v in data_batch.items()}
@@ -514,7 +488,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
             # Generate video frames for this clip (batched)
             log.info("Starting diffusion sampling")
-            latents = generate_world_from_control(
+            latents, intermediates = generate_world_from_control(
                 model=self.model,
                 state_shape=state_shape,
                 is_negative_prompt=True,
@@ -530,6 +504,11 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             log.info("Completed diffusion sampling")
             log.info("Starting VAE decode")
             frames = self._run_tokenizer_decoding(latents)  # [B, T, H, W, C] or similar
+            intermediate_latents = torch.unbind(intermediates, dim=0)  # List of intermediate frames
+            for i, intermediate_latent in enumerate(intermediate_latents):
+                intermediate_frames = self._run_tokenizer_decoding(intermediate_latent)
+                intermediate_videos[i].append(intermediate_frames)
+
             log.info("Completed VAE decode")
 
             if i_clip == 0:
@@ -542,7 +521,12 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         video = torch.cat(video, dim=2)[:, :, :T]
         video = video.permute(0, 2, 3, 4, 1).numpy()
-        return video
+
+        for i in range(self.num_steps):
+            intermediate_videos[i] = torch.cat(intermediate_videos[i], dim=2)[:, :, :T]
+            intermediate_videos[i] = intermediate_videos[i].permute(0, 2, 3, 4, 1).numpy()
+
+        return video, intermediate_videos
 
     def generate(
         self,
@@ -552,7 +536,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         control_inputs: dict | list[dict] = None,
         save_folder: str = "outputs/",
         batch_size: int = 1,
-    ) -> tuple[np.ndarray, str | list[str]] | None:
+    ) -> tuple[np.ndarray, str | list[str], list[np.ndarray] | list[list[np.ndarray]]] | None:
         """Generate video from text prompt and control video.
 
         Pipeline steps:
@@ -590,6 +574,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         # Process prompts in batch
         all_videos = []
         all_final_prompts = []
+        all_intermediate_videos = []
 
         # Upsample prompts if enabled
         if self.prompt_upsampler and int(os.environ["RANK"]) == 0:
@@ -654,7 +639,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         all_neg_embeddings = [emb[1] for emb in all_prompt_embeddings]
         all_prompt_embeddings = [emb[0] for emb in all_prompt_embeddings]
-        videos = self._run_model_with_offload(
+        videos, intermediate_videos = self._run_model_with_offload(
             prompt_embeddings=all_prompt_embeddings,
             negative_prompt_embeddings=all_neg_embeddings,
             video_paths=safe_video_paths,
@@ -668,10 +653,11 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             if safe_video is not None:
                 all_videos.append(safe_video)
                 all_final_prompts.append(safe_prompts[i])
+                all_intermediate_videos.append(intermediate_videos[i])
             else:
                 log.critical(f"Generated video {i+1} is not safe")
 
         if not all_videos:
             log.critical("All generated videos failed safety checks")
             return None
-        return all_videos, all_final_prompts
+        return all_videos, all_final_prompts, all_intermediate_videos
