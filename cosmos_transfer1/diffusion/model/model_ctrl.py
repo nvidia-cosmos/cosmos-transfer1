@@ -359,12 +359,18 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             x_sigma_max = broadcast(x_sigma_max, to_tp=False, to_cp=True)
             x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
 
-        samples = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
+        samples, intermediates = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
+        print(f"Before : CTRL device: {samples.device}, samples.shape: {samples.shape}")
+        print(f"Before : CTRL device: {intermediates.device}, intermediates.shape: {intermediates.shape}")
 
         if self.net.is_context_parallel_enabled:
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
+            intermediates = cat_outputs_cp(intermediates, seq_dim=3, cp_group=self.net.cp_group)
 
-        return samples
+        print(f"After : CTRL device: {samples.device}, samples.shape: {samples.shape}")
+        print(f"After : CTRL device: {intermediates.device}, intermediates.shape: {intermediates.shape}")
+
+        return samples, intermediates
 
 
 class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
@@ -588,7 +594,7 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
         x_sigma_max: Optional[torch.Tensor] = None,
         sigma_max: float | None = None,
         **kwargs,
-    ) -> Tensor:
+    ) -> Tuple[Tensor, Tensor]:
         """
         Generate samples from the batch. Based on given batch, it will automatically determine whether to generate image or video samples.
         Different from the base model, this function support condition latent as input, it will create a differnt x0_fn if condition latent is given.
@@ -632,8 +638,9 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
             x_sigma_max = broadcast(x_sigma_max, to_tp=False, to_cp=True)
             x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
 
-        samples = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
+        samples, intermediates = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
 
         if self.net.is_context_parallel_enabled:
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
-        return samples
+            intermediates = cat_outputs_cp(intermediates, seq_dim=2, cp_group=self.net.cp_group)
+        return samples, intermediates
