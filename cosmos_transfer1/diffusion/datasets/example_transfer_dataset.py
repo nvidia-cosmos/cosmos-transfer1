@@ -256,6 +256,7 @@ class ExampleTransferDataset(Dataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
+        return
 
     def __len__(self):
         return len(self.video_paths)
@@ -379,7 +380,7 @@ class AVTransferDataset(ExampleTransferDataset):
                     if frame_ids is None:
                         frames, frame_ids, fps = self._sample_frames(video_path)
                         if frames is None:  # Invalid video or too short
-                            raise Exception("Failed to load frames")
+                            raise Exception(f"Failed to load frames {video_path}")
 
                     else:
                         frames, fps = self._load_video(
@@ -392,7 +393,7 @@ class AVTransferDataset(ExampleTransferDataset):
                     aspect_ratio = detect_aspect_ratio((video.shape[3], video.shape[2]))  # expects (W, H)
                     videos.append(video)
 
-                    if video_name.endswith("_0"):
+                    if video_name[-2] == "_" and video_name[-1].isdigit():
                         video_name_emb = video_name[:-2]
                     else:
                         video_name_emb = video_name
@@ -445,11 +446,12 @@ class AVTransferDataset(ExampleTransferDataset):
 
                 # Basic data
                 data["video"] = video
+                data["video_name"] = video_name
                 data["aspect_ratio"] = aspect_ratio
                 data["t5_text_embeddings"] = t5_embedding
                 data["t5_text_mask"] = torch.cat(t5_masks)
                 data["view_indices"] = view_indices_conditioning.contiguous()
-
+                data["frame_repeat"] = torch.zeros(len(view_indices))
                 # Add metadata
                 data["fps"] = fps
                 data["frame_start"] = frame_ids[0]
@@ -478,6 +480,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
+        return
 
 
 if __name__ == "__main__":

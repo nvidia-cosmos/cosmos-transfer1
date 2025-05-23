@@ -17,8 +17,14 @@ import copy
 
 from cosmos_transfer1.diffusion.config.base.net import FADITV2Config
 from cosmos_transfer1.diffusion.networks.general_dit_ctrl_enc import GeneralDITEncoder
+from cosmos_transfer1.diffusion.networks.general_dit_ctrl_enc_multiview import GeneralDITMultiviewEncoder
 
 num_blocks = FADITV2Config["num_blocks"]
 FADITV2EncoderConfig = copy.deepcopy(FADITV2Config)
 FADITV2EncoderConfig["_target_"] = GeneralDITEncoder
 FADITV2EncoderConfig["layer_mask"] = [True if i > num_blocks // 2 else False for i in range(num_blocks)]
+
+num_blocks = FADITV2Config["num_blocks"]
+FADITV2MultiCamEncoderConfig = copy.deepcopy(FADITV2Config)
+FADITV2MultiCamEncoderConfig["_target_"] = GeneralDITMultiviewEncoder
+FADITV2MultiCamEncoderConfig["layer_mask"] = [True if i > num_blocks // 2 else False for i in range(num_blocks)]

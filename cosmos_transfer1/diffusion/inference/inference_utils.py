@@ -37,11 +37,16 @@ from cosmos_transfer1.checkpoints import (
     SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
     VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.config.transfer.augmentors import BilateralOnlyBlurAugmentorConfig
 from cosmos_transfer1.diffusion.datasets.augmentors.control_input import get_augmentor_for_eval
 from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel
 from cosmos_transfer1.diffusion.model.model_v2w import DiffusionV2WModel
+from cosmos_transfer1.diffusion.model.model_v2w_multiview import DiffusionV2WMultiviewModel
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.utils.config_helper import get_config_module, override
 from cosmos_transfer1.utils.io import load_from_fileobj
@@ -215,10 +220,13 @@ def load_model_by_config(
 
 
 def load_network_model(model: DiffusionT2WModel, ckpt_path: str):
-    with skip_init_linear():
+    if ckpt_path:
+        with skip_init_linear():
+            model.set_up_model()
+        net_state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=False)  # , weights_only=True)
+        non_strict_load_model(model.model, net_state_dict)
+    else:
         model.set_up_model()
-    net_state_dict = torch.load(ckpt_path, map_location="cpu", weights_only=False)  # , weights_only=True)
-    non_strict_load_model(model.model, net_state_dict)
     model.cuda()
 
 
@@ -364,6 +372,105 @@ def read_and_resize_input(input_control_path, num_total_frames, interpolation):
     control_input = resize_video(control_input, h, w, interpolation=interpolation)  # BCTHW, range [0, 255]
     control_input = torch.from_numpy(control_input[0])  # CTHW, range [0, 255]
     return control_input, fps, aspect_ratio
+
+
+def get_video_batch_for_multiview_model(
+    model, prompt_embedding, height, width, fps, num_video_frames, frame_repeat_negative_condition
+):
+    """Prepare complete input batch for video generation including latent dimensions.
+
+    Args:
+        model: Diffusion model instance
+        prompt_embedding list(torch.Tensor): Text prompt embeddings
+        height (int): Output video height
+        width (int): Output video width
+        fps (int): Output video frame rate
+        num_video_frames (int): Number of frames to generate
+        frame_repeat_negative_condition (int): Number of frames to generate
+
+    Returns:
+        tuple:
+            - data_batch (dict): Complete model input batch
+            - state_shape (list): Shape of latent state [C,T,H,W] accounting for VAE compression
+    """
+    n_views = len(prompt_embedding)
+    prompt_embedding = einops.rearrange(prompt_embedding, "n t d -> (n t) d").unsqueeze(0)
+    raw_video_batch = prepare_data_batch(
+        height=height,
+        width=width,
+        num_frames=num_video_frames,
+        fps=fps,
+        prompt_embedding=prompt_embedding,
+    )
+    if frame_repeat_negative_condition != -1:
+        frame_repeat = torch.zeros(n_views)
+        frame_repeat[-1] = frame_repeat_negative_condition
+        frame_repeat[-2] = frame_repeat_negative_condition
+        raw_video_batch["frame_repeat"] = frame_repeat.unsqueeze(0).to(dtype=torch.bfloat16).cuda()
+    state_shape = [
+        model.tokenizer.channel,
+        model.tokenizer.get_latent_num_frames(int(num_video_frames / n_views)) * n_views,
+        height // model.tokenizer.spatial_compression_factor,
+        width // model.tokenizer.spatial_compression_factor,
+    ]
+    return raw_video_batch, state_shape
+
+
+def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs):
+    # Initialize control input dictionary
+    control_input_dict = {k: v for k, v in data_batch.items()}
+    control_weights = []
+    hint_keys = []
+    for hint_key, control_info in control_inputs.items():
+        if hint_key not in valid_hint_keys:
+            continue
+        if "input_control" in control_info:
+            cond_videos = []
+            for in_file in control_info["input_control"]:
+                log.info(f"reading control input {in_file} for hint {hint_key}")
+                cond_vid, fps = read_video_or_image_into_frames_BCTHW(
+                    in_file,
+                    normalize=False,  # s.t. output range is [0, 255]
+                    max_frames=num_total_frames,
+                    also_return_fps=True,
+                )
+                cond_vid = resize_video(cond_vid, H, W, interpolation=cv2.INTER_LINEAR)
+                cond_vid = torch.from_numpy(cond_vid[0])
+
+                cond_videos.append(cond_vid)
+
+            input_frames = torch.cat(cond_videos, dim=1)
+            control_input_dict[f"control_input_{hint_key}"] = input_frames
+            hint_keys.append(hint_key)
+        control_weights.append(control_info["control_weight"])
+
+    target_w, target_h = W, H
+    hint_key = "control_input_" + "_".join(hint_keys)
+    add_control_input = get_augmentor_for_eval(input_key="video", output_key=hint_key)
+
+    if len(control_input_dict):
+        control_input = add_control_input(control_input_dict)[hint_key]
+        if control_input.ndim == 4:
+            control_input = control_input[None]
+        control_input = control_input.bfloat16() / 255 * 2 - 1
+        control_weights = load_spatial_temporal_weights(
+            control_weights, B=1, T=num_total_frames, H=target_h, W=target_w, patch_h=H, patch_w=W
+        )
+        data_batch["control_weight"] = control_weights
+
+        if len(control_inputs) > 1:  # Multicontrol enabled
+            data_batch["hint_key"] = "control_input_multi"
+            data_batch["control_input_multi"] = control_input
+        else:  # Single-control case
+            data_batch["hint_key"] = hint_key
+            data_batch[hint_key] = control_input
+
+    data_batch["target_h"], data_batch["target_w"] = target_h // 8, target_w // 8
+    data_batch["video"] = torch.zeros((1, 3, 57, H, W), dtype=torch.uint8).cuda()  # ?????
+    data_batch["image_size"] = torch.tensor([[H, W, H, W]] * 1, dtype=torch.bfloat16).cuda()
+    data_batch["padding_mask"] = torch.zeros((1, 1, H, W), dtype=torch.bfloat16).cuda()
+
+    return data_batch
 
 
 def get_batched_ctrl_batch(
@@ -587,6 +694,7 @@ def generate_world_from_control(
     num_input_frames: int,
     sigma_max: float,
     x_sigma_max=None,
+    augment_sigma=None,
 ) -> Tuple[np.array, list, list]:
     """Generate video using a conditioning video/image input.
 
@@ -605,7 +713,9 @@ def generate_world_from_control(
         np.array: Generated video frames in shape [T,H,W,C], range [0,255]
     """
     assert not model.config.conditioner.video_cond_bool.sample_tokens_start_from_p_or_i, "not supported"
-    augment_sigma = DEFAULT_AUGMENT_SIGMA
+
+    if augment_sigma is None:
+        augment_sigma = DEFAULT_AUGMENT_SIGMA
 
     b, c, t, h, w = condition_latent.shape
     if condition_latent.shape[2] < state_shape[1]:
@@ -717,14 +827,16 @@ def compute_num_latent_frames(model: DiffusionV2WModel, num_input_frames: int, d
     Returns:
         int: number of latent frames
     """
+    # First find how many vae chunks are contained with in num_input_frames
     num_latent_frames = (
         num_input_frames
         // model.tokenizer.video_vae.pixel_chunk_duration
         * model.tokenizer.video_vae.latent_chunk_duration
     )
-    if num_input_frames % model.tokenizer.video_vae.latent_chunk_duration == 1:
+    # Then handle the remainder
+    if num_input_frames % model.tokenizer.video_vae.pixel_chunk_duration == 1:
         num_latent_frames += 1
-    elif num_input_frames % model.tokenizer.video_vae.latent_chunk_duration > 1:
+    elif num_input_frames % model.tokenizer.video_vae.pixel_chunk_duration > 1:
         assert (
             num_input_frames % model.tokenizer.video_vae.pixel_chunk_duration - 1
         ) % downsample_factor == 0, f"num_input_frames % model.tokenizer.video_vae.pixel_chunk_duration - 1 must be divisible by {downsample_factor}"
@@ -739,6 +851,7 @@ def create_condition_latent_from_input_frames(
     model: DiffusionV2WModel,
     input_frames: torch.Tensor,
     num_frames_condition: int = 25,
+    from_back: bool = True,
 ):
     """Create condition latent for video generation from input frames.
 
@@ -774,28 +887,84 @@ def create_condition_latent_from_input_frames(
     ), f"num_frames_encode should be larger than num_frames_condition, get {num_frames_encode}, {num_frames_condition}"
 
     # Put the conditioal frames to the begining of the video, and pad the end with zero
-    condition_frames = input_frames[:, :, -num_frames_condition:]
-    padding_frames = condition_frames.new_zeros(B, C, num_frames_encode - num_frames_condition, H, W)
-    encode_input_frames = torch.cat([condition_frames, padding_frames], dim=2)
+    if model.config.conditioner.video_cond_bool.condition_location == "first_and_last_1":
+        condition_frames_first = input_frames[:, :, :num_frames_condition]
+        condition_frames_last = input_frames[:, :, -num_frames_condition:]
+        padding_frames = condition_frames_first.new_zeros(B, C, num_frames_encode + 1 - 2 * num_frames_condition, H, W)
+        encode_input_frames = torch.cat([condition_frames_first, padding_frames, condition_frames_last], dim=2)
+    elif not from_back:
+        condition_frames = input_frames[:, :, :num_frames_condition]
+        padding_frames = condition_frames.new_zeros(B, C, num_frames_encode - num_frames_condition, H, W)
+        encode_input_frames = torch.cat([condition_frames, padding_frames], dim=2)
+    else:
+        condition_frames = input_frames[:, :, -num_frames_condition:]
+        padding_frames = condition_frames.new_zeros(B, C, num_frames_encode - num_frames_condition, H, W)
+        encode_input_frames = torch.cat([condition_frames, padding_frames], dim=2)
 
-    log.debug(
+    log.info(
         f"create latent with input shape {encode_input_frames.shape} including padding {num_frames_encode - num_frames_condition} at the end"
     )
-    latent = model.encode(encode_input_frames)
+    if hasattr(model, "n_views") and encode_input_frames.shape[0] == model.n_views:
+        encode_input_frames = einops.rearrange(encode_input_frames, "(B V) C T H W -> B C (V T) H W", V=model.n_views)
+        latent = model.encode(encode_input_frames)
+    elif model.config.conditioner.video_cond_bool.condition_location == "first_and_last_1":
+        latent1 = model.encode(encode_input_frames[:, :, :num_frames_encode])  # BCTHW
+        latent2 = model.encode(encode_input_frames[:, :, num_frames_encode:])
+        latent = torch.cat([latent1, latent2], dim=2)  # BCTHW
+    elif encode_input_frames.shape[0] == 1:
+        # treat as single view video
+        latent = model.tokenizer.encode(encode_input_frames) * model.sigma_data
+    else:
+        raise ValueError(
+            f"First dimension of encode_input_frames {encode_input_frames.shape[0]} does not match "
+            f"model.n_views or model.n_views is not defined and first dimension is not 1"
+        )
     return latent, encode_input_frames
+
+
+def compute_num_frames_condition(model: DiffusionV2WModel, num_of_latent_overlap: int, downsample_factor=8) -> int:
+    """This function computes the number of condition pixel frames given the number of latent frames to overlap.
+    Args:
+        model (ExtendDiffusionModel): video generation model
+        num_of_latent_overlap (int): number of latent frames to overlap
+        downsample_factor (int): downsample factor for temporal reduce
+    Returns:
+        int: number of condition frames in output space
+    """
+    if getattr(model.tokenizer.video_vae, "is_casual", True):
+        # For casual model
+        num_frames_condition = (
+            num_of_latent_overlap
+            // model.tokenizer.video_vae.latent_chunk_duration
+            * model.tokenizer.video_vae.pixel_chunk_duration
+        )
+        if num_of_latent_overlap % model.tokenizer.video_vae.latent_chunk_duration == 1:
+            num_frames_condition += 1
+        elif num_of_latent_overlap % model.tokenizer.video_vae.latent_chunk_duration > 1:
+            num_frames_condition += (
+                1 + (num_of_latent_overlap % model.tokenizer.video_vae.latent_chunk_duration - 1) * downsample_factor
+            )
+    else:
+        num_frames_condition = num_of_latent_overlap * downsample_factor
+
+    return num_frames_condition
 
 
 def get_condition_latent(
     model: DiffusionV2WModel,
-    input_video_path: str,
+    input_image_or_video_path: str,
     num_input_frames: int = 1,
     state_shape: list[int] = None,
-):
+    frame_index: int = 0,
+    frame_stride: int = 1,
+    from_back: bool = True,
+    start_frame: int = 0,
+) -> torch.Tensor:
     """Get condition latent from input image/video file.
 
     Args:
         model (DiffusionV2WModel): Video generation model
-        input_video_path (str): Path to conditioning image/video
+        input_image_or_video_path (str): Path to conditioning image/video
         num_input_frames (int): Number of input frames for video2world prediction
 
     Returns:
@@ -812,15 +981,31 @@ def get_condition_latent(
         state_shape[-1] * model.tokenizer.spatial_compression_factor,
     )
 
-    input_path_format = input_video_path.split(".")[-1]
+    input_path_format = input_image_or_video_path.split(".")[-1]
     input_frames = read_video_or_image_into_frames_BCTHW(
-        input_video_path,
+        input_image_or_video_path,
         input_path_format=input_path_format,
         H=H,
         W=W,
     )
+    if model.config.conditioner.video_cond_bool.condition_location == "first_and_last_1":
+        start_frame = frame_index * frame_stride
+        end_frame = (frame_index + 1) * frame_stride
+        curr_input_frames = torch.cat(
+            [input_frames[:, :, start_frame : start_frame + 1], input_frames[:, :, end_frame : end_frame + 1]], dim=2
+        ).contiguous()  # BCTHW
+        num_of_latent_condition = 1
+        num_frames_condition = compute_num_frames_condition(
+            model, num_of_latent_condition, downsample_factor=model.tokenizer.temporal_compression_factor
+        )
 
-    condition_latent, _ = create_condition_latent_from_input_frames(model, input_frames, num_input_frames)
+        condition_latent, _ = create_condition_latent_from_input_frames(model, curr_input_frames, num_frames_condition)
+        condition_latent = condition_latent.to(torch.bfloat16)
+        return condition_latent
+    input_frames = input_frames[:, :, start_frame:, :, :]
+    condition_latent, _ = create_condition_latent_from_input_frames(
+        model, input_frames, num_input_frames, from_back=from_back
+    )
     condition_latent = condition_latent.to(torch.bfloat16)
 
     return condition_latent

@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 from typing import Callable, Dict, Tuple, Union
 
 import torch
@@ -20,7 +21,7 @@ from einops import rearrange
 from megatron.core import parallel_state
 from torch import Tensor
 
-from cosmos_transfer1.diffusion.conditioner import DataType, VideoExtendCondition
+from cosmos_transfer1.diffusion.conditioner import DataType, VideoExtendCondition, ViewConditionedVideoExtendCondition
 from cosmos_transfer1.diffusion.config.base.conditioner import VideoCondBoolConfig
 from cosmos_transfer1.diffusion.functional.batch_ops import batch_mul
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
@@ -31,6 +32,7 @@ from cosmos_transfer1.diffusion.training.models.extend_model import (
 )
 from cosmos_transfer1.diffusion.training.models.model import DiffusionModel, broadcast_condition
 from cosmos_transfer1.diffusion.training.models.model_image import CosmosCondition, diffusion_fsdp_class_decorator
+from cosmos_transfer1.diffusion.training.models.model_multiview import deepcopy_no_copy_model
 from cosmos_transfer1.utils import log
 
 
@@ -96,6 +98,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
         sigma: Tensor,
         condition: VideoExtendCondition,
         condition_video_augment_sigma_in_inference: float = 0.001,
+        seed_inference: int = 1,
     ) -> VideoDenoisePrediction:
         """
         Denoise the noisy input tensor.
@@ -122,6 +125,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             assert (
                 condition.gt_latent is not None
             ), f"find None gt_latent in condition, likely didn't call self.add_condition_video_indicator_and_video_input_mask when preparing the condition or this is a image batch but condition.data_type is wrong, get {noise_x.shape}"
+            condition = deepcopy_no_copy_model(condition)
             gt_latent = condition.gt_latent
             cfg_video_cond_bool: VideoCondBoolConfig = self.config.conditioner.video_cond_bool
 
@@ -132,7 +136,12 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
 
             # Augment the latent with different sigma value, and add the augment_sigma to the condition object if needed
             condition, augment_latent = self.augment_conditional_latent_frames(
-                condition, cfg_video_cond_bool, condition_latent, condition_video_augment_sigma_in_inference, sigma
+                condition,
+                cfg_video_cond_bool,
+                condition_latent,
+                condition_video_augment_sigma_in_inference,
+                sigma,
+                seed_inference,
             )
             condition_video_indicator = condition.condition_video_indicator  # [B, 1, T, 1, 1]
             if parallel_state.get_context_parallel_world_size() > 1:
@@ -143,7 +152,10 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
                 )
                 augment_latent = rearrange(augment_latent, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
                 gt_latent = rearrange(gt_latent, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
-
+                if getattr(condition, "view_indices_B_T", None) is not None:
+                    view_indices_B_V_T = rearrange(condition.view_indices_B_T, "B (V T) -> (B V) T", V=self.n_views)
+                    view_indices_B_V_T = split_inputs_cp(view_indices_B_V_T, seq_dim=1, cp_group=cp_group)
+                    condition.view_indices_B_T = rearrange(view_indices_B_V_T, "(B V) T -> B (V T)", V=self.n_views)
                 condition_video_indicator = split_inputs_cp(condition_video_indicator, seq_dim=2, cp_group=cp_group)
                 augment_latent = split_inputs_cp(augment_latent, seq_dim=2, cp_group=cp_group)
                 gt_latent = split_inputs_cp(gt_latent, seq_dim=2, cp_group=cp_group)
@@ -221,6 +233,130 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             num_condition_t = torch.randint(0, num_condition_t_max + 1, (1,)).item()
             condition_video_indicator[:, :, :num_condition_t] += 1.0
 
+        elif self.config.conditioner.video_cond_bool.condition_location == "first_cam":
+            # condition on first cam
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "(B V) C T H W -> B V C T H W", V=self.n_views
+            )
+            condition_video_indicator[:, 0, :, :, :, :] += 1.0
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "B V C T H W  -> (B V) C T H W", V=self.n_views
+            )
+        elif self.config.conditioner.video_cond_bool.condition_location == "any_cam":
+            # condition on any n camera
+            n_cond_view = torch.randint(
+                self.config.conditioner.video_cond_bool.n_cond_view_min,
+                self.config.conditioner.video_cond_bool.n_cond_view_max + 1,
+                (1,),
+            ).item()
+            vids = torch.randperm(self.n_views)
+            cond_vids = vids[:n_cond_view]
+
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "(B V) C T H W -> B V C T H W", V=self.n_views
+            )
+
+            for vidx in cond_vids:
+                condition_video_indicator[:, vidx.item(), :, :, :, :] += 1.0
+            condition_video_indicator = torch.clamp(condition_video_indicator, 0, 1)
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "B V C T H W  -> (B V) C T H W", V=self.n_views
+            )
+        elif self.config.conditioner.video_cond_bool.condition_location == "any_cam_and_random_n":
+            # condition on any n camera
+            n_cond_view = torch.randint(
+                self.config.conditioner.video_cond_bool.n_cond_view_min,
+                self.config.conditioner.video_cond_bool.n_cond_view_max + 1,
+                (1,),
+            ).item()
+            vids = torch.randperm(self.n_views)
+            cond_vids = vids[:n_cond_view]
+
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "(B V) C T H W -> B V C T H W", V=self.n_views
+            )
+
+            for vidx in cond_vids:
+                condition_video_indicator[:, vidx.item(), :, :, :, :] += 1.0
+            # condition_video_indicator = torch.clamp(condition_video_indicator, 0, 1)
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "B V C T H W  -> (B V) C T H W", V=self.n_views
+            )
+
+            num_condition_t_max = self.config.conditioner.video_cond_bool.first_random_n_num_condition_t_max
+            assert (
+                num_condition_t_max <= T
+            ), f"num_condition_t_max should be less than T, get {num_condition_t_max}, {T}"
+            num_condition_t = torch.randint(0, num_condition_t_max + 1, (1,)).item()
+            condition_video_indicator[:, :, :num_condition_t] += 1.0
+            condition_video_indicator = condition_video_indicator.clamp(max=1.0)
+        elif self.config.conditioner.video_cond_bool.condition_location.startswith("fixed_cam_and_first_n"):
+            # condition on a list of cameras specified through the string
+            cond_vids = [int(c) for c in self.config.conditioner.video_cond_bool.condition_location.split("_")[5:]]
+
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "(B V) C T H W -> B V C T H W", V=self.n_views
+            )
+
+            for vidx in cond_vids:
+                condition_video_indicator[:, vidx, :, :, :, :] += 1.0
+            condition_video_indicator = torch.clamp(condition_video_indicator, 0, 1)
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "B V C T H W  -> (B V) C T H W", V=self.n_views
+            )
+            log.info(
+                f"condition_location fixed_cam_and_first_n, num_condition_t {num_condition_t}, condition.video_cond_bool {condition.video_cond_bool}"
+            )
+            condition_video_indicator[:, :, :num_condition_t] += 1.0
+            condition_video_indicator = condition_video_indicator.clamp(max=1.0)
+
+        elif self.config.conditioner.video_cond_bool.condition_location.startswith("fixed_cam"):
+            # condition on a list of cameras specified through the string
+            cond_vids = [int(c) for c in self.config.conditioner.video_cond_bool.condition_location.split("_")[2:]]
+
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "(B V) C T H W -> B V C T H W", V=self.n_views
+            )
+
+            for vidx in cond_vids:
+                condition_video_indicator[:, vidx, :, :, :, :] += 1.0
+            condition_video_indicator = torch.clamp(condition_video_indicator, 0, 1)
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "B V C T H W  -> (B V) C T H W", V=self.n_views
+            )
+        elif self.config.conditioner.video_cond_bool.condition_location == "first_cam_and_random_n":
+            # condition on first cam
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "(B V) C T H W -> B V C T H W", V=self.n_views
+            )
+            condition_video_indicator[:, 0, :, :, :, :] += 1.0
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "B V C T H W  -> (B V) C T H W", V=self.n_views
+            )
+            # and condition on first few cams
+            num_condition_t_max = self.config.conditioner.video_cond_bool.first_random_n_num_condition_t_max
+            assert (
+                num_condition_t_max <= T
+            ), f"num_condition_t_max should be less than T, get {num_condition_t_max}, {T}"
+            num_condition_t = torch.randint(0, num_condition_t_max + 1, (1,)).item()
+            condition_video_indicator[:, :, :num_condition_t] += 1.0
+            condition_video_indicator = condition_video_indicator.clamp(max=1.0)
+        elif self.config.conditioner.video_cond_bool.condition_location == "first_cam_and_first_n":
+            # condition on first cam
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "(B V) C T H W -> B V C T H W", V=self.n_views
+            )
+            condition_video_indicator[:, 0, :, :, :, :] += 1.0
+            condition_video_indicator = rearrange(
+                condition_video_indicator, "B V C T H W  -> (B V) C T H W", V=self.n_views
+            )
+            assert num_condition_t is not None, "num_condition_t should be provided"
+            assert num_condition_t <= T, f"num_condition_t should be less than T, get {num_condition_t}, {T}"
+            log.info(
+                f"condition_location first_cam_and_first_n, num_condition_t {num_condition_t}, condition.video_cond_bool {condition.video_cond_bool}"
+            )
+            condition_video_indicator[:, :, :num_condition_t] += 1.0
+            condition_video_indicator = condition_video_indicator.clamp(max=1.0)
         else:
             raise NotImplementedError(
                 f"condition_location {self.config.conditioner.video_cond_bool.condition_location} not implemented; training={self.training}"
@@ -266,7 +402,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
         num_condition_t: Union[int, None] = None,
         condition_video_augment_sigma_in_inference: float = None,
         add_input_frames_guidance: bool = False,
-        guidance_other: Union[float, None] = None,
+        seed_inference: int = 1,
     ) -> Callable:
         """
         Generates a callable function `x0_fn` based on the provided data batch and guidance factor.
@@ -314,50 +450,21 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             uncondition = broadcast_condition(uncondition, to_tp=True, to_cp=to_cp)
         else:
             assert not to_cp, "parallel_state is not initialized, context parallel should be turned off."
-        if guidance_other is not None:  # and guidance_other != guidance:
-            import copy
 
-            assert not parallel_state.is_initialized(), "Parallel state not supported with two guidances."
-            condition_other = copy.deepcopy(uncondition)
-            condition_other.trajectory = condition.trajectory
-
-            def x0_fn(noise_x: torch.Tensor, sigma: torch.Tensor) -> torch.Tensor:
-                cond_x0 = self.denoise(
-                    noise_x,
-                    sigma,
-                    condition,
-                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                ).x0_pred_replaced
-                uncond_x0 = self.denoise(
-                    noise_x,
-                    sigma,
-                    uncondition,
-                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                ).x0_pred_replaced
-                cond_other_x0 = self.denoise(
-                    noise_x,
-                    sigma,
-                    condition_other,
-                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                ).x0_pred_replaced
-                return cond_x0 + guidance * (cond_x0 - uncond_x0) + guidance_other * (cond_other_x0 - uncond_x0)
-
-        else:
-
-            def x0_fn(noise_x: torch.Tensor, sigma: torch.Tensor) -> torch.Tensor:
-                cond_x0 = self.denoise(
-                    noise_x,
-                    sigma,
-                    condition,
-                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                ).x0_pred_replaced
-                uncond_x0 = self.denoise(
-                    noise_x,
-                    sigma,
-                    uncondition,
-                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                ).x0_pred_replaced
-                return cond_x0 + guidance * (cond_x0 - uncond_x0)
+        def x0_fn(noise_x: torch.Tensor, sigma: torch.Tensor) -> torch.Tensor:
+            cond_x0 = self.denoise(
+                noise_x,
+                sigma,
+                condition,
+                condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+            ).x0_pred_replaced
+            uncond_x0 = self.denoise(
+                noise_x,
+                sigma,
+                uncondition,
+                condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+            ).x0_pred_replaced
+            return cond_x0 + guidance * (cond_x0 - uncond_x0)
 
         return x0_fn
 
@@ -374,8 +481,8 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
         num_condition_t: Union[int, None] = None,
         condition_video_augment_sigma_in_inference: float = None,
         add_input_frames_guidance: bool = False,
-        guidance_other: Union[float, None] = None,
-    ) -> Tensor:
+        return_noise: bool = False,
+    ) -> Tensor | Tuple[Tensor, Tensor]:
         """
         Generate samples from the batch. Based on given batch, it will automatically determine whether to generate image or video samples.
         Different from the base model, this function support condition latent as input, it will create a differnt x0_fn if condition latent is given.
@@ -420,7 +527,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             num_condition_t=num_condition_t,
             condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
             add_input_frames_guidance=add_input_frames_guidance,
-            guidance_other=guidance_other,
+            seed_inference=seed,  # Use for noise of augment sigma
         )
 
         generator = torch.Generator(device=self.tensor_kwargs["device"])
@@ -439,7 +546,35 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             samples = rearrange(samples, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
             samples = rearrange(samples, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
+
+        if return_noise:
+            if self.net.is_context_parallel_enabled:
+                x_sigma_max = rearrange(x_sigma_max, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
+                x_sigma_max = cat_outputs_cp(x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
+                x_sigma_max = rearrange(x_sigma_max, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
+            return samples, x_sigma_max / self.sde.sigma_max
+
         return samples
+
+    def get_data_and_condition(
+        self, data_batch: dict[str, Tensor], num_condition_t: Union[int, None] = None
+    ) -> Tuple[Tensor, Tensor, ViewConditionedVideoExtendCondition]:
+        if self.config.conditioner.video_cond_bool.sample_tokens_start_from_p_or_i:
+            raise NotImplementedError(
+                "sample_tokens_start_from_p_or_i is not implemented for multiview extension diffusion model"
+            )
+        raw_state, latent_state, condition = super().get_data_and_condition(data_batch, num_condition_t=num_condition_t)
+        if condition.data_type == DataType.VIDEO and "view_indices" in data_batch:
+            comp_factor = self.vae.temporal_compression_factor
+            # n_frames = data_batch['num_frames']
+            view_indices = rearrange(data_batch["view_indices"], "B (V T) -> B V T", V=self.n_views)
+            view_indices_B_V_0 = view_indices[:, :, :1]
+            view_indices_B_V_1T = view_indices[:, :, 1:-1:comp_factor]
+            view_indices_B_V_T = torch.cat([view_indices_B_V_0, view_indices_B_V_1T], dim=-1)
+            condition.view_indices_B_T = rearrange(view_indices_B_V_T, "B V T -> B (V T)", V=self.n_views)
+            condition.data_n_views = self.n_views
+            log.debug(f"condition.data_n_views {self.n_views}")
+        return raw_state, latent_state, condition
 
 
 @diffusion_fsdp_class_decorator
