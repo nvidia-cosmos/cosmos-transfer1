@@ -330,9 +330,13 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         else:
             for _, spec in self.control_inputs.items():
                 log.info(f"Loading ctrl model from ckpt_path: {spec['ckpt_path']}")
-                net_state_dict = torch.load(
-                    f"{self.checkpoint_dir}/{spec['ckpt_path']}", map_location="cpu", weights_only=False
-                )  # , weights_only=True)
+
+                if os.path.exists(spec["ckpt_path"]):
+                    net_state_dict = torch.load(spec["ckpt_path"], map_location="cpu", weights_only=False)
+                else:
+                    net_state_dict = torch.load(
+                        f"{self.checkpoint_dir}/{spec['ckpt_path']}", map_location="cpu", weights_only=False
+                    )
                 non_strict_load_model(self.model.model, net_state_dict)
 
         if self.process_group is not None:
