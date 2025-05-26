@@ -74,7 +74,7 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             state_dict = torch.load(checkpoint_path, map_location=lambda storage, loc: storage, weights_only=False)
             log.success(f"Complete loading base model checkpoint (local): {checkpoint_path}")
 
-            if "ema" in state_dict:
+            if "ema" in state_dict and state_dict["ema"] is not None:
                 # Copy the base model weights from ema model.
                 log.info("Copying ema to base model")
                 base_state_dict = {k.replace("-", "."): v for k, v in state_dict["ema"].items()}
