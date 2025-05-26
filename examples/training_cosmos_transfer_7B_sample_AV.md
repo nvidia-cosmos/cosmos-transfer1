@@ -9,14 +9,14 @@ The model is trained separately for each control input type.
 ## Model Support Matrix
 We support the following Cosmos-Transfer1-Sample-AV models for pre-training and post-training. Review the available models and their compute requirements for training to determine the best model for your use case. We use Tensor Parallel of size 8 for training.
 
-| Model Name                                                          | Model Status | Compute Requirements for Post-Training |
-|---------------------------------------------------------------------|--------------|----------------------------------------|
-| Cosmos-Transfer1-7B-Sample-AV [Lidar]                               | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-Sample-AV [HDMap]                               | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV-Text2World [Lidar]  | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV-Text2World [HDMap]  | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV-Video2World [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV-Video2World [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
+| Model Name                                                        | Model Status | Compute Requirements for Post-Training |
+|-------------------------------------------------------------------|--------------|----------------------------------------|
+| Cosmos-Transfer1-7B-Sample-AV [Lidar]                             | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-Sample-AV [HDMap]                             | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_model [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_model [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/v2w_model [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/v2w_model [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
 
 **\*** 80GB GPU memory required for training. `H100-80GB` or `A100-80GB` GPUs are recommended.
 
