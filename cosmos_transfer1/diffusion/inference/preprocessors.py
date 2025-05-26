@@ -60,7 +60,7 @@ class Preprocessors:
                         binarize_video=True,
                     )
                     control_input["control_weight"] = out_tensor
-                if len(regional_prompts):
+                if regional_prompts and len(regional_prompts):
                     for i, regional_prompt in enumerate(regional_prompts):
                         log.info(f"generating regional context for {regional_prompt}")
                         if "mask_prompt" in regional_prompt:
