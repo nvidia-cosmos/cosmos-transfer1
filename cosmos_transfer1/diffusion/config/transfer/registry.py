@@ -20,8 +20,9 @@ from cosmos_transfer1.diffusion.config.transfer.conditioner import (
     CTRL_HINT_KEYS,
     BaseVideoConditionerWithCtrlConfig,
     VideoConditionerFpsSizePaddingWithCtrlConfig,
+    ViewConditionedVideoConditionerFpsSizePaddingWithCtrlConfig,
 )
-from cosmos_transfer1.diffusion.config.transfer.net_ctrl import FADITV2EncoderConfig
+from cosmos_transfer1.diffusion.config.transfer.net_ctrl import FADITV2EncoderConfig, FADITV2MultiCamEncoderConfig
 
 
 def register_experiment_ctrlnet(cs):
@@ -32,6 +33,7 @@ def register_experiment_ctrlnet(cs):
     # but current naming is the same as the full DiT in the main 'net' group that's defined
     # in cosmos_transfer1/diffusion/config/registry.py. Isn't an error but could be confusing.
     cs.store(group="net_ctrl", package="model.net_ctrl", name="faditv2_7b", node=FADITV2EncoderConfig)
+    cs.store(group="net_ctrl", package="model.net_ctrl", name="faditv2_7b_mv", node=FADITV2MultiCamEncoderConfig)
 
     cs.store(group="conditioner", package="model.conditioner", name="ctrlnet", node=BaseVideoConditionerWithCtrlConfig)
     cs.store(
@@ -39,6 +41,12 @@ def register_experiment_ctrlnet(cs):
         package="model.conditioner",
         name="ctrlnet_add_fps_image_size_padding_mask",
         node=VideoConditionerFpsSizePaddingWithCtrlConfig,
+    )
+    cs.store(
+        group="conditioner",
+        package="model.conditioner",
+        name="view_cond_ctrlnet_add_fps_image_size_padding_mask",
+        node=ViewConditionedVideoConditionerFpsSizePaddingWithCtrlConfig,
     )
     for hint_key in CTRL_HINT_KEYS:
         cs.store(

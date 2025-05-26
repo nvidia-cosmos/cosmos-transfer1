@@ -106,6 +106,19 @@ class TextAttr(BaseConditionEntry):
         return super().random_dropout_input(in_tensor, dropout_rate, key)
 
 
+class FrameRepeatAttr(BaseConditionEntry):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, frame_repeat: torch.Tensor) -> Dict[str, torch.Tensor]:
+        return {
+            "frame_repeat": frame_repeat / 10.0,
+        }
+
+    def details(self) -> str:
+        return "Frame repeat, Output key: [frame_repeat]"
+
+
 @dataclass
 class BaseVideoCondition:
     crossattn_emb: torch.Tensor
@@ -343,6 +356,14 @@ class BaseWithCtrlCondition(VideoExtendCondition):
     num_layers_to_use: Optional[int] = -1
 
 
+@dataclass
+class ViewConditionedWithCtrlCondition(BaseWithCtrlCondition):
+    # view index indicating camera, used to index nn.Embedding
+    view_indices_B_T: Optional[torch.Tensor] = None
+    # number of cameras in this cond data
+    data_n_views: Optional[int] = -1
+
+
 class VideoConditionerWithCtrl(VideoExtendConditioner):
     def forward(
         self,
@@ -356,3 +377,18 @@ class VideoConditionerWithCtrl(VideoExtendConditioner):
         if "num_layers_to_use" in batch:
             output["num_layers_to_use"] = batch["num_layers_to_use"]
         return BaseWithCtrlCondition(**output)
+
+
+class ViewConditionedVideoConditionerWithCtrl(VideoConditionerWithCtrl):
+    def forward(
+        self,
+        batch: Dict,
+        override_dropout_rate: Optional[Dict[str, float]] = None,
+    ) -> ViewConditionedWithCtrlCondition:
+        output = super()._forward(batch, override_dropout_rate)
+        output["hint_key"] = batch["hint_key"]
+        if "control_weight" in batch:
+            output["control_weight"] = batch["control_weight"]
+        if "num_layers_to_use" in batch:
+            output["num_layers_to_use"] = batch["num_layers_to_use"]
+        return ViewConditionedWithCtrlCondition(**output)

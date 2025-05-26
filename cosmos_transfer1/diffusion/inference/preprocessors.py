@@ -19,6 +19,7 @@ import os
 from cosmos_transfer1.auxiliary.depth_anything.model.depth_anything import DepthAnythingModel
 from cosmos_transfer1.auxiliary.human_keypoint.human_keypoint import HumanKeypointModel
 from cosmos_transfer1.auxiliary.sam2.sam2_model import VideoSegmentationModel
+from cosmos_transfer1.diffusion.inference.inference_utils import valid_hint_keys
 from cosmos_transfer1.utils import log
 
 
@@ -30,33 +31,34 @@ class Preprocessors:
 
     def __call__(self, input_video, input_prompt, control_inputs, output_folder):
         for hint_key in control_inputs:
-            if hint_key in ["depth", "seg", "keypoint"]:
-                self.gen_input_control(input_video, input_prompt, hint_key, control_inputs[hint_key], output_folder)
+            if hint_key in valid_hint_keys:
+                if hint_key in ["depth", "seg", "keypoint"]:
+                    self.gen_input_control(input_video, input_prompt, hint_key, control_inputs[hint_key], output_folder)
 
-            # for all hints we need to create weight tensor if not present
-            control_input = control_inputs[hint_key]
+                # for all hints we need to create weight tensor if not present
+                control_input = control_inputs[hint_key]
 
-            # For each control input modality, compute a spatiotemporal weight tensor as long as
-            # the user provides "control_weight_prompt". The object specified in the
-            # control_weight_prompt will be treated as foreground and have control_weight for these locations.
-            # Everything else will be treated as background and have control weight 0 at those locations.
-            if control_input.get("control_weight_prompt", None) is not None:
-                prompt = control_input["control_weight_prompt"]
-                log.info(f"{hint_key}: generating control weight tensor with SAM using {prompt=}")
-                out_tensor = os.path.join(output_folder, f"{hint_key}_control_weight.pt")
-                out_video = os.path.join(output_folder, f"{hint_key}_control_weight.mp4")
-                weight_scaler = (
-                    control_input["control_weight"] if isinstance(control_input["control_weight"], float) else 1.0
-                )
-                self.segmentation(
-                    in_video=input_video,
-                    out_tensor=out_tensor,
-                    out_video=out_video,
-                    prompt=prompt,
-                    weight_scaler=weight_scaler,
-                    binarize_video=True,
-                )
-                control_input["control_weight"] = out_tensor
+                # For each control input modality, compute a spatiotemporal weight tensor as long as
+                # the user provides "control_weight_prompt". The object specified in the
+                # control_weight_prompt will be treated as foreground and have control_weight for these locations.
+                # Everything else will be treated as background and have control weight 0 at those locations.
+                if control_input.get("control_weight_prompt", None) is not None:
+                    prompt = control_input["control_weight_prompt"]
+                    log.info(f"{hint_key}: generating control weight tensor with SAM using {prompt=}")
+                    out_tensor = os.path.join(output_folder, f"{hint_key}_control_weight.pt")
+                    out_video = os.path.join(output_folder, f"{hint_key}_control_weight.mp4")
+                    weight_scaler = (
+                        control_input["control_weight"] if isinstance(control_input["control_weight"], float) else 1.0
+                    )
+                    self.segmentation(
+                        in_video=input_video,
+                        out_tensor=out_tensor,
+                        out_video=out_video,
+                        prompt=prompt,
+                        weight_scaler=weight_scaler,
+                        binarize_video=True,
+                    )
+                    control_input["control_weight"] = out_tensor
         return control_inputs
 
     def gen_input_control(self, in_video, in_prompt, hint_key, control_input, output_folder):

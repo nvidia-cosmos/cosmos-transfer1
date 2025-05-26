@@ -30,3 +30,4 @@ class CtrlModelConfig(DefaultModelConfig):
     num_control_blocks: int = 3
     random_drop_control_blocks: bool = False
     pixel_corruptor: LazyDict = None
+    n_views: int = 1

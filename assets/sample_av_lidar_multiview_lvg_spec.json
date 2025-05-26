@@ -1,0 +1,14 @@
+{
+    "lidar": {
+        "control_weight": 0,
+        "input_control": [
+            "assets/sample_av_mv_input_lidar_front.mp4",
+            "assets/sample_av_mv_input_lidar_front_left.mp4",
+            "assets/sample_av_mv_input_lidar_front_right.mp4",
+            "assets/sample_av_mv_input_lidar_rear.mp4",
+            "assets/sample_av_mv_input_lidar_rear_left.mp4",
+            "assets/sample_av_mv_input_lidar_rear_right.mp4"
+        ],
+        "ckpt_path": "nvidia/Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/v2w_lidar_control.pt"
+    }
+}

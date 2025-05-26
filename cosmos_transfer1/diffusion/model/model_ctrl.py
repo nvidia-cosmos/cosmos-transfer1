@@ -213,12 +213,12 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
 
         condition.video_cond_bool = True
         condition = self.add_condition_video_indicator_and_video_input_mask(
-            condition_latent[:1], condition, num_condition_t
+            condition_latent, condition, num_condition_t
         )
 
         uncondition.video_cond_bool = True  # Not do cfg on condition frames
         uncondition = self.add_condition_video_indicator_and_video_input_mask(
-            condition_latent[:1], uncondition, num_condition_t
+            condition_latent, uncondition, num_condition_t
         )
 
         # Add extra conditions for ctrlnet.
@@ -250,6 +250,7 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             self.model.net.hint_encoders = self.hint_encoders
 
         def x0_fn(noise_x: torch.Tensor, sigma: torch.Tensor):
+            B = noise_x.shape[0]  # Batch dimension
             w, h = target_w, target_h
             n_img_w = (w - 1) // patch_w + 1
             n_img_h = (h - 1) // patch_h + 1
@@ -262,38 +263,32 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
                 overlap_size_h = (n_img_h * patch_h - h) // (n_img_h - 1)
                 assert n_img_h * patch_h - overlap_size_h * (n_img_h - 1) == h
 
-            batch_images = noise_x
-            batch_sigma = sigma
-            output = []
-            for idx, cur_images in enumerate(batch_images):
-                noise_x = cur_images.unsqueeze(0)
-                sigma = batch_sigma[idx : idx + 1]
-                condition.gt_latent = condition_latent[idx : idx + 1]
-                uncondition.gt_latent = condition_latent[idx : idx + 1]
-                setattr(condition, hint_key, latent_hint[idx : idx + 1])
-                if getattr(uncondition, hint_key) is not None:
-                    setattr(uncondition, hint_key, latent_hint[idx : idx + 1])
+            condition.gt_latent = condition_latent
+            uncondition.gt_latent = condition_latent
+            setattr(condition, hint_key, latent_hint)
+            if getattr(uncondition, hint_key) is not None:
+                setattr(uncondition, hint_key, latent_hint)
 
-                cond_x0 = self.denoise(
-                    noise_x,
-                    sigma,
-                    condition,
-                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                    seed=seed,
-                ).x0_pred_replaced
-                uncond_x0 = self.denoise(
-                    noise_x,
-                    sigma,
-                    uncondition,
-                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                    seed=seed,
-                ).x0_pred_replaced
-                x0 = cond_x0 + guidance * (cond_x0 - uncond_x0)
-                output.append(x0)
-            output = rearrange(torch.stack(output), "(n t) b ... -> (b n t) ...", n=n_img_h, t=n_img_w)
-            final_output = merge_patches_into_video(output, overlap_size_h, overlap_size_w, n_img_h, n_img_w)
-            final_output = split_video_into_patches(final_output, patch_h, patch_w)
-            return final_output
+            # Batch denoising
+            cond_x0 = self.denoise(
+                noise_x,
+                sigma,
+                condition,
+                condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+                seed=seed,
+            ).x0_pred_replaced
+
+            uncond_x0 = self.denoise(
+                noise_x,
+                sigma,
+                uncondition,
+                condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+                seed=seed,
+            ).x0_pred_replaced
+            x0 = cond_x0 + guidance * (cond_x0 - uncond_x0)
+
+            merged = merge_patches_into_video(x0, overlap_size_h, overlap_size_w, n_img_h, n_img_w)
+            return split_video_into_patches(merged, patch_h, patch_w)
 
         return x0_fn
 

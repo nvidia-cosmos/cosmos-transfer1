@@ -81,6 +81,12 @@ MD5_CHECKSUM_LOOKUP = {
     f"{checkpoints.COSMOS_UPSAMPLER_CHECKPOINT}/consolidated.safetensors": "d06e6366e003126dcb351ce9b8bf3701",
     f"{checkpoints.COSMOS_GUARDRAIL_CHECKPOINT}/video_content_safety_filter/safety_filter.pt": "b46dc2ad821fc3b0d946549d7ade19cf",
     f"{checkpoints.LLAMA_GUARD_3_MODEL_CHECKPOINT}/model-00001-of-00004.safetensors": "5748060ae47b335dc19263060c921a54",
+    checkpoints.SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "4f8a4340d48ebedaa9e7bab772e0203d",
+    checkpoints.SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "89b82db1bc1dc859178154f88b6ca0f2",
+    checkpoints.SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "a9592d232a7e5f7971f39918c18eaae0",
+    checkpoints.SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "cb27af88ec7fb425faec32f4734d99cf",
+    checkpoints.BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "a3fb13e8418d8bb366b58e4092bd91df",
+    checkpoints.BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "48b2080ca5be66c05fac44dea4989a04",
 }
 
 
@@ -100,7 +106,6 @@ def get_md5_checksum(output_dir, model_name):
             if file_md5 != value:
                 print(f"MD5 checksum of checkpoint {key} does not match.")
                 return False
-    print(f"Model checkpoints for {model_name} exist with matched MD5 checksums.")
     return True
 
 
@@ -129,7 +134,10 @@ def main():
             ]:
                 if args.model == "7b" and name == "COSMOS_TRANSFER1_7B_CHECKPOINT":
                     checkpoint_vars.append(obj)
-                elif args.model == "7b_av" and name == "COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT":
+                elif args.model == "7b_av" and name in [
+                    "COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT",
+                    "COSMOS_TRANSFER1_7B_MV_SAMPLE_AV_CHECKPOINT",
+                ]:
                     checkpoint_vars.append(obj)
             else:
                 checkpoint_vars.append(obj)

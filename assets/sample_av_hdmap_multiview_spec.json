@@ -1,0 +1,14 @@
+{
+    "hdmap": {
+        "control_weight": 1,
+        "input_control": [
+            "assets/sample_av_mv_input_hdmap_front.mp4",
+            "assets/sample_av_mv_input_hdmap_front_left.mp4",
+            "assets/sample_av_mv_input_hdmap_front_right.mp4",
+            "assets/sample_av_mv_input_hdmap_rear.mp4",
+            "assets/sample_av_mv_input_hdmap_rear_left.mp4",
+            "assets/sample_av_mv_input_hdmap_rear_right.mp4"
+        ],
+        "ckpt_path": "nvidia/Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_hdmap_control.pt"
+    }
+}
