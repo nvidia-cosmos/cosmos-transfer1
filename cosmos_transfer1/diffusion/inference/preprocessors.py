@@ -73,7 +73,7 @@ class Preprocessors:
                                 out_video=out_video,
                                 prompt=prompt,
                                 weight_scaler=1.0,
-                                legacy_mask=True
+                                legacy_mask=True,
                             )
                             if os.path.exists(out_tensor):
                                 regional_prompt["region_definitions_path"] = out_tensor

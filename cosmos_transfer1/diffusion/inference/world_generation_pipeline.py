@@ -18,8 +18,6 @@ from typing import List, Optional, Union
 
 import cv2
 import einops
-from cosmos_transfer1.diffusion.module.parallel import broadcast
-from cosmos_transfer1.utils.regional_prompting_utils import prepare_regional_prompts
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -464,7 +462,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         assert len(control_inputs_list) == B, "Batch size mismatch for control_inputs_list"
 
         log.info("Starting data augmentation")
-        
+
         # Process regional prompts if provided
         log.info(f"regional_prompts passed to _run_model: {self.regional_prompts}")
         log.info(f"region_definitions passed to _run_model: {self.region_definitions}")
