@@ -21,7 +21,7 @@ from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from megatron.core import parallel_state
 from torch import nn
-from transformer_engine.pytorch.attention import apply_rotary_pos_emb
+from transformer_engine.pytorch.attention.rope import apply_rotary_pos_emb
 
 from cosmos_transfer1.diffusion.training.modules.attention import Attention, GPT2FeedForward
 from cosmos_transfer1.diffusion.training.tensor_parallel import gather_along_first_dim
