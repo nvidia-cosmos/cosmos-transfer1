@@ -485,12 +485,6 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 compression_factor=self.model.tokenizer.spatial_compression_factor,
             )
 
-        log.info(f"regional_contexts: {regional_contexts}")
-        log.info(f"region_masks: {region_masks}")
-        if regional_contexts is not None:
-            data_batch["regional_contexts"] = regional_contexts
-            data_batch["region_masks"] = region_masks
-
         # Get video batch and state shape
         data_batch, state_shape = get_batched_ctrl_batch(
             model=self.model,
@@ -505,6 +499,10 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             blur_strength=self.blur_strength,
             canny_threshold=self.canny_threshold,
         )
+
+        if regional_contexts is not None:
+            data_batch["regional_contexts"] = regional_contexts
+            data_batch["region_masks"] = region_masks
 
         log.info("Completed data augmentation")
 
