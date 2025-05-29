@@ -166,6 +166,12 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Offload prompt upsampler model after inference",
     )
+    parser.add_argument(
+        "--waymo_example",
+        type=bool,
+        default=False,
+        help="Whether to use waymo example",
+    )
 
     cmd_args = parser.parse_args()
 
@@ -271,14 +277,24 @@ def demo(cfg, control_inputs):
         device_rank = distributed.get_rank(process_group)
 
     preprocessors = Preprocessors()
-    prompts = [
-        cfg.prompt,
-        cfg.prompt_left,
-        cfg.prompt_right,
-        cfg.prompt_back,
-        cfg.prompt_back_left,
-        cfg.prompt_back_right,
-    ]
+
+    if cfg.waymo_example:
+        prompts = [
+            cfg.prompt,
+            cfg.prompt_left,
+            cfg.prompt_right,
+            cfg.prompt_back_left,
+            cfg.prompt_back_right,
+        ]   
+    else:
+        prompts = [
+            cfg.prompt,
+            cfg.prompt_left,
+            cfg.prompt_right,
+            cfg.prompt_back,
+            cfg.prompt_back_left,
+            cfg.prompt_back_right,
+        ]
 
     if cfg.initial_condition_video:
         cfg.is_lvg_model = True
@@ -308,6 +324,7 @@ def demo(cfg, control_inputs):
         width=1024,
         is_lvg_model=cfg.is_lvg_model,
         n_clip_max=cfg.n_clip_max,
+        waymo_example=cfg.waymo_example,
     )
 
     os.makedirs(cfg.video_save_folder, exist_ok=True)

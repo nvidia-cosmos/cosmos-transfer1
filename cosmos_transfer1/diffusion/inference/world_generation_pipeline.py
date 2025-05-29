@@ -41,6 +41,7 @@ from cosmos_transfer1.checkpoints import (
     SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.inference.inference_utils import (
     detect_aspect_ratio,
@@ -86,6 +87,7 @@ MODEL_NAME_DICT = {
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_sv2mv_v2w_57frames_control_input_hdmap_block3",
     SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_block3",
     SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_lidar_block3",
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_waymo_block3",
 }
 MODEL_CLASS_DICT = {
     BASE_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
@@ -104,6 +106,7 @@ MODEL_CLASS_DICT = {
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: MultiVideoDiffusionModelWithCtrl,
     SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
 }
 
 from collections import defaultdict
@@ -136,6 +139,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         process_group: torch.distributed.ProcessGroup | None = None,
         regional_prompts: List[str] = None,
         region_definitions: Union[List[List[float]], torch.Tensor] = None,
+        waymo_example: bool = False,
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -162,6 +166,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             upsample_prompt: Whether to upsample prompts using prompt upsampler model
             offload_prompt_upsampler: Whether to offload prompt upsampler after use
             process_group: Process group for distributed training
+            waymo_example: Whether to use the waymo example post-training checkpoint
         """
         self.num_input_frames = num_input_frames
         self.control_inputs = control_inputs
@@ -177,6 +182,12 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         self.model_name = MODEL_NAME_DICT[checkpoint_name]
         self.model_class = MODEL_CLASS_DICT[checkpoint_name]
+
+        if waymo_example:
+            checkpoint_name = SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH
+            self.model_name = MODEL_NAME_DICT[checkpoint_name]
+            self.model_class = MODEL_CLASS_DICT[checkpoint_name]
+
         self.guidance = guidance
         self.num_steps = num_steps
         self.height = height
@@ -763,11 +774,18 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             np.ndarray: Decoded video frames as uint8 numpy array [T, H, W, C]
                         with values in range [0, 255]
         """
+
+        if self.model.n_views == 5:
+            video_arrangement = [1, 0, 2, 3, 0, 4]
+        elif self.model.n_views == 6:
+            video_arrangement = [1, 0, 2, 4, 3, 5]
+        else:
+            raise ValueError(f"Unsupported number of views: {self.model.n_views}")
         # Decode video
         video = (1.0 + self.model.decode(sample)).clamp(0, 2) / 2  # [B, 3, T, H, W]
         video_segments = einops.rearrange(video, "b c (v t) h w -> b c v t h w", v=self.model.n_views)
         grid_video = torch.stack(
-            [video_segments[:, :, i] for i in [1, 0, 2, 4, 3, 5]],
+            [video_segments[:, :, i] for i in video_arrangement],
             dim=2,
         )
         grid_video = einops.rearrange(grid_video, "b c (h w) t h1 w1 -> b c t (h h1) (w w1)", h=2, w=3)
@@ -895,7 +913,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             initial_condition_video = None
 
         data_batch = get_ctrl_batch_mv(
-            self.height, self.width, data_batch, total_T, control_inputs
+            self.height, self.width, data_batch, total_T, control_inputs,self.model.n_views,self.num_video_frames
         )  # multicontrol inputs are concatenated channel wise, [-1,1] range
 
         hint_key = data_batch["hint_key"]
@@ -1104,14 +1122,23 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         Returns:
 
         """
-        base_prompts = [
-            "The video is captured from a camera mounted on a car. The camera is facing forward. ",
-            "The video is captured from a camera mounted on a car. The camera is facing to the left. ",
-            "The video is captured from a camera mounted on a car. The camera is facing to the right. ",
-            "The video is captured from a camera mounted on a car. The camera is facing backwards. ",
-            "The video is captured from a camera mounted on a car. The camera is facing the rear left side. ",
-            "The video is captured from a camera mounted on a car. The camera is facing the rear right side. ",
-        ]
+        if n_views == 5:
+            base_prompts = [
+                "The video is captured from a camera mounted on a car. The camera is facing forward.",
+                "The video is captured from a camera mounted on a car. The camera is facing to the left.",
+                "The video is captured from a camera mounted on a car. The camera is facing to the right.",
+                "The video is captured from a camera mounted on a car. The camera is facing the rear left side.",
+                "The video is captured from a camera mounted on a car. The camera is facing the rear right side.",
+            ]
+        elif n_views == 6:
+            base_prompts = [
+                "The video is captured from a camera mounted on a car. The camera is facing forward.",
+                "The video is captured from a camera mounted on a car. The camera is facing to the left.",
+                "The video is captured from a camera mounted on a car. The camera is facing to the right.",
+                "The video is captured from a camera mounted on a car. The camera is facing backwards.",
+                "The video is captured from a camera mounted on a car. The camera is facing the rear left side.",
+                "The video is captured from a camera mounted on a car. The camera is facing the rear right side.",
+            ]
 
         log.info(f"Reading multiview prompts, found {len(mv_prompts)} splits")
         n = len(mv_prompts)
