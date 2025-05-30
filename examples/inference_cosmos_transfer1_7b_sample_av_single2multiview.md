@@ -123,3 +123,26 @@ Video extension is achieved by looping the Cosmos-Transfer1-Sample-AV-Single2Mul
 3. `--initial_condition_video` is the video generated in the first example using the `t2w` model.
 
 We also provide `lidar` controled examples that can be tested by modifying the `--controlnet_specs` to `assets/sample_av_lidar_multiview_spec.json` in the above commands.
+
+## Run Post-trained Example
+If you follow the post-training example in [Training README](./training_cosmos_transfer_7B_sample_AV.md), you will eventually end up with a waymo-style post-trained ckpt where there are 5 input and output views. The inference scirpt is a little bit different than the pre-trained 6 view model. We provided an example of running Cosmos-Transfer1-Sample-AV-Single2Multiview post-trained with waymo data. Here we provide multiview `hdmap` as conditioning, transferring virtual worlds demarcated by map elements to the real world.
+
+Ensure you are at the root of the repository before executing the following to launch `transfer_multiview.py` and configures the controlnets for inference according to `assets/sample_av_hdmap_multiview_waymo_spec.json`, the ckpt_path need to match your own post-trained ckpt :
+
+```bash
+#!/bin/bash
+export PROMPT="The video is captured from a camera mounted on a car. The camera is facing forward. The video captures a driving scene on a multi-lane highway during the day. The sky is clear and blue, indicating good weather conditions. The road is relatively busy with several cars and trucks in motion. A red sedan is driving in the left lane, followed by a black pickup truck in the right lane. The vehicles are maintaining a safe distance from each other. On the right side of the road, there are speed limit signs indicating a limit of 65 mph. The surrounding area includes a mix of greenery and industrial buildings, with hills visible in the distance. The overall environment appears to be a typical day on a highway with moderate traffic. The golden light of the late afternoon bathes the highway, casting long shadows and creating a warm, serene atmosphere. The sky is a mix of orange and blue, with the sun low on the horizon. The red sedan in the left lane reflects the golden hues, while the black pickup truck in the right lane casts a distinct shadow on the pavement. The speed limit signs stand out clearly under the fading sunlight. The surrounding greenery glows with a rich, warm tone, and the industrial buildings take on a softened appearance in the sunset."
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+export NUM_GPUS=1
+CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} cosmos_transfer1/diffusion/inference/transfer_multiview.py \
+--checkpoint_dir $CHECKPOINT_DIR \
+--video_save_name output_video \
+--video_save_folder outputs/sample_av_multiview_waymo \
+--offload_text_encoder_model \
+--guidance 3 \
+--controlnet_specs assets/sample_av_hdmap_multiview_spec.json --num_gpus ${NUM_GPUS} --num_steps 30 \
+--view_condition_video assets/sample_av_mv_input_rgb.mp4 \
+--prompt "$PROMPT"
+--waymo_example True
+```
