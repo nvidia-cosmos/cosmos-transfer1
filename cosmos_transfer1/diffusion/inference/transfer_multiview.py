@@ -105,7 +105,7 @@ def parse_arguments() -> argparse.Namespace:
         "--num_input_frames",
         type=int,
         default=1,
-        help="Number of conditional frames for long video generation",
+        help="Number of conditional frames for long video generation, not used in t2w",
         choices=[1, 9],
     )
     parser.add_argument(
@@ -285,6 +285,7 @@ def demo(cfg, control_inputs):
         checkpoint = BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
     else:
         cfg.is_lvg_model = False
+        cfg.num_input_frames = 0
         checkpoint = BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
 
     # Initialize transfer generation model pipeline

@@ -70,6 +70,8 @@ class VideoExtendGeneralDIT(GeneralDIT):
         condition_video_indicator: Optional[torch.Tensor] = None,
         condition_video_input_mask: Optional[torch.Tensor] = None,
         condition_video_augment_sigma: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.Tensor:
         """Forward pass of the video-conditioned DIT model.
@@ -117,6 +119,8 @@ class VideoExtendGeneralDIT(GeneralDIT):
             scalar_feature=scalar_feature,
             data_type=data_type,
             condition_video_augment_sigma=condition_video_augment_sigma,
+            regional_contexts=regional_contexts,
+            region_masks=region_masks,
             **kwargs,
         )
 
@@ -133,6 +137,8 @@ class VideoExtendGeneralDIT(GeneralDIT):
         latent_condition: Optional[torch.Tensor] = None,
         latent_condition_sigma: Optional[torch.Tensor] = None,
         condition_video_augment_sigma: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.Tensor:
         """
@@ -192,6 +198,15 @@ class VideoExtendGeneralDIT(GeneralDIT):
         if crossattn_mask:
             crossattn_mask = rearrange(crossattn_mask, "B M -> M B")
 
+        # For regional contexts
+        if regional_contexts is not None:
+            regional_contexts = rearrange(regional_contexts, "B R M D -> R M B D")
+
+        # For region masks (assuming 5D format)
+        if region_masks is not None:
+            # if len(region_masks.shape) == 5:
+            region_masks = rearrange(region_masks, "B R T H W -> R T H W B")
+
         output = {
             "x": x,
             "affline_emb_B_D": affline_emb_B_D,
@@ -201,5 +216,7 @@ class VideoExtendGeneralDIT(GeneralDIT):
             "adaln_lora_B_3D": adaln_lora_B_3D,
             "original_shape": original_shape,
             "extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D": extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+            "regional_contexts": regional_contexts,
+            "region_masks": region_masks,
         }
         return output

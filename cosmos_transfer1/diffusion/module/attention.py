@@ -19,9 +19,10 @@ import numpy as np
 import torch
 import transformer_engine as te
 from einops import rearrange
-from torch import nn
+from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint
-from transformer_engine.pytorch.attention import DotProductAttention, apply_rotary_pos_emb
+from transformer_engine.pytorch.attention.dot_product_attention.dot_product_attention import DotProductAttention
+from transformer_engine.pytorch.attention.rope import apply_rotary_pos_emb
 
 # ---------------------- Feed Forward Network -----------------------
 
@@ -138,6 +139,152 @@ class BaseAttentionOp(nn.Module):
         super().__init__()
 
 
+class RegionalAttentionOp(BaseAttentionOp):
+    def __init__(
+        self,
+        heads,
+        dim_head,
+        num_gqa_groups=None,
+        attention_dropout=0,
+        qkv_format="bshd",
+        attn_mask_type="no_mask",
+        tp_size=1,
+        tp_group=None,
+        sequence_parallel=False,
+    ):
+        super().__init__()
+        self.heads = heads
+        self.dim_head = dim_head
+        self.qkv_format = qkv_format
+        self.tp_size = tp_size
+        self.scale = dim_head**-0.5
+        self.attention_dropout = attention_dropout
+        self.sequence_parallel = sequence_parallel
+        self.tp_group = tp_group
+        self.dot_product_attention = DotProductAttention(
+            self.heads,
+            self.dim_head,
+            num_gqa_groups=num_gqa_groups,
+            attention_dropout=attention_dropout,
+            qkv_format=qkv_format,
+            attn_mask_type=attn_mask_type,
+            tp_size=tp_size,
+            tp_group=tp_group,
+            sequence_parallel=sequence_parallel,
+        )
+
+    def forward(
+        self,
+        q,
+        k,
+        v,
+        regional_k=None,
+        regional_v=None,
+        region_masks=None,
+        core_attention_bias_type="no_bias",
+        core_attention_bias=None,
+    ):
+        # Early return for non-regional case
+        if regional_k is None or regional_v is None or region_masks is None:
+            return self.dot_product_attention(
+                q,
+                k,
+                v,
+                attention_mask=None,
+                core_attention_bias_type=core_attention_bias_type,
+                core_attention_bias=core_attention_bias,
+            )
+        # Get dimensions
+        is_bshd = self.qkv_format == "bshd"
+        if is_bshd:
+            batch_size, seq_len, num_heads, head_dim = q.shape
+        else:
+            seq_len, batch_size, num_heads, head_dim = q.shape
+
+        # Process region masks
+        processed_masks = []
+        prompt_len = k.shape[1] if is_bshd else k.shape[0]
+        num_regions = len(regional_k)
+
+        def preprocess_mask(mask: Tensor) -> Tensor:
+            mask = mask.permute(3, 0, 1, 2)
+            B, T, H, W = mask.shape
+            mask = mask.unsqueeze(1)  # dummy unsqueeze since trilinear interpolation expects 5D
+
+            mask_i = [
+                torch.nn.functional.interpolate(
+                    mask[:, :, :1, :, :],
+                    size=(1, 44, 80),
+                    mode="trilinear",
+                    align_corners=False,
+                )
+            ]
+            for wi in range(1, T, 8):
+                mask_i += [
+                    torch.nn.functional.interpolate(
+                        mask[:, :, wi : wi + 8, :, :],
+                        size=(1, 44, 80),
+                        mode="trilinear",
+                        align_corners=False,
+                    )
+                ]
+            assert len(mask_i) == 16
+            mask = torch.cat(mask_i, dim=2)
+            mask = mask.squeeze(1)
+            return (mask > 0.5).float()
+
+        for i in range(num_regions):
+            mask = region_masks[i]
+            mask = mask.to(q.device)
+            if mask.shape[0] != seq_len:
+                mask = preprocess_mask(mask)
+                mask = rearrange(mask, "b t h w ->  b (t h w)")
+            processed_masks.append(mask)
+
+        hidden_seq_len = seq_len
+        regional_attention_mask = torch.zeros(
+            (batch_size, hidden_seq_len, (num_regions + 1) * prompt_len), device=q.device, dtype=torch.bool
+        )
+        start_idx = 0
+        for i, mask in enumerate(processed_masks):
+            regional_attention_mask[:, :, (i + 1) * prompt_len : (i + 2) * prompt_len] = mask.unsqueeze(-1).bool()
+
+        regional_masks_tensor = torch.stack(processed_masks, dim=-1).bool()  # [B, S, R]
+        global_mask = (regional_masks_tensor.sum(dim=-1) == 0).unsqueeze(-1).bool()  # [B, S, 1]
+        regional_attention_mask[:, :, :prompt_len] = global_mask
+        combined_k = torch.cat([k] + regional_k, dim=0)
+        combined_v = torch.cat([v] + regional_v, dim=0)
+
+        attn_bias = torch.zeros_like(regional_attention_mask, dtype=torch.float32)
+        attn_bias = attn_bias.masked_fill(~regional_attention_mask, float("-inf"))
+        attn_bias = attn_bias.unsqueeze(1).expand(-1, num_heads, -1, -1)
+        output = self.dot_product_attention(
+            q,
+            combined_k,
+            combined_v,
+            attention_mask=None,
+            core_attention_bias_type="post_scale_bias",
+            core_attention_bias=attn_bias,
+        )
+
+        base_ratio = 0.5  # signifies the weight of the global prompt
+        if base_ratio is not None:
+            base_output = self.dot_product_attention(
+                q,
+                k,
+                v,
+                attention_mask=None,
+                core_attention_bias_type=core_attention_bias_type,
+                core_attention_bias=core_attention_bias,
+            )
+            output = output * (1 - base_ratio) + base_output * base_ratio
+
+        if self.tp_size > 1 and not self.sequence_parallel:
+            torch.distributed.all_reduce(output, group=self.tp_group)
+
+        return output
+
+
 class Attention(nn.Module):
     """
     Generalized attention impl.
@@ -233,6 +380,14 @@ class Attention(nn.Module):
                 attn_mask_type="no_mask",
                 sequence_parallel=False,
             )
+            self.regional_attn_op = RegionalAttentionOp(
+                self.heads,
+                self.dim_head,
+                num_gqa_groups=self.heads,
+                attention_dropout=0,
+                qkv_format=qkv_format,
+                attn_mask_type="arbitrary",
+            )
         else:
             raise ValueError(f"Backend {backend} not found")
 
@@ -288,12 +443,58 @@ class Attention(nn.Module):
         context=None,
         mask=None,
         rope_emb=None,
+        regional_contexts=None,
+        region_masks=None,
         **kwargs,
     ):
         """
         Args:
             x (Tensor): The query tensor of shape [B, Mq, K]
             context (Optional[Tensor]): The key tensor of shape [B, Mk, K] or use x as context [self attention] if None
+            regional_contexts (Optional[Tensor]): Stacked regional context tensors [B, R, M, D] or [R, M, B, D] if THWBD format
+            region_masks (Optional[Tensor]): Region masks [B, R, S] or [R, S, B] if THWBD format
         """
         q, k, v = self.cal_qkv(x, context, mask, rope_emb=rope_emb, **kwargs)
-        return self.cal_attn(q, k, v, mask)
+
+        # Early return if no regional contexts
+        if regional_contexts is None or region_masks is None:
+            return self.cal_attn(q, k, v, mask)
+
+        # Process regional contexts
+        regional_k = []
+        regional_v = []
+
+        # Determine format based on qkv_format
+        is_bshd = self.qkv_format == "bshd"
+
+        # Get number of regions
+        num_regions = regional_contexts.shape[1] if is_bshd else regional_contexts.shape[0]
+
+        # Process each region
+        for i in range(num_regions):
+            # Extract regional context
+            reg_context = regional_contexts[:, i] if is_bshd else regional_contexts[i]
+
+            # Ensure correct dtype
+            if reg_context.dtype != context.dtype:
+                reg_context = reg_context.to(dtype=context.dtype)
+
+            _, k_regional, v_regional = self.cal_qkv(x, reg_context, mask, rope_emb=rope_emb, **kwargs)
+
+            regional_k.append(k_regional)
+            regional_v.append(v_regional)
+
+        # Apply regional attention
+        combined_attn = self.regional_attn_op(
+            q,
+            k,  # from global prompt
+            v,  # from global prompt
+            regional_k=regional_k,
+            regional_v=regional_v,
+            region_masks=region_masks,
+            core_attention_bias_type="no_bias",
+            core_attention_bias=None,
+        )
+
+        # Apply output projection
+        return self.to_out(combined_attn)

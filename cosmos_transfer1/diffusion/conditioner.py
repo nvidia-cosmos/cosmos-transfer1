@@ -130,6 +130,8 @@ class BaseVideoCondition:
     image_size: Optional[torch.Tensor] = None
     scalar_feature: Optional[torch.Tensor] = None
     frame_repeat: Optional[torch.Tensor] = None
+    regional_contexts: Optional[torch.Tensor] = None
+    region_masks: Optional[torch.Tensor] = None
 
     def to_dict(self) -> Dict[str, Optional[torch.Tensor]]:
         return {f.name: getattr(self, f.name) for f in fields(self)}
@@ -148,6 +150,14 @@ class VideoExtendCondition(BaseVideoCondition):
     condition_video_augment_sigma: Optional[torch.Tensor] = None
     # pose conditional input, will be concat with the input tensor
     condition_video_pose: Optional[torch.Tensor] = None
+
+
+@dataclass
+class ViewConditionedVideoExtendCondition(VideoExtendCondition):
+    # view index indicating camera, used to index nn.Embedding
+    view_indices_B_T: Optional[torch.Tensor] = None
+    # number of cameras in this cond data
+    data_n_cameras: Optional[int] = -1
 
 
 class GeneralConditioner(nn.Module, ABC):
@@ -326,6 +336,10 @@ class VideoConditioner(GeneralConditioner):
         override_dropout_rate: Optional[Dict[str, float]] = None,
     ) -> BaseVideoCondition:
         output = super()._forward(batch, override_dropout_rate)
+        if "regional_contexts" in batch:
+            output["regional_contexts"] = batch["regional_contexts"]
+        if "region_masks" in batch:
+            output["region_masks"] = batch["region_masks"]
         return BaseVideoCondition(**output)
 
 
@@ -337,6 +351,16 @@ class VideoExtendConditioner(GeneralConditioner):
     ) -> VideoExtendCondition:
         output = super()._forward(batch, override_dropout_rate)
         return VideoExtendCondition(**output)
+
+
+class ViewConditionedVideoExtendConditioner(GeneralConditioner):
+    def forward(
+        self,
+        batch: Dict,
+        override_dropout_rate: Optional[Dict[str, float]] = None,
+    ) -> ViewConditionedVideoExtendCondition:
+        output = super()._forward(batch, override_dropout_rate)
+        return ViewConditionedVideoExtendCondition(**output)
 
 
 @dataclass

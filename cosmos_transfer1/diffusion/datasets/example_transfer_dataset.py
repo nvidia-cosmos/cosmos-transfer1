@@ -256,6 +256,7 @@ class ExampleTransferDataset(Dataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
+        return
 
     def __len__(self):
         return len(self.video_paths)
@@ -450,7 +451,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 data["t5_text_embeddings"] = t5_embedding
                 data["t5_text_mask"] = torch.cat(t5_masks)
                 data["view_indices"] = view_indices_conditioning.contiguous()
-
+                data["frame_repeat"] = torch.zeros(len(view_indices))
                 # Add metadata
                 data["fps"] = fps
                 data["frame_start"] = frame_ids[0]
@@ -479,6 +480,7 @@ class AVTransferDataset(ExampleTransferDataset):
                 if _ == max_retries - 1:
                     raise RuntimeError(f"Failed to load data after {max_retries} attempts")
                 index = np.random.randint(len(self.video_paths))
+        return
 
 
 if __name__ == "__main__":

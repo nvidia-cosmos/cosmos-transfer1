@@ -15,7 +15,7 @@
 
 """
 Usage:
-    torchrun --nproc_per_node=8 -m scripts.convert_ckpt_fsdp_to_tp > output.txt
+    torchrun --nproc_per_node=8 -m scripts.convert_ckpt_tp_to_fsdp > output.txt
 
 This script is designed to convert a Tensor Parallel (TP) checkpoint
 to a Fully Sharded Data Parallel (FSDP) compatible format for a video diffusion model.

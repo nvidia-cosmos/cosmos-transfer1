@@ -74,7 +74,7 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             state_dict = torch.load(checkpoint_path, map_location=lambda storage, loc: storage, weights_only=False)
             log.success(f"Complete loading base model checkpoint (local): {checkpoint_path}")
 
-            if "ema" in state_dict:
+            if "ema" in state_dict and state_dict["ema"] is not None:
                 # Copy the base model weights from ema model.
                 log.info("Copying ema to base model")
                 base_state_dict = {k.replace("-", "."): v for k, v in state_dict["ema"].items()}
@@ -230,6 +230,15 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
         else:
             setattr(uncondition, hint_key, latent_hint)
 
+        # Add extra conditions for ctrlnet.
+        # Handle regional prompting information
+        if "regional_contexts" in data_batch and "region_masks" in data_batch:
+            setattr(condition, "regional_contexts", data_batch["regional_contexts"])
+            setattr(condition, "region_masks", data_batch["region_masks"])
+            # For unconditioned generation, we still need the region masks but not the regional contexts
+            setattr(uncondition, "region_masks", data_batch["region_masks"])
+            setattr(uncondition, "regional_contexts", None)
+
         to_cp = self.net.is_context_parallel_enabled
         # For inference, check if parallel_state is initialized
         if parallel_state.is_initialized():
@@ -243,6 +252,16 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             setattr(condition, hint_key, latent_hint)
             if getattr(uncondition, hint_key) is not None:
                 setattr(uncondition, hint_key, latent_hint)
+            if hasattr(condition, "regional_contexts") and getattr(condition, "regional_contexts") is not None:
+                regional_contexts = getattr(condition, "regional_contexts")
+                regional_contexts = split_inputs_cp(regional_contexts, seq_dim=2, cp_group=cp_group)
+                setattr(condition, "regional_contexts", regional_contexts)
+
+            if hasattr(condition, "region_masks") and getattr(condition, "region_masks") is not None:
+                region_masks = getattr(condition, "region_masks")
+                region_masks = split_inputs_cp(region_masks, seq_dim=2, cp_group=cp_group)
+                setattr(condition, "region_masks", region_masks)
+                setattr(uncondition, "region_masks", region_masks)
 
         setattr(condition, "base_model", self.model.base_model)
         setattr(uncondition, "base_model", self.model.base_model)
@@ -539,6 +558,14 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
         else:
             setattr(uncondition, hint_key, latent_hint)
 
+        # Handle regional prompting information
+        if "regional_contexts" in data_batch and "region_masks" in data_batch:
+            setattr(condition, "regional_contexts", data_batch["regional_contexts"])
+            setattr(condition, "region_masks", data_batch["region_masks"])
+            # For unconditioned generation, we still need the region masks but not the regional contexts
+            setattr(uncondition, "region_masks", data_batch["region_masks"])
+            setattr(uncondition, "regional_contexts", None)
+
         to_cp = self.net.is_context_parallel_enabled
         # For inference, check if parallel_state is initialized
         if parallel_state.is_initialized():
@@ -553,6 +580,16 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
             if getattr(uncondition, hint_key) is not None:
                 setattr(uncondition, hint_key, latent_hint)
 
+            if hasattr(condition, "regional_contexts") and getattr(condition, "regional_contexts") is not None:
+                regional_contexts = getattr(condition, "regional_contexts")
+                regional_contexts = split_inputs_cp(regional_contexts, seq_dim=2, cp_group=cp_group)
+                setattr(condition, "regional_contexts", regional_contexts)
+
+            if hasattr(condition, "region_masks") and getattr(condition, "region_masks") is not None:
+                region_masks = getattr(condition, "region_masks")
+                region_masks = split_inputs_cp(region_masks, seq_dim=2, cp_group=cp_group)
+                setattr(condition, "region_masks", region_masks)
+                setattr(uncondition, "region_masks", region_masks)
         setattr(condition, "base_model", self.model.base_model)
         setattr(uncondition, "base_model", self.model.base_model)
         if hasattr(self, "hint_encoders"):

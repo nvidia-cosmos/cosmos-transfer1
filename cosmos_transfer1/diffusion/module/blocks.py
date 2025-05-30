@@ -301,9 +301,11 @@ class VideoAttn(nn.Module):
         context: Optional[torch.Tensor] = None,
         crossattn_mask: Optional[torch.Tensor] = None,
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
-        Forward pass for video attention.
+        Forward pass for video attention with regional prompting support.
 
         Args:
             x (Tensor): Input tensor of shape (B, T, H, W, D) or (T, H, W, B, D) representing batches of video data.
@@ -324,11 +326,18 @@ class VideoAttn(nn.Module):
             context_M_B_D = context
         T, H, W, B, D = x_T_H_W_B_D.shape
         x_THW_B_D = rearrange(x_T_H_W_B_D, "t h w b d -> (t h w) b d")
+        if regional_contexts is not None:
+            regional_contexts = rearrange(regional_contexts, "r (v m) b d -> r m (v b) d", v=1)
+        if region_masks is not None:
+            r, t, h, w, b = region_masks.shape
+            region_masks = rearrange(region_masks, "r (v t) h w b -> r t h w (v b)", v=1)
         x_THW_B_D = self.attn(
             x_THW_B_D,
             context_M_B_D,
             crossattn_mask,
             rope_emb=rope_emb_L_1_1_D,
+            regional_contexts=regional_contexts,
+            region_masks=region_masks,
         )
         x_T_H_W_B_D = rearrange(x_THW_B_D, "(t h w) b d -> t h w b d", h=H, w=W)
         if context is not None and self.n_views > 1:
@@ -424,6 +433,8 @@ class DITBuildingBlock(nn.Module):
         crossattn_mask: Optional[torch.Tensor] = None,
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Forward pass for dynamically configured blocks with adaptive normalization.
@@ -433,8 +444,10 @@ class DITBuildingBlock(nn.Module):
             emb_B_D (Tensor): Embedding tensor for adaptive layer normalization modulation.
             crossattn_emb (Tensor): Tensor for cross-attention blocks.
             crossattn_mask (Optional[Tensor]): Optional mask for cross-attention.
-            rope_emb_L_1_1_D (Optional[Tensor]):
-            Rotary positional embedding tensor of shape (L, 1, 1, D). L == THW for current video training.
+            rope_emb_L_1_1_D (Optional[Tensor]): Rotary positional embedding tensor of shape (L, 1, 1, D). L == THW for current video training.
+            adaln_lora_B_3D (Optional[Tensor]): Additional embedding for adaptive layer norm.
+            regional_contexts (Optional[List[Tensor]]): List of regional context tensors.
+            region_masks (Optional[Tensor]): Region masks of shape (B, R, THW).
 
         Returns:
             Tensor: The output tensor after processing through the configured block and adaptive normalization.
@@ -463,11 +476,14 @@ class DITBuildingBlock(nn.Module):
                 rope_emb_L_1_1_D=rope_emb_L_1_1_D,
             )
         elif self.block_type in ["cross_attn", "ca"]:
+            normalized_x = adaln_norm_state(self.norm_state, x, scale_1_1_1_B_D, shift_1_1_1_B_D)
             x = x + gate_1_1_1_B_D * self.block(
-                adaln_norm_state(self.norm_state, x, scale_1_1_1_B_D, shift_1_1_1_B_D),
+                normalized_x,
                 context=crossattn_emb,
                 crossattn_mask=crossattn_mask,
                 rope_emb_L_1_1_D=rope_emb_L_1_1_D,
+                regional_contexts=regional_contexts,
+                region_masks=region_masks,
             )
         else:
             raise ValueError(f"Unknown block type: {self.block_type}")
@@ -542,6 +558,8 @@ class GeneralDITTransformerBlock(nn.Module):
         rope_emb_L_1_1_D: Optional[torch.Tensor] = None,
         adaln_lora_B_3D: Optional[torch.Tensor] = None,
         extra_per_block_pos_emb: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         if extra_per_block_pos_emb is not None:
             x = x + extra_per_block_pos_emb
@@ -553,6 +571,8 @@ class GeneralDITTransformerBlock(nn.Module):
                 crossattn_mask,
                 rope_emb_L_1_1_D=rope_emb_L_1_1_D,
                 adaln_lora_B_3D=adaln_lora_B_3D,
+                regional_contexts=regional_contexts,
+                region_masks=region_masks,
             )
         return x
 

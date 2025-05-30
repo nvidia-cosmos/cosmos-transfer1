@@ -9,10 +9,14 @@ The model is trained separately for each control input type.
 ## Model Support Matrix
 We support the following Cosmos-Transfer1-Sample-AV models for pre-training and post-training. Review the available models and their compute requirements for training to determine the best model for your use case. We use Tensor Parallel of size 8 for training.
 
-| Model Name                            | Model Status | Compute Requirements for Post-Training |
-|---------------------------------------|--------------|----------------------------------------|
-| Cosmos-Transfer1-7B-Sample-AV [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-Sample-AV [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
+| Model Name                                                        | Model Status | Compute Requirements for Post-Training |
+|-------------------------------------------------------------------|--------------|----------------------------------------|
+| Cosmos-Transfer1-7B-Sample-AV [Lidar]                             | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-Sample-AV [HDMap]                             | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_model [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_model [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/v2w_model [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/v2w_model [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
 
 **\*** 80GB GPU memory required for training. `H100-80GB` or `A100-80GB` GPUs are recommended.
 
@@ -63,6 +67,14 @@ checkpoints/
 │   │   ├── hdmap_control.pt
 │   │   └── lidar_control.pt
 │   │
+│   ├── Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/
+│   │   ├── v2w_base_model.pt
+│   │   ├── v2w_hdmap_control.pt
+│   │   ├── v2w_lidar_control.pt
+│   │   ├── t2w_base_model.pt
+│   │   ├── t2w_hdmap_control.pt
+│   │   └── t2w_lidar_control.pt
+│   │
 │   │── Cosmos-Tokenize1-CV8x8x8-720p
 │   │   ├── decoder.jit
 │   │   ├── encoder.jit
@@ -92,11 +104,11 @@ checkpoints/
 ```
 
 Checkpoint Requirements:
-- Base model (`base_model.pt`) and tokenizer models (under `Cosmos-Tokenize1-CV8x8x8-720p`): Required for all training.
+- Base model (`base_model.pt` for single view, `t2w_base_model.pt`, `v2w_base_model.pt` for multiview) and tokenizer models (under `Cosmos-Tokenize1-CV8x8x8-720p`): Required for all training.
 - Control modality-specific model checkpoint (e.g., `hdmap_control.pt`): Only needed for post-training that specific control. Not needed if training from scratch.
 - Other folders such as `depth-anything`, `facebook/sam2-hiera-large` etc.: optional. These are helper modules to process the video data into the respective control modalities such as depth and segmentation.
 
-## Example
+## Examples
 There are 3 steps to train a Cosmos-Transfer1-Sample-AV model: preparing a dataset, prepare checkpoints, and launch training.
 
 ### 1. Dataset Download and Preprocessing
@@ -109,9 +121,14 @@ Due to the large model size, we leverage TensorParallel (TP) to split the model 
 
 ```bash
 # Will split the Base model checkpoint into 8 TP checkpoints
-PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV/base_model.pt
+PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV/t2w_base_model.pt
 # Example: for LidarControl checkpoint splitting for post-train.
-PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV/lidar_control.pt
+PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV/t2w_lidar_control.pt
+# Example: for SingleToMultiView, the base model checkpoint is different
+PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_base_model.pt
+# Example: for SingleToMultiView HDMapControl
+PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_hdmap_control.pt
+
 ```
 This will generate the TP checkpoints under `checkpoints/checkpoints_tp/*_mp_*.pt`, which we load in the training below.
 
@@ -122,35 +139,43 @@ As a sanity check, run the following command to dry-run an example training job 
 export OUTPUT_ROOT=checkpoints # default value
 
 # Training from scratch
-torchrun --nproc_per_node=1 -m cosmos_transfer1.diffusion.training.train --dryrun --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3_pretrain
+torchrun --nproc_per_node=1 -m cosmos_transfer1.diffusion.training.train --dryrun --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain
 
 # Post-train from our provided checkpoint (need to first split checkpoint into TP checkpoints as instructed above)
-torchrun --nproc_per_node=1 -m cosmos_transfer1.diffusion.training.train --dryrun --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3_posttrain
+torchrun --nproc_per_node=1 -m cosmos_transfer1.diffusion.training.train --dryrun --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_posttrain
 ```
 
 Explanation of the command:
 
 - The trainer and the passed (master) config script will, in the background, load the detailed experiment configurations defined in `cosmos_transfer1/diffusion/config/training/experiment/ctrl_7b_tp_sample_av.py`, and register the experiments configurations for all `hint_keys` (control modalities), covering both pretrain and post-train. We use [Hydra](https://hydra.cc/docs/intro/) for advanced configuration composition and overriding.
 
-- The `CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3_pretrain` corresponds to an experiment name registered in `ctrl_7b_tp_sample_av.py`. By specifiying this name, all the detailed config will be generated and then written to `checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_sampleAV/CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3_pretrain/config.yaml`.
+- The `CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain` corresponds to an experiment name registered in `ctrl_7b_tp_sample_av.py`. By specifiying this name, all the detailed config will be generated and then written to `checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_sampleAV/CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain/config.yaml`.
 
 - To customize your training, see `cosmos_transfer1/diffusion/config/training/experiment/ctrl_7b_tp_sample_av.py` to understand how the detailed configs of the model, trainer, dataloader etc. are defined, and edit as needed.
 
 ### 4. Launch Training
-Now we can start a real training job! Removing the `--dryrun` and set `--nproc_per_node=8` will start a real training job on 8 GPUs:
+
+#### 4.a Launch Training of Cosmos-Transfer1-7B-Sample-AV
+Now we can start a real training job! Removing the `--dryrun` and set `--nproc_per_node=8` will start a real training job on 8 GPUs, using Lidar conditioning:
 
 ```bash
-torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3_pretrain
+torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain
+```
+#### 4.b Launch Training of Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV
+In this example, we instead launch a training run of the SingleToMultiView model with HDMap condition:
+
+```bash
+torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_sv2mv_57frames_control_input_hdmap_block3_pretrain
 ```
 
-**Config group and override.** An `experiment` determines a complete group of configuration parameters (model architecture, data, trainer behavior, checkpointing, etc.). Changing the `experiment` value in the command above will decide which ControlNet model is trained, and whether it's pretrain or post-train. For example, replacing the experiment name in the command with `CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3_posttrain` will post-train the LidarControl model from the downloaded checkpoint instead.
+**Config group and override.** An `experiment` determines a complete group of configuration parameters (model architecture, data, trainer behavior, checkpointing, etc.). Changing the `experiment` value in the command above will decide which ControlNet model is trained, and whether it's pretrain or post-train. For example, replacing the experiment name in the command with `CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_posttrain` will post-train the LidarControl model from the downloaded checkpoint instead.
 
-To customize your training, see the job (experiment) config in `cosmos_transfer1/diffusion/config/training/experiment/ctrl_7b_tp_sample_av.py` to understand they are defined, and edit as needed.
+To customize your training, see the job (experiment) config in `cosmos_transfer1/diffusion/config/training/experiment/ctrl_7b_tp_sample_av.py` to understand how they are defined, and edit as needed.
 
 It is also possible to modify config parameters from command line. For example:
 
 ```bash
-torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3_pretrain trainer.max_iter=100 checkpoint.save_iter=40
+torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain trainer.max_iter=100 checkpoint.save_iter=40
 ```
 
 This will update the maximum training iterations to 100 (default in the registered experiments: 999999999) and checkpoint saving frequency to 50 (default: 1000).
@@ -159,7 +184,7 @@ This will update the maximum training iterations to 100 (default in the register
 During the training, the checkpoints will be saved in the below structure. Since we use TensorParallel across 8 GPUs, 8 checkpoints will be saved each time.
 
 ```
-checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_sampleAV/CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3_pretrain/checkpoints/
+checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_sampleAV/CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain/checkpoints/
 ├── iter_{NUMBER}.pt             # "master" checkpoint, saving metadata only
 ├── iter_{NUMBER}_model_mp_0.pt  # real TP checkpoints
 ├── iter_{NUMBER}_model_mp_1.pt
@@ -168,6 +193,7 @@ checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_sampleAV/CTRL_7Bv1pt3_t2v_121fra
 ```
 
 Since the `experiment` is uniquely associated with its checkpoint directory, rerunning the same training command after an unexpected interruption will automatically resume from the latest saved checkpoint.
+
 
 ### 5. Inference Using Trained Models
 - Convert the TP checkpoints to FSDP checkpoint using [this script](scripts/convert_ckpt_tp_to_fsdp.py). Note: this script requires TP_SIZE gpus available.

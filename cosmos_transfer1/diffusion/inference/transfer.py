@@ -154,7 +154,6 @@ def parse_arguments() -> argparse.Namespace:
 
     log.info(f"control_inputs: {json.dumps(control_inputs, indent=4)}")
     log.info(f"args in json: {json.dumps(json_args, indent=4)}")
-
     # if parameters not set on command line, use the ones from the controlnet_specs
     # if both not set use command line defaults
     for key in json_args:
@@ -261,7 +260,6 @@ def demo(cfg, control_inputs):
                 video_save_subfolder = cfg.video_save_folder
 
             current_control_inputs = copy.deepcopy(control_inputs)
-
             if "control_overrides" in input_dict:
                 for hint_key, override in input_dict["control_overrides"].items():
                     if hint_key in current_control_inputs:
@@ -271,7 +269,30 @@ def demo(cfg, control_inputs):
 
             # if control inputs are not provided, run respective preprocessor (for seg and depth)
             preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder)
+            if hasattr(cfg, "regional_prompts") and cfg.regional_prompts:
+                log.info(f"regional_prompts after preprocessors: {cfg.regional_prompts}")
             batch_control_inputs.append(current_control_inputs)
+
+        regional_prompts = []
+        region_definitions = []
+        if hasattr(cfg, "regional_prompts") and cfg.regional_prompts:
+            log.info(f"regional_prompts: {cfg.regional_prompts}")
+            for regional_prompt in cfg.regional_prompts:
+                regional_prompts.append(regional_prompt["prompt"])
+                if "region_definitions_path" in regional_prompt:
+                    log.info(f"region_definitions_path: {regional_prompt['region_definitions_path']}")
+                    region_definition_path = regional_prompt["region_definitions_path"]
+                    if region_definition_path.endswith(".json"):
+                        with open(region_definition_path, "r") as f:
+                            region_definitions_json = json.load(f)
+                        region_definitions.extend(region_definitions_json)
+                    else:
+                        region_definitions.append(region_definition_path)
+
+        if hasattr(pipeline, "regional_prompts"):
+            pipeline.regional_prompts = regional_prompts
+        if hasattr(pipeline, "region_definitions"):
+            pipeline.region_definitions = region_definitions
 
         # Generate videos in batch
         batch_outputs = pipeline.generate(

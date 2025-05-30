@@ -378,6 +378,8 @@ class GeneralDIT(nn.Module):
         data_type: Optional[DataType] = DataType.VIDEO,
         latent_condition: Optional[torch.Tensor] = None,
         latent_condition_sigma: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.Tensor:
         """
@@ -428,6 +430,14 @@ class GeneralDIT(nn.Module):
             if crossattn_mask:
                 crossattn_mask = rearrange(crossattn_mask, "B M -> M B")
 
+            # For regional contexts
+            if regional_contexts is not None:
+                regional_contexts = rearrange(regional_contexts, "B R M D -> R M B D")
+
+            # For region masks (assuming 5D format)
+            if region_masks is not None:
+                region_masks = rearrange(region_masks, "B R T H W -> R T H W B")
+
         elif self.blocks["block0"].x_format == "BTHWD":
             x = x_B_T_H_W_D
         else:
@@ -441,6 +451,8 @@ class GeneralDIT(nn.Module):
             "adaln_lora_B_3D": adaln_lora_B_3D,
             "original_shape": original_shape,
             "extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D": extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+            "regional_contexts": regional_contexts,
+            "region_masks": region_masks,
         }
         return output
 
@@ -458,6 +470,8 @@ class GeneralDIT(nn.Module):
         latent_condition_sigma: Optional[torch.Tensor] = None,
         condition_video_augment_sigma: Optional[torch.Tensor] = None,
         x_ctrl: Optional[dict] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.Tensor | List[torch.Tensor] | Tuple[torch.Tensor, List[torch.Tensor]]:
         """
@@ -469,6 +483,8 @@ class GeneralDIT(nn.Module):
             condition_video_augment_sigma: (B,) used in lvg(long video generation), we add noise with this sigma to
                 augment condition input, the lvg model will condition on the condition_video_augment_sigma value;
                 we need forward_before_blocks pass to the forward_before_blocks function.
+            regional_contexts: Optional list of regional prompt embeddings, each of shape (B, N, D)
+            region_masks: Optional tensor of region masks of shape (B, R, THW)
         """
 
         inputs = self.forward_before_blocks(
@@ -483,9 +499,21 @@ class GeneralDIT(nn.Module):
             latent_condition=latent_condition,
             latent_condition_sigma=latent_condition_sigma,
             condition_video_augment_sigma=condition_video_augment_sigma,
+            regional_contexts=regional_contexts,
+            region_masks=region_masks,
             **kwargs,
         )
-        x, affline_emb_B_D, crossattn_emb, crossattn_mask, rope_emb_L_1_1_D, adaln_lora_B_3D, original_shape = (
+        (
+            x,
+            affline_emb_B_D,
+            crossattn_emb,
+            crossattn_mask,
+            rope_emb_L_1_1_D,
+            adaln_lora_B_3D,
+            original_shape,
+            regional_contexts,
+            region_masks,
+        ) = (
             inputs["x"],
             inputs["affline_emb_B_D"],
             inputs["crossattn_emb"],
@@ -493,7 +521,10 @@ class GeneralDIT(nn.Module):
             inputs["rope_emb_L_1_1_D"],
             inputs["adaln_lora_B_3D"],
             inputs["original_shape"],
+            inputs["regional_contexts"],
+            inputs["region_masks"],
         )
+
         extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = inputs["extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D"]
         if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
             assert (
@@ -513,6 +544,8 @@ class GeneralDIT(nn.Module):
                 rope_emb_L_1_1_D=rope_emb_L_1_1_D,
                 adaln_lora_B_3D=adaln_lora_B_3D,
                 extra_per_block_pos_emb=extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+                regional_contexts=regional_contexts,
+                region_masks=region_masks,
             )
             if x_ctrl is not None and name in x_ctrl:
                 x = x + x_ctrl[name]

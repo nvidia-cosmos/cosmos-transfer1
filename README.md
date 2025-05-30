@@ -19,6 +19,10 @@ Cosmos-Transfer1 includes the following:
 - **Pre-training scripts** for helping Physical AI builders train their own Cosmos-Transfer1 models from scratch.
 
 ## News
+- [2025/05] **Cosmos AV Single2MultiView** is available! Now you can create dynamic, multi-view clips from just one video. Try it out and tell us what you think!  
+    - [Inference guide](examples/inference_cosmos_transfer1_7b_sample_av_single2multiview.md)  
+    - [Build your own or PyTorch post-training](examples/training_cosmos_transfer_7B_sample_AV.md)  
+    - [Hugging Face model](https://huggingface.co/nvidia/Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV)
 - [2025/04] [Post training](README.md#post-train-pre-trained-cosmos-transfer1-models) is available! Now you can customize Transfer1 models in your own way. Please try it out and we look forward to your feedback.
 
 ## Example Model Behavior
@@ -53,19 +57,19 @@ Please refer to [INSTALL.md](INSTALL.md) for general instructions on environment
 * [Inference with pre-trained Cosmos-Transfer1-7B (Edge)](examples/inference_cosmos_transfer1_7b.md#example-1-single-control-edge)
 * [Inference with pre-trained Cosmos-Transfer1-7B (Vis)](examples/inference_cosmos_transfer1_7b_vis.md)
 * [Inference with pre-trained Cosmos-Transfer1pt1-7B [Keypoint]](/examples/inference_cosmos_transfer1pt1_7b_keypoint.md)
-* Inference with pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
+* [Inference with pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview](/examples/inference_cosmos_transfer1_7b_sample_av_single2multiview.md)
 
 ### Post-train pre-trained Cosmos-Transfer1 models
 
 * [Post-train pre-trained Cosmos-Transfer1-7B [Depth | Edge | Keypoint | Segmentation | Vis]](examples/training_cosmos_transfer_7b.md) **[with multi-GPU support]**
 * [Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV [LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
-* Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
+* [Post-train pre-trained Cosmos-Transfer1-7B-Sample-AV-Multiview[LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
 
 ### Build your own Cosmos-Transfer1 models from scratch
 
 * [Pre-train Cosmos-Transfer1-7B [Depth | Edge | Keypoint | Segmentation | Vis]](examples/training_cosmos_transfer_7b.md) **[with multi-GPU support]**
 * [Pre-train Cosmos-Transfer1-7B-Sample-AV [LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
-* Pre-train Cosmos-Transfer1-7B-Sample-AV-Multiview: Coming soon
+* [Pre-train Cosmos-Transfer1-7B-Sample-AV-Multiview[LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
 
 ### Workflow
 

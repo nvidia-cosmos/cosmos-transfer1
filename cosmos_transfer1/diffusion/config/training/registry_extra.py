@@ -29,9 +29,11 @@ from cosmos_transfer1.diffusion.config.transfer.conditioner import (
     CTRL_HINT_KEYS,
     BaseVideoConditionerWithCtrlConfig,
     VideoConditionerFpsSizePaddingWithCtrlConfig,
+    ViewConditionedVideoConditionerFpsSizePaddingWithCtrlConfig,
 )
 from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
 from cosmos_transfer1.diffusion.training.networks.general_dit_ctrl_enc import GeneralDITEncoder
+from cosmos_transfer1.diffusion.training.networks.general_dit_ctrl_enc_multicamera import GeneralDITMulticamEncoder
 
 # from cosmos_transfer1.diffusion.config.registry import register_tokenizer
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
@@ -66,6 +68,11 @@ FADITV2EncoderConfigTrain = copy.deepcopy(FADITV2ConfigTrain)
 FADITV2EncoderConfigTrain["_target_"] = GeneralDITEncoder
 FADITV2EncoderConfigTrain["layer_mask"] = [True if i > num_blocks // 2 else False for i in range(num_blocks)]
 
+num_blocks = FADITV2ConfigTrain["num_blocks"]
+FADITV2MultiCamEncoderConfig = copy.deepcopy(FADITV2ConfigTrain)
+FADITV2MultiCamEncoderConfig["_target_"] = GeneralDITMulticamEncoder
+FADITV2MultiCamEncoderConfig["layer_mask"] = [True if i > num_blocks // 2 else False for i in range(num_blocks)]
+
 
 def register_net_train(cs):
     cs.store(
@@ -75,6 +82,7 @@ def register_net_train(cs):
         node=FADITV2ConfigTrain,
     )
     cs.store(group="net_ctrl", package="model.net_ctrl", name="faditv2_7b", node=FADITV2EncoderConfigTrain)
+    cs.store(group="net_ctrl", package="model.net_ctrl", name="faditv2_sv2mv", node=FADITV2MultiCamEncoderConfig)
 
 
 def register_conditioner_ctrlnet(cs):
@@ -89,6 +97,12 @@ def register_conditioner_ctrlnet(cs):
         package="model.conditioner",
         name="ctrlnet_add_fps_image_size_padding_mask",
         node=VideoConditionerFpsSizePaddingWithCtrlConfig,
+    )
+    cs.store(
+        group="conditioner",
+        package="model.conditioner",
+        name="view_cond_ctrlnet_add_fps_image_size_padding_mask",
+        node=ViewConditionedVideoConditionerFpsSizePaddingWithCtrlConfig,
     )
 
 

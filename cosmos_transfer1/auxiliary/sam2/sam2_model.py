@@ -22,7 +22,7 @@ import torch
 
 from cosmos_transfer1.utils import log
 
-sys.path.append("third_party/sam2")
+sys.path.append("cosmos_transfer1/auxiliary")
 
 import tempfile
 
@@ -108,6 +108,12 @@ class VideoSegmentationModel:
 
         if len(boxes) > 0:
             print(f"Found {len(boxes)} boxes with scores: {scores}")
+            # Sort boxes by confidence score in descending order
+            sorted_indices = np.argsort(scores)[::-1]
+            boxes = boxes[sorted_indices]
+            scores = scores[sorted_indices]
+            if labels is not None:
+                labels = np.array(labels)[sorted_indices]
         else:
             print("Still no boxes detected. Consider adjusting the prompt or using box/points mode.")
 
@@ -207,11 +213,26 @@ class VideoSegmentationModel:
                     gd_results = self.get_boxes_from_text(first_frame_path, text)
                     boxes = gd_results["boxes"]
                     labels_out = gd_results["labels"]
+                    scores = gd_results["scores"]
+                    log.info(f"scores: {scores}")
                     if len(boxes) > 0:
-                        for object_id, (box, label) in enumerate(zip(boxes, labels_out)):
+                        legacy_mask = kwargs.get("legacy_mask", False)
+                        if legacy_mask:
+                            # Use only the highest confidence box for legacy mask
+                            log.info(f"using legacy_mask: {legacy_mask}")
                             frame_idx, obj_ids, masks = self.sam2_predictor.add_new_points_or_box(
-                                inference_state=state, frame_idx=ann_frame_idx, obj_id=object_id, box=box
+                                inference_state=state, frame_idx=ann_frame_idx, obj_id=ann_obj_id, box=boxes[0]
                             )
+                            # Update boxes and labels after processing
+                            boxes = boxes[:1]
+                            if labels_out is not None:
+                                labels_out = labels_out[:1]
+                        else:
+                            log.info(f"using new_mask: {legacy_mask}")
+                            for object_id, (box, label) in enumerate(zip(boxes, labels_out)):
+                                frame_idx, obj_ids, masks = self.sam2_predictor.add_new_points_or_box(
+                                    inference_state=state, frame_idx=ann_frame_idx, obj_id=object_id, box=box
+                                )
                         visualization_data["boxes"] = boxes
                         self.grounding_labels = [str(lbl) for lbl in labels_out] if labels_out is not None else [text]
                     else:
@@ -329,6 +350,7 @@ class VideoSegmentationModel:
         labels=None,
         weight_scaler=None,
         binarize_video=False,
+        legacy_mask=False,
     ):
         log.info(
             f"Processing video: {input_video} to generate segmentation video: {output_video} segmentation tensor: {output_tensor}"
@@ -356,6 +378,7 @@ class VideoSegmentationModel:
                     input_data=input_data,
                     save_dir=str(temp_output_dir),
                     visualize=True,
+                    legacy_mask=legacy_mask,
                 )
                 if output_video:
                     os.makedirs(os.path.dirname(output_video), exist_ok=True)

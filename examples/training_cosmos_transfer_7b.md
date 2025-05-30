@@ -239,7 +239,7 @@ checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_lvg/CTRL_7Bv1pt3_lvg_tp_121frame
 Since the `experiment` is uniquely associated with its checkpoint directory, rerunning the same training command after an unexpected interruption will automatically resume from the latest saved checkpoint.
 
 ### 7. Inference Using Trained Models
-- Convert the TP checkpoints to FSDP checkpoint using [this script](scripts/convert_ckpt_tp_to_fsdp.py). Note: this script requires TP_SIZE gpus available.
+- Convert the TP checkpoints to FSDP checkpoint using [this script](../scripts/convert_ckpt_tp_to_fsdp.py). See the docstring in the script for details. Note: this script requires TP_SIZE gpus available.
 - Run inference steps as in the [inference README](./inference_cosmos_transfer1_7b.md).
 
 ## FAQ

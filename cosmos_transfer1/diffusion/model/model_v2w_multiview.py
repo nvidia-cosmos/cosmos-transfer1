@@ -31,23 +31,6 @@ from cosmos_transfer1.diffusion.module.parallel import broadcast, cat_outputs_cp
 from cosmos_transfer1.utils import log, misc
 
 
-def deepcopy_no_copy_model(obj):
-    """
-    We need to create a copy of the condition construct such that condition masks can be adjusted dynamically, but
-    the controlnet encoder plug-in also uses the condition construct to pass along the base_model object which cannot be
-    deep-copied, hence this funciton
-    """
-    if hasattr(obj, "base_model") and obj.base_model is not None:
-        my_base_model = obj.base_model
-        obj.base_model = None
-        copied_obj = copy.deepcopy(obj)
-        copied_obj.base_model = my_base_model
-        obj.base_model = my_base_model
-    else:
-        copied_obj = copy.deepcopy(obj)
-    return copied_obj
-
-
 @dataclass
 class VideoDenoisePrediction:
     x0: torch.Tensor  # clean data prediction
@@ -75,69 +58,6 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
         decoded_state = self.tokenizer.decode(latent / self.sigma_data)
         decoded_state = rearrange(decoded_state, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
         return decoded_state
-
-    def augment_conditional_latent_frames(
-        self,
-        condition: VideoExtendCondition,
-        cfg_video_cond_bool: VideoCondBoolConfig,
-        gt_latent: Tensor,
-        condition_video_augment_sigma_in_inference: float = 0.001,
-        sigma: Tensor = None,
-        seed: int = 1,
-    ) -> Union[VideoExtendCondition, Tensor]:
-        """Augments the conditional frames with noise during inference.
-
-        Args:
-            condition (VideoExtendCondition): condition object
-                condition_video_indicator: binary tensor indicating the region is condition(value=1) or generation(value=0). Bx1xTx1x1 tensor.
-                condition_video_input_mask: input mask for the network input, indicating the condition region. B,1,T,H,W tensor. will be concat with the input for the network.
-            cfg_video_cond_bool (VideoCondBoolConfig): video condition bool config
-            gt_latent (Tensor): ground truth latent tensor in shape B,C,T,H,W
-            condition_video_augment_sigma_in_inference (float): sigma for condition video augmentation in inference
-            sigma (Tensor): noise level for the generation region
-            seed (int): random seed for reproducibility
-        Returns:
-            VideoExtendCondition: updated condition object
-                condition_video_augment_sigma: sigma for the condition region, feed to the network
-            augment_latent (Tensor): augmented latent tensor in shape B,C,T,H,W
-
-        """
-
-        # Inference only, use fixed sigma for the condition region
-        assert (
-            condition_video_augment_sigma_in_inference is not None
-        ), "condition_video_augment_sigma_in_inference should be provided"
-        augment_sigma = condition_video_augment_sigma_in_inference
-
-        if augment_sigma >= sigma.flatten()[0]:
-            # This is a inference trick! If the sampling sigma is smaller than the augment sigma, we will start denoising the condition region together.
-            # This is achieved by setting all region as `generation`, i.e. value=0
-            log.debug("augment_sigma larger than sigma or other frame, remove condition")
-            condition.condition_video_indicator = condition.condition_video_indicator * 0
-
-        augment_sigma = torch.tensor([augment_sigma], **self.tensor_kwargs)
-
-        # Now apply the augment_sigma to the gt_latent
-
-        noise = misc.arch_invariant_rand(
-            gt_latent.shape,
-            torch.float32,
-            self.tensor_kwargs["device"],
-            seed,
-        )
-
-        augment_latent = gt_latent + noise * augment_sigma[:, None, None, None, None]
-
-        _, _, c_in_augment, _ = self.scaling(sigma=augment_sigma)
-
-        # Multiply the whole latent with c_in_augment
-        augment_latent_cin = batch_mul(augment_latent, c_in_augment)
-
-        # Since the whole latent will multiply with c_in later, we devide the value to cancel the effect
-        _, _, c_in, _ = self.scaling(sigma=sigma)
-        augment_latent_cin = batch_mul(augment_latent_cin, 1 / c_in)
-
-        return condition, augment_latent_cin
 
     def denoise(
         self,
@@ -186,7 +106,6 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
             augment_latent = rearrange(augment_latent, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
             gt_latent = rearrange(gt_latent, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
             if getattr(condition, "view_indices_B_T", None) is not None:
-                # view_indices_B_T_og = copy.deepcopy(condition.view_indices_B_T)
                 view_indices_B_V_T = rearrange(condition.view_indices_B_T, "B (V T) -> (B V) T", V=self.n_views)
                 view_indices_B_V_T = split_inputs_cp(view_indices_B_V_T, seq_dim=1, cp_group=cp_group)
                 condition.view_indices_B_T = rearrange(view_indices_B_V_T, "(B V) T -> B (V T)", V=self.n_views)
