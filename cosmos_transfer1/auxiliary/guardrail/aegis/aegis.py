@@ -22,7 +22,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from cosmos_transfer1.auxiliary.guardrail.aegis.categories import UNSAFE_CATEGORIES
 from cosmos_transfer1.auxiliary.guardrail.common.core import ContentSafetyGuardrail, GuardrailRunner
-from cosmos_transfer1.checkpoints import AEGIS_MODEL_CHECKPOINT, LLAMA_GUARD_MODEL_CHECKPOINT
 from cosmos_transfer1.utils import log, misc
 
 SAFE = misc.Color.green("SAFE")

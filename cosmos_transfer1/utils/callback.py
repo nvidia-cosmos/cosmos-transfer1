@@ -23,7 +23,6 @@ import omegaconf
 import torch
 import torch.utils.data
 import tqdm
-from megatron.core import parallel_state
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 from cosmos_transfer1.utils import distributed, log

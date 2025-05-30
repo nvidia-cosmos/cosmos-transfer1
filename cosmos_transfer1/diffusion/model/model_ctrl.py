@@ -16,7 +16,6 @@
 from typing import Callable, Dict, Optional, Tuple, TypeVar, Union
 
 import torch
-from einops import rearrange
 from megatron.core import parallel_state
 from torch import Tensor
 

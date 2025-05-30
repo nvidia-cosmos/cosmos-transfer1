@@ -16,8 +16,6 @@
 import json
 import os
 
-import torch
-
 from cosmos_transfer1.auxiliary.depth_anything.model.depth_anything import DepthAnythingModel
 from cosmos_transfer1.auxiliary.human_keypoint.human_keypoint import HumanKeypointModel
 from cosmos_transfer1.auxiliary.sam2.sam2_model import VideoSegmentationModel

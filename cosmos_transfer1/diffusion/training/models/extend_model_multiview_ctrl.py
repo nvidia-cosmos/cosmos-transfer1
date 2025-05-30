@@ -22,14 +22,9 @@ from torch import Tensor
 
 from cosmos_transfer1.diffusion.conditioner import CosmosCondition, DataType, ViewConditionedVideoConditionerWithCtrl
 from cosmos_transfer1.diffusion.diffusion.modules.res_sampler import COMMON_SOLVER_OPTIONS
-from cosmos_transfer1.diffusion.inference.inference_utils import (
-    merge_patches_into_video,
-    non_strict_load_model,
-    split_video_into_patches,
-)
+from cosmos_transfer1.diffusion.inference.inference_utils import non_strict_load_model
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.diffusion.training.models.extend_model_multiview import MultiviewExtendDiffusionModel
-from cosmos_transfer1.diffusion.training.models.model import DiffusionModel as VideoDiffusionModel
 from cosmos_transfer1.diffusion.training.models.model import _broadcast, broadcast_condition
 from cosmos_transfer1.diffusion.training.models.model_image import diffusion_fsdp_class_decorator
 from cosmos_transfer1.utils import log, misc

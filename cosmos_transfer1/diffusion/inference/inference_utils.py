@@ -37,16 +37,11 @@ from cosmos_transfer1.checkpoints import (
     SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
     VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.config.transfer.augmentors import BilateralOnlyBlurAugmentorConfig
 from cosmos_transfer1.diffusion.datasets.augmentors.control_input import get_augmentor_for_eval
 from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel
 from cosmos_transfer1.diffusion.model.model_v2w import DiffusionV2WModel
-from cosmos_transfer1.diffusion.model.model_v2w_multiview import DiffusionV2WMultiviewModel
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.utils.config_helper import get_config_module, override
 from cosmos_transfer1.utils.io import load_from_fileobj

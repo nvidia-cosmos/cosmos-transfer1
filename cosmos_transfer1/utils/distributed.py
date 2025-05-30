@@ -27,7 +27,6 @@ from typing import Any, Callable, Optional, TypeVar
 import pynvml
 import torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.utils.ddp_config import DDPConfig

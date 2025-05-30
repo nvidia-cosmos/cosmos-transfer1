@@ -179,12 +179,12 @@ def get_normalization(name: str, channels: int):
 # ---------------------- Attention Op -----------------------
 # A list of attention ops
 if version.parse(torch.__version__) >= version.parse("2.3.0"):
-    from torch.nn.attention import SDPBackend, sdpa_kernel
+    from torch.nn.attention import sdpa_kernel
 
     sdpa_context = sdpa_kernel
     USE_SDPA = True
 elif version.parse(torch.__version__) >= version.parse("2.0.0"):
-    from torch.backends.cuda import SDPBackend, sdp_kernel
+    from torch.backends.cuda import sdp_kernel
 
     sdpa_context = sdp_kernel
     USE_SDPA = False

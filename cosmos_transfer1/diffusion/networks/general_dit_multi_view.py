@@ -18,18 +18,11 @@ from typing import Optional, Tuple
 import torch
 from einops import rearrange
 from megatron.core import parallel_state
-from torch import DictType, nn
+from torch import nn
 from torchvision import transforms
 
 from cosmos_transfer1.diffusion.conditioner import DataType
-from cosmos_transfer1.diffusion.module.attention import get_normalization
-from cosmos_transfer1.diffusion.module.blocks import (
-    FinalLayer,
-    GeneralDITTransformerBlock,
-    PatchEmbed,
-    TimestepEmbedding,
-    Timesteps,
-)
+from cosmos_transfer1.diffusion.module.blocks import GeneralDITTransformerBlock, PatchEmbed
 from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
 from cosmos_transfer1.diffusion.module.position_embedding import (
     MultiCameraSinCosPosEmbAxis,

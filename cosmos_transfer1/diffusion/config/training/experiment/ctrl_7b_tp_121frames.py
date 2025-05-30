@@ -26,7 +26,6 @@ Example usage:
             torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain
 """
 
-import copy
 import os
 
 from hydra.core.config_store import ConfigStore
