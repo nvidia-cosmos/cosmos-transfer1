@@ -30,6 +30,21 @@ from cosmos_transfer1.diffusion.model.model_v2w import DiffusionV2WModel
 from cosmos_transfer1.diffusion.module.parallel import broadcast, cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.utils import log, misc
 
+def deepcopy_no_copy_model(obj):
+    """
+    We need to create a copy of the condition construct such that condition masks can be adjusted dynamically, but
+    the controlnet encoder plug-in also uses the condition construct to pass along the base_model object which cannot be
+    deep-copied, hence this funciton
+    """
+    if hasattr(obj, "base_model") and obj.base_model is not None:
+        my_base_model = obj.base_model
+        obj.base_model = None
+        copied_obj = copy.deepcopy(obj)
+        copied_obj.base_model = my_base_model
+        obj.base_model = my_base_model
+    else:
+        copied_obj = copy.deepcopy(obj)
+    return copied_obj
 
 @dataclass
 class VideoDenoisePrediction:
@@ -87,6 +102,7 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
         assert (
             condition.gt_latent is not None
         ), f"find None gt_latent in condition, likely didn't call self.add_condition_video_indicator_and_video_input_mask when preparing the condition or this is a image batch but condition.data_type is wrong, get {noise_x.shape}"
+        condition = deepcopy_no_copy_model(condition)
         gt_latent = condition.gt_latent
         cfg_video_cond_bool: VideoCondBoolConfig = self.config.conditioner.video_cond_bool
 
