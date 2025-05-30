@@ -23,14 +23,18 @@ Most of sampling algorihtm, Runge-Kutta, Multi-step, etc, can be impl in this fr
 """
 
 import math
+import os
 from typing import Any, Callable, List, Literal, Optional, Tuple, Union
 
 import attrs
 import torch
+from tqdm import tqdm
 
 from cosmos_transfer1.diffusion.diffusion.functional.multi_step import get_multi_step_fn, is_multi_step_fn_supported
 from cosmos_transfer1.diffusion.diffusion.functional.runge_kutta import get_runge_kutta_fn, is_runge_kutta_fn_supported
+from cosmos_transfer1.utils import log
 from cosmos_transfer1.utils.ddp_config import make_freezable
+from cosmos_transfer1.utils.intermediates import SAVE_INTERMEDIATES
 
 COMMON_SOLVER_OPTIONS = Literal["2ab", "2mid", "1euler"]
 
@@ -125,7 +129,7 @@ class Sampler(torch.nn.Module):
         S_max: float = float("inf"),
         S_noise: float = 1,
         solver_option: str = "2ab",
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         in_dtype = x_sigma_max.dtype
 
         def float64_x0_fn(x_B_StateShape: torch.Tensor, t_B: torch.Tensor) -> torch.Tensor:
@@ -147,7 +151,11 @@ class Sampler(torch.nn.Module):
         timestamps_cfg = SolverTimestampConfig(nfe=num_steps, t_min=sigma_min, t_max=sigma_max, order=rho)
         sampler_cfg = SamplerConfig(solver=solver_cfg, timestamps=timestamps_cfg, sample_clean=True)
 
-        return self._forward_impl(float64_x0_fn, x_sigma_max, sampler_cfg).to(in_dtype)
+        output, intermediates = self._forward_impl(float64_x0_fn, x_sigma_max, sampler_cfg)
+        output = output.to(in_dtype)
+        intermediates = intermediates.to(in_dtype) if SAVE_INTERMEDIATES else None
+
+        return output, intermediates
 
     @torch.no_grad()
     def _forward_impl(
@@ -156,7 +164,7 @@ class Sampler(torch.nn.Module):
         noisy_input_B_StateShape: torch.Tensor,
         sampler_cfg: Optional[SamplerConfig] = None,
         callback_fns: Optional[List[Callable]] = None,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Internal implementation of the forward pass.
 
@@ -177,7 +185,7 @@ class Sampler(torch.nn.Module):
             sampler_cfg.timestamps.t_min, sampler_cfg.timestamps.t_max, num_timestamps, sampler_cfg.timestamps.order
         ).to(noisy_input_B_StateShape.device)
 
-        denoised_output = differential_equation_solver(
+        denoised_output, intermediates = differential_equation_solver(
             denoiser_fn, sigmas_L, sampler_cfg.solver, callback_fns=callback_fns
         )(noisy_input_B_StateShape)
 
@@ -186,7 +194,7 @@ class Sampler(torch.nn.Module):
             ones = torch.ones(denoised_output.size(0), device=denoised_output.device, dtype=denoised_output.dtype)
             denoised_output = denoiser_fn(denoised_output, sigmas_L[-1] * ones)
 
-        return denoised_output
+        return denoised_output, intermediates
 
 
 def fori_loop(lower: int, upper: int, body_fun: Callable[[int, Any], Any], init_val: Any) -> Any:
@@ -203,9 +211,13 @@ def fori_loop(lower: int, upper: int, body_fun: Callable[[int, Any], Any], init_
         The final result after all iterations.
     """
     val = init_val
-    for i in range(lower, upper):
+    intermediates = []
+    for i in tqdm(range(lower, upper)):
         val = body_fun(i, val)
-    return val
+        intermediates.append(val[0])
+
+    intermediates = torch.stack(intermediates) if SAVE_INTERMEDIATES else None
+    return val[0], intermediates
 
 
 def differential_equation_solver(
@@ -213,7 +225,7 @@ def differential_equation_solver(
     sigmas_L: torch.Tensor,
     solver_cfg: SolverConfig,
     callback_fns: Optional[List[Callable]] = None,
-) -> Callable[[torch.Tensor], torch.Tensor]:
+) -> Callable[[torch.Tensor], Tuple[torch.Tensor, Optional[torch.Tensor]]]:
     """
     Creates a differential equation solver function.
 
@@ -235,7 +247,7 @@ def differential_equation_solver(
 
     eta = min(solver_cfg.s_churn / (num_step + 1), math.sqrt(1.2) - 1)
 
-    def sample_fn(input_xT_B_StateShape: torch.Tensor) -> torch.Tensor:
+    def sample_fn(input_xT_B_StateShape: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Samples from the differential equation.
 
@@ -277,7 +289,8 @@ def differential_equation_solver(
 
             return output_x_B_StateShape, x0_preds
 
-        x_at_eps, _ = fori_loop(0, num_step, step_fn, [input_xT_B_StateShape, None])
-        return x_at_eps
+        log.info(f"Running diffusion loop with {num_step} steps")
+        x_at_eps, intermediates = fori_loop(0, num_step, step_fn, [input_xT_B_StateShape, None])
+        return x_at_eps, intermediates
 
     return sample_fn
