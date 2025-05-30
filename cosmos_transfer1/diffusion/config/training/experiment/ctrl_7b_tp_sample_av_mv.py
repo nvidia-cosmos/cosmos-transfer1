@@ -19,12 +19,9 @@ Usage:
     - [debug small model, 1 gpu] torchrun --nproc_per_node=8 -m projects.edify_image.v4.train --config=projects/edify_video/v4/config/ctrl/config.py -- experiment=CTRL_tp_121frames_control_input_bbox_image_block3  model.net.num_blocks=1 model.context_parallel_size=1 checkpoint.load_path="" job.group=debug trainer.logging_iter=5
 """
 
-import copy
 import os
 
 from hydra.core.config_store import ConfigStore
-from megatron.core import parallel_state
-from torch.utils.data import DataLoader, DistributedSampler
 
 from cosmos_transfer1.checkpoints import (
     BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
@@ -35,13 +32,8 @@ from cosmos_transfer1.checkpoints import (
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.config.base.data import get_sampler
-from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
 from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import AVTransferDataset
-from cosmos_transfer1.diffusion.training.models.extend_model_multiview_ctrl import (
-    FSDPMultiVideoDiffusionModelWithCtrl,
-    MultiVideoDiffusionModelWithCtrl,
-)
-from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
+from cosmos_transfer1.diffusion.training.models.extend_model_multiview_ctrl import MultiVideoDiffusionModelWithCtrl
 from cosmos_transfer1.diffusion.training.networks.general_dit_multi_camera import VideoExtendGeneralDIT
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict

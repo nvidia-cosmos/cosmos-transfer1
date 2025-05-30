@@ -19,7 +19,6 @@ ControlNet Encoder based on GeneralDIT
 
 from typing import List, Optional, Tuple
 
-import numpy as np
 import torch
 from einops import rearrange
 from megatron.core import parallel_state

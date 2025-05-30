@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional, Type, TypeVar, Union
+from typing import Any, Dict, Optional, Type, Union
 
 import attrs
 import torch

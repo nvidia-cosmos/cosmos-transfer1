@@ -13,15 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from abc import ABC, abstractmethod
 
 import torch
-import torch.nn.functional as F
 from einops import rearrange
 from torch.nn.modules import Module
-
-from cosmos_transfer1.utils.distributed import rank0_first
 
 
 class BaseVAE(torch.nn.Module, ABC):

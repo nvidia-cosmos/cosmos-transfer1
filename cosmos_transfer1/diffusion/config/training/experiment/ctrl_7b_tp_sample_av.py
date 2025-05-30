@@ -19,24 +19,18 @@ Usage:
     - [debug small model, 1 gpu] torchrun --nproc_per_node=8 -m projects.edify_image.v4.train --config=projects/edify_video/v4/config/ctrl/config.py -- experiment=CTRL_tp_121frames_control_input_bbox_image_block3  model.net.num_blocks=1 model.context_parallel_size=1 checkpoint.load_path="" job.group=debug trainer.logging_iter=5
 """
 
-import copy
 import os
 
 from hydra.core.config_store import ConfigStore
-from megatron.core import parallel_state
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DataLoader
 
-from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_CHECKPOINT, COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT
+from cosmos_transfer1.checkpoints import COSMOS_TRANSFER1_7B_SAMPLE_AV_CHECKPOINT
 from cosmos_transfer1.diffusion.config.base.data import get_sampler
-from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
-from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import AVTransferDataset, ExampleTransferDataset
+from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import AVTransferDataset
 from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
 from cosmos_transfer1.diffusion.training.models.model_ctrl import (  # this one has training support
     ShortVideoDiffusionModelWithCtrl,
-    VideoDiffusionModelWithCtrl,
 )
-from cosmos_transfer1.diffusion.training.networks.general_dit import GeneralDIT
-from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
 

@@ -15,11 +15,7 @@
 
 import omegaconf
 
-from cosmos_transfer1.diffusion.training.modules.pretrained_vae import (
-    JITVAE,
-    JointImageVideoSharedJITTokenizer,
-    VideoJITTokenizer,
-)
+from cosmos_transfer1.diffusion.training.modules.pretrained_vae import VideoJITTokenizer
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
 TOKENIZER_OPTIONS = {}

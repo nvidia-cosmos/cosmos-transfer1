@@ -14,16 +14,14 @@
 # limitations under the License.
 
 default_language_version:
-  python: python3.10
+  python: python3.12
 repos:
   - repo: https://github.com/pycqa/flake8
     rev: 6.0.0
     hooks:
-      - id: flake8
-        args:
-          - --max-line-length=120
-          - --ignore=E501,F401,E203,E402,E265,E741,F841,F821,F811,W503,E231,E225,E702
-        exclude: ^dist/|^third_party/
+    - id: flake8
+      args: [--max-line-length=120, --config=.flake8]
+      exclude: ^dist/|^third_party/
 
   - repo: https://github.com/psf/black
     rev: 23.12.1

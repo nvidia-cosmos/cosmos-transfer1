@@ -43,21 +43,15 @@ from cosmos_transfer1.checkpoints import (
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.inference.inference_utils import (
-    detect_aspect_ratio,
     generate_control_input,
     generate_world_from_control,
     get_batched_ctrl_batch,
-    get_ctrl_batch,
     get_ctrl_batch_mv,
-    get_upscale_size,
-    get_video_batch,
     get_video_batch_for_multiview_model,
     load_model_by_config,
     load_network_model,
     load_tokenizer_model,
-    merge_patches_into_video,
     non_strict_load_model,
-    read_and_resize_input,
     read_video_or_image_into_frames_BCTHW,
     resize_control_weight_map,
     resize_video,
@@ -105,8 +99,6 @@ MODEL_CLASS_DICT = {
     SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
 }
-
-from collections import defaultdict
 
 
 class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
