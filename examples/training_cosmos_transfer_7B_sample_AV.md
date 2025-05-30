@@ -196,5 +196,5 @@ Since the `experiment` is uniquely associated with its checkpoint directory, rer
 
 
 ### 5. Inference Using Trained Models
-- Convert the TP checkpoints to FSDP checkpoint using [this script](scripts/convert_ckpt_tp_to_fsdp.py). Note: this script requires TP_SIZE gpus available.
+- Convert the TP checkpoints to FSDP checkpoint using [this script](../scripts/convert_ckpt_tp_to_fsdp.py). Note: this script requires TP_SIZE gpus available.
 - Run inference steps as in the [inference README](./inference_cosmos_transfer1_7b_sample_av.md).
