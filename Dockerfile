@@ -14,31 +14,28 @@
 # limitations under the License.
 
 # Use NVIDIA PyTorch container as base image
-FROM nvcr.io/nvidia/pytorch:24.10-py3
+FROM nvcr.io/nvidia/tritonserver:25.04-vllm-python-py3
 
 # Install basic tools
 RUN apt-get update && apt-get install -y git tree ffmpeg wget
 RUN rm /bin/sh && ln -s /bin/bash /bin/sh && ln -s /lib64/libcuda.so.1 /lib64/libcuda.so
+RUN apt-get install -y libglib2.0-0
 
 # Copy the cosmos-transfer1.yaml and requirements.txt files to the container
 COPY ./cosmos-transfer1.yaml /cosmos-transfer1.yaml
 COPY ./requirements.txt /requirements.txt
 
-# Install dependencies. This will take a while.
+RUN ls -l /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info && rm -rf /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info
 RUN echo "Installing dependencies. This will take a while..." && \
-    mkdir -p ~/miniconda3 && \
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh && \
-    bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3 && \
-    rm ~/miniconda3/miniconda.sh && \
-    source ~/miniconda3/bin/activate && \
-    conda env create --file /cosmos-transfer1.yaml && \
-    conda activate cosmos-transfer1 && \
     pip install --no-cache-dir -r /requirements.txt && \
-    ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/ && \
-    ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.10 && \
-    pip install transformer-engine[pytorch]==1.12.0 && \
-    pip install vllm==0.8.0 && \
+    pip install -v --upgrade --no-build-isolation --no-dependencies sam2==1.1.0 && \
+    pip install transformer-engine[pytorch] && \
     echo "Environment setup complete"
 
-# Default command
+# Create Python symlink
+RUN ln -s /usr/bin/python3.12 /usr/bin/python
+
+RUN mkdir -p /workspace
+WORKDIR /workspace
+
 CMD ["/bin/bash"]
