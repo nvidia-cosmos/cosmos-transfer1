@@ -30,6 +30,7 @@ from cosmos_transfer1.diffusion.model.model_v2w import DiffusionV2WModel
 from cosmos_transfer1.diffusion.module.parallel import broadcast, cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.utils import log, misc
 
+
 def deepcopy_no_copy_model(obj):
     """
     We need to create a copy of the condition construct such that condition masks can be adjusted dynamically, but
@@ -45,6 +46,7 @@ def deepcopy_no_copy_model(obj):
     else:
         copied_obj = copy.deepcopy(obj)
     return copied_obj
+
 
 @dataclass
 class VideoDenoisePrediction:

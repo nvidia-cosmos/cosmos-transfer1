@@ -1021,7 +1021,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
             prev_frames = torch.zeros_like(frames_BVCT)
             n_copy = max(1, abs(self.num_input_frames))
-            prev_frames[:, :, :, : n_copy] = frames_BVCT[:, :, :, -n_copy :]
+            prev_frames[:, :, :, :n_copy] = frames_BVCT[:, :, :, -n_copy:]
             prev_frames = einops.rearrange(prev_frames, "B V C T H W -> B C (V T) H W")
 
         video = torch.cat(video, dim=3)

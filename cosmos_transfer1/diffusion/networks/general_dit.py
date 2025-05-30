@@ -511,7 +511,6 @@ class GeneralDIT(nn.Module):
             rope_emb_L_1_1_D,
             adaln_lora_B_3D,
             original_shape,
-
         ) = (
             inputs["x"],
             inputs["affline_emb_B_D"],
@@ -524,7 +523,7 @@ class GeneralDIT(nn.Module):
         if regional_contexts is not None:
             regional_contexts = inputs["regional_contexts"]
         if region_masks is not None:
-            region_masks  = inputs["region_masks"]
+            region_masks = inputs["region_masks"]
         extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D = inputs["extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D"]
         if extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D is not None:
             assert (
