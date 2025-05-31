@@ -34,6 +34,7 @@ omegaconf==2.3.0
 opencv-python==4.10.0.84
 peft==0.14.0
 pycocotools
+python-magic
 retinaface-py==0.0.2
 rtmlib==0.0.13
 scikit-image==0.25.2

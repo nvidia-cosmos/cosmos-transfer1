@@ -10,7 +10,7 @@
     "regional_prompts": [
         {
             "prompt": "woman is wearing a red dress with white ruffles",
-            "region_definitions_path": "assets/regionprompt_test/regionprompt_test_left.json"
+            "region_definitions_path": [0.0, 0.0, 0.5, 1.0]
         }
     ]
 }

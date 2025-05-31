@@ -282,7 +282,7 @@ def demo(cfg, control_inputs):
                 if "region_definitions_path" in regional_prompt:
                     log.info(f"region_definitions_path: {regional_prompt['region_definitions_path']}")
                     region_definition_path = regional_prompt["region_definitions_path"]
-                    if region_definition_path.endswith(".json"):
+                    if isinstance(region_definition_path, str) and region_definition_path.endswith(".json"):
                         with open(region_definition_path, "r") as f:
                             region_definitions_json = json.load(f)
                         region_definitions.extend(region_definitions_json)
