@@ -23,7 +23,7 @@ RUN apt-get install -y libglib2.0-0
 
 # Copy the cosmos-transfer1.yaml and requirements.txt files to the container
 COPY ./cosmos-transfer1.yaml /cosmos-transfer1.yaml
-COPY ./requirements.txt /requirements.txt
+COPY ./requirements_docker.txt /requirements.txt
 
 RUN ls -l /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info && rm -rf /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info
 RUN echo "Installing dependencies. This will take a while..." && \

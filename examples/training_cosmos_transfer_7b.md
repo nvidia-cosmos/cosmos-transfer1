@@ -38,7 +38,7 @@ huggingface-cli login
 4. Download the Cosmos model weights from [Hugging Face](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e). Note that this will require about 300GB of free storage.
 
 ```bash
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
+PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
 ```
 
 5. The downloaded files should be in the following structure.
@@ -148,7 +148,7 @@ pip install pytubefix ffmpeg
 
 ```bash
 # The script will downlaod the original HD-VILA-100M videos, save the corresponding clips, the captions and the metadata.
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/download_diffusion_example_data.py --dataset_path datasets/hdvila --N_videos 128 --do_download --do_clip
+PYTHONPATH=$(pwd) python scripts/download_diffusion_example_data.py --dataset_path datasets/hdvila --N_videos 128 --do_download --do_clip
 ```
 
 ### 2. Computing T5 Text Embeddings
@@ -156,7 +156,7 @@ Run the following command to pre-compute T5-XXL embeddings for the video caption
 
 ```bash
 # The script will read the captions, save the T5-XXL embeddings in pickle format.
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/get_t5_embeddings.py --dataset_path datasets/hdvila
+PYTHONPATH=$(pwd) python scripts/get_t5_embeddings.py --dataset_path datasets/hdvila
 ```
 
 ### 3. Obtaining the Control Input Data

@@ -21,7 +21,7 @@ huggingface-cli login
 4. Download the Cosmos model weights from [Hugging Face](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e):
 
 ```bash
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
+PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
 ```
 
 Note that this will require about 300GB of free storage. Not all these checkpoints will be used in every generation.
@@ -76,7 +76,7 @@ Ensure you are at the root of the repository before executing the following:
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPU="${NUM_GPU:=1}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/inference_upscaler \
     --controlnet_specs assets/inference_upscaler.json \
@@ -91,7 +91,7 @@ You can also choose to run the inference on multiple GPUs as follows:
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0,1,2,3}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPU="${NUM_GPU:=4}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/inference_upscaler \
     --controlnet_specs assets/inference_upscaler.json \

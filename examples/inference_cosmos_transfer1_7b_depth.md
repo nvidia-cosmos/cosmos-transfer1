@@ -5,7 +5,7 @@ Here is another simple example of using the Depth control. Many steps are simila
 ```bash
 export CUDA_VISIBLE_DEVICES=0
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example1_single_control_depth \
     --controlnet_specs assets/inference_cosmos_transfer1_single_control_depth.json \

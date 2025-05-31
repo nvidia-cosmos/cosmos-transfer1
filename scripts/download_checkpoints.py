@@ -19,7 +19,7 @@ This file downloads the checkpoints specified in the `cosmos_transfer1.checkpoin
 
 Usage:
 
-    CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir <output_dir> --hf_token <hf_token>
+    PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir <output_dir> --hf_token <hf_token>
     If the token is not provided, it will try to read from the `HF_TOKEN` environment variable.
 
 """

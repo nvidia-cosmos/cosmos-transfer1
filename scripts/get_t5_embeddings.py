@@ -23,7 +23,7 @@ import torch
 from transformers import T5EncoderModel, T5TokenizerFast
 
 """example command
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/get_t5_embeddings.py --dataset_path datasets/hdvila
+PYTHONPATH=$(pwd) python scripts/get_t5_embeddings.py --dataset_path datasets/hdvila
 """
 
 
