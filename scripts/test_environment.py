@@ -49,7 +49,7 @@ if not (sys.version_info.major == 3 and sys.version_info.minor >= 10):
     sys.exit(1)
 
 if "CONDA_PREFIX" not in os.environ:
-    print("\033[93m[WARNING]\033[0m Cosmos should be run under a conda environment.")
+    print("\033[93m[WARNING]\033[0m Cosmos should be run under a conda environment, if run outside of a container.")
 
 print("Attempting to import critical packages...")
 

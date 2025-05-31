@@ -20,15 +20,21 @@ conda env create --file cosmos-transfer1.yaml
 conda activate cosmos-transfer1
 # Install the dependencies.
 pip install -r requirements.txt
+# Install vllm
+1. pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
+2. export VLLM_ATTENTION_BACKEND=FLASHINFER
+3. pip install vllm==0.9.0
 # Patch Transformer engine linking issues in conda environments.
-ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
-ln -sf $CONDA_PREFIX/lib/python3.10/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.10
+ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
+ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.12
 # Install Transformer engine.
-pip install transformer-engine[pytorch]==1.12.0
+pip install transformer-engine[pytorch]
 ```
 
 * Alternatively, if you are more familiar with a containerized environment, you can build the dockerfile and run it to get an environment with all the packages pre-installed.
     This requires docker to be already present on your system with the [Nvidia Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed.
+
+    conda is not needed for docker environment!
 
     ```bash
     docker build -f Dockerfile . -t nvcr.io/$USER/cosmos-transfer1:latest
