@@ -17,8 +17,8 @@
 Usage:
     torchrun --nproc_per_node=8 convert_ckpt_tp_to_fsdp.py \
         --experiment CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain \
-        --checkpoint-path checkpoints/cosmos_transfer1_posttrain/CTRL_7Bv1_lvg/CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain/checkpoints/iter_000000100.pt \
-        
+        --checkpoint-path checkpoints/cosmos_transfer1_posttrain/CTRL_7Bv1_lvg/CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain/checkpoints/iter_000000100.pt
+
 This script is designed to convert a Tensor Parallel (TP) checkpoint
 to a Fully Sharded Data Parallel (FSDP) compatible format for a video diffusion model.
 
@@ -45,8 +45,8 @@ iter_000000100_ema_model.pt
 ```
 """
 
-import os
 import argparse
+import os
 from collections import OrderedDict
 
 import torch
@@ -301,30 +301,32 @@ if __name__ == "__main__":
         "--experiment",
         type=str,
         default="CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain",
-        help="Name of the experiment"
+        help="Name of the experiment",
     )
     parser.add_argument(
         "--checkpoint-path",
         type=str,
-        help="Path to the checkpoint file. If not provided, will be constructed using experiment name"
+        help="Path to the checkpoint file. If not provided, will be constructed using experiment name",
     )
     parser.add_argument(
         "--output-directory",
         type=str,
-        help="Directory to save the converted checkpoints. If not provided, will be constructed using checkpoint path"
+        help="Directory to save the converted checkpoints. If not provided, will be constructed using checkpoint path",
     )
     parser.add_argument(
         "--include-base-model",
         action="store_true",
         default=False,
-        help="Include base model in controlnet checkpoint (default: False)"
+        help="Include base model in controlnet checkpoint (default: False)",
     )
 
     args = parser.parse_args()
 
     # Set default checkpoint path if not provided
     if args.checkpoint_path is None:
-        args.checkpoint_path = f"checkpoints/cosmos_transfer1_posttrain/CTRL_7Bv1_lvg/{args.experiment}/checkpoints/iter_000000100.pt"
+        args.checkpoint_path = (
+            f"checkpoints/cosmos_transfer1_posttrain/CTRL_7Bv1_lvg/{args.experiment}/checkpoints/iter_000000100.pt"
+        )
 
     # Set default output directory if not provided
     if args.output_directory is None:
@@ -340,5 +342,5 @@ if __name__ == "__main__":
         experiment=args.experiment,
         checkpoint_path=args.checkpoint_path,
         output_directory=args.output_directory,
-        include_base_model_in_ctrlnet_ckpt=args.include_base_model
+        include_base_model_in_ctrlnet_ckpt=args.include_base_model,
     )
