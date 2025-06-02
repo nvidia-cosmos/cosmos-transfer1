@@ -25,9 +25,6 @@ RUN apt-get install -y libglib2.0-0
 COPY ./cosmos-transfer1.yaml /cosmos-transfer1.yaml
 COPY ./requirements_docker.txt /requirements.txt
 
-# Set the conda prefix, so that the CUDA_HOME environment variable is set correctly
-ENV CONDA_PREFIX=/usr/local/cuda
-
 RUN ls -l /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info && rm -rf /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info
 RUN echo "Installing dependencies. This will take a while..." && \
     pip install --no-cache-dir -r /requirements.txt && \
