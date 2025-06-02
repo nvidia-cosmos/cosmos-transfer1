@@ -32,6 +32,7 @@ natsort==8.4.0
 nltk==3.9.1
 omegaconf==2.3.0
 opencv-python==4.10.0.84
+pandas==2.2.3
 peft==0.14.0
 pycocotools
 retinaface-py==0.0.2
