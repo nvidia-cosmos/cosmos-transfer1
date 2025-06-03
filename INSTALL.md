@@ -40,7 +40,7 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/test_environment.py
 
 ### Inference using docker
 
-Alternatively, if you are more familiar with a containerized environment, you can build the dockerfile and run it to get an environment with all the packages pre-installed. There is no need for conda in this setup, therefore remember to remove the prefix `CUDA_HOME=$CONDA_PREFIX` from the example commands that you see in this repo.
+If you prefer to use a containerized environment, you can build and run this repo's dockerfile to get an environment with all the packages pre-installed. This environment does not use conda. So, there is no need to specify `CUDA_HOME=$CONDA_PREFIX` when invoking this repo's scripts.
     
 This requires docker to be already present on your system with the [Nvidia Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed.
 
