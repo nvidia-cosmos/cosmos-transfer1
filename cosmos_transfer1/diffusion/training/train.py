@@ -76,15 +76,6 @@ def launch(config: Config, args: argparse.Namespace) -> None:
         config.trainer.seed = seed
         log.critical(f"Changed Random Seed based on timestamp. {config.trainer.seed}")
 
-    # Config model tokenizer paths update
-    checkpoints_dir = os.getenv("CHECKPOINT_DIR", "./checkpoints")
-    # Update tokenizer paths
-    config.model.tokenizer.enc_fp = os.path.join(checkpoints_dir, "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/encoder.jit")
-    config.model.tokenizer.dec_fp = os.path.join(checkpoints_dir, "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/decoder.jit")
-    config.model.tokenizer.mean_std_fp = os.path.join(checkpoints_dir, "nvidia/Cosmos-Tokenize1-CV8x8x8-720p/mean_std.pt")
-    # Update base load from path
-    config.model.base_load_from.load_path = os.path.join(checkpoints_dir, "nvidia/Cosmos-Transfer1-7B/checkpoints_tp/base_model_model_mp_*.pt")
-    config.checkpoint.load_path = os.path.join(checkpoints_dir, "nvidia/Cosmos-Transfer1-7B/checkpoints_tp/vis_control.pt")
     # Freeze the config so developers don't change it during training.
     log.info(f"TokenizerConfig: {config.model.tokenizer}")
     config.freeze()  # type: ignore
