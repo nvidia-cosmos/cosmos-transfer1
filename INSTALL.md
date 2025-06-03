@@ -26,6 +26,8 @@ pip install -r requirements.txt
 1. pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
 2. export VLLM_ATTENTION_BACKEND=FLASHINFER
 3. pip install vllm==0.9.0
+# Install decord
+pip install decord==0.6.0
 # Patch Transformer engine linking issues in conda environments.
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.12
@@ -68,11 +70,16 @@ pip install -r requirements.txt
 1. pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
 2. export VLLM_ATTENTION_BACKEND=FLASHINFER
 3. pip install vllm==0.9.0
+# Install decord
+pip install decord==0.6.0
 # Patch Transformer engine linking issues in conda environments.
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.12
 # Install Transformer engine.
 pip install transformer-engine[pytorch]
+# Install Apex for full training with bfloat16.
+git clone https://github.com/NVIDIA/apex
+CUDA_HOME=$CONDA_PREFIX pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./apex
 ```
 
 You can test the environment setup for post-training with

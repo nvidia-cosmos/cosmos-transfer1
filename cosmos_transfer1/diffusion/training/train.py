@@ -78,6 +78,7 @@ def launch(config: Config, args: argparse.Namespace) -> None:
 
     # Freeze the config so developers don't change it during training.
     config.freeze()  # type: ignore
+    log.info(f"Config: {config}")
     trainer = config.trainer.type(config)
     # # Setup the miscellaneous stuff for reproducibility.
     # log_reproducible_setup(config, args)

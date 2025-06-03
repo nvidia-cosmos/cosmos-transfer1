@@ -60,6 +60,7 @@ packages = [
     "megatron.core",
     "transformer_engine",
     "vllm",
+    "pandas"
 ]
 packages_training = [
     "apex.multi_tensor_apply",
