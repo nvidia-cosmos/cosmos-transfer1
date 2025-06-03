@@ -77,9 +77,7 @@ def launch(config: Config, args: argparse.Namespace) -> None:
         log.critical(f"Changed Random Seed based on timestamp. {config.trainer.seed}")
 
     # Freeze the config so developers don't change it during training.
-    log.info(f"TokenizerConfig: {config.model.tokenizer}")
     config.freeze()  # type: ignore
-
     trainer = config.trainer.type(config)
     # # Setup the miscellaneous stuff for reproducibility.
     # log_reproducible_setup(config, args)
