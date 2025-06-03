@@ -257,7 +257,7 @@ The script will create two files in the output directory:
 1. `*_reg_model.pt`: Regular model checkpoint
 2. `*_ema_model.pt`: EMA model checkpoint
 
-The regular model checkpoint is the ControlNet checkpoint that should be used to run inference in the next stage. For more details about the conversion process and available options, refer to the script's docstring.
+The EMA model checkpoint (`*_ema_model.pt`) typically presents better quality results and is recommended for running inference in the next stage. For more details about the conversion process and available options, refer to the script's docstring.
 
 **Run inference:** Follow the steps in the [inference README](./inference_cosmos_transfer1_7b.md).
 
