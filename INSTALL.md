@@ -23,9 +23,9 @@ conda activate cosmos-transfer1
 # Install the dependencies.
 pip install -r requirements.txt
 # Install vllm
-1. pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
-2. export VLLM_ATTENTION_BACKEND=FLASHINFER
-3. pip install vllm==0.9.0
+pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
+export VLLM_ATTENTION_BACKEND=FLASHINFER
+pip install vllm==0.9.0
 # Install decord
 pip install decord==0.6.0
 # Patch Transformer engine linking issues in conda environments.
@@ -67,9 +67,9 @@ conda activate cosmos-transfer1
 # Install the dependencies.
 pip install -r requirements.txt
 # Install vllm
-1. pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
-2. export VLLM_ATTENTION_BACKEND=FLASHINFER
-3. pip install vllm==0.9.0
+pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
+export VLLM_ATTENTION_BACKEND=FLASHINFER
+pip install vllm==0.9.0
 # Install decord
 pip install decord==0.6.0
 # Patch Transformer engine linking issues in conda environments.
