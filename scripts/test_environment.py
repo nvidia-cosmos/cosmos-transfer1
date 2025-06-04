@@ -34,7 +34,7 @@ def check_packages(package_list):
     for package in package_list:
         try:
             _ = importlib.import_module(package)
-        except Exception as e:
+        except Exception:
             print(f"\033[91m[ERROR]\033[0m Package not successfully imported: \033[93m{package}\033[0m")
             all_success = False
         else:
