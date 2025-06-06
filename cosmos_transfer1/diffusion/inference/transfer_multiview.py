@@ -43,6 +43,67 @@ from cosmos_transfer1.utils.io import save_video
 
 torch.enable_grad(False)
 
+from cosmos_transfer1.checkpoints import (
+    BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
+    BASE_7B_CHECKPOINT_PATH,
+    DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
+    VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+    BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH,
+)
+
+from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
+from cosmos_transfer1.diffusion.model.model_multi_camera_ctrl import MultiVideoDiffusionModelWithCtrl
+
+MODEL_CLASS_DICT = {
+    BASE_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
+    EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
+    VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
+    DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
+    SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
+    KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
+    UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
+    BASE_7B_CHECKPOINT_AV_SAMPLE_PATH: VideoDiffusionT2VModelWithCtrl,
+    HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionT2VModelWithCtrl,
+    LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: VideoDiffusionT2VModelWithCtrl,
+    BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+}
+
+MODEL_NAME_DICT = {
+    BASE_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3",
+    EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3",
+    VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_lvg_tp_121frames_control_input_vis_block3",
+    DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_lvg_tp_121frames_control_input_depth_block3",
+    KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_lvg_tp_121frames_control_input_keypoint_block3",
+    SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3",
+    UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_lvg_tp_121frames_control_input_upscale_block3",
+    BASE_7B_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_t2v_121frames_control_input_hdmap_block3",
+    HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_t2v_121frames_control_input_hdmap_block3",
+    LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_t2v_121frames_control_input_lidar_block3",
+    BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_block3",
+    BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_sv2mv_v2w_57frames_control_input_hdmap_block3",
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_block3",
+    SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_lidar_block3",
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_waymo_block3",
+}
+
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Control to world generation demo script", conflict_handler="resolve")
@@ -166,6 +227,12 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Offload prompt upsampler model after inference",
     )
+    parser.add_argument(
+        "--waymo_example",
+        type=bool,
+        default=False,
+        help="Set to true when using post-trained checkpoint from the Waymo post-training example",
+    )
 
     cmd_args = parser.parse_args()
 
@@ -271,27 +338,45 @@ def demo(cfg, control_inputs):
         device_rank = distributed.get_rank(process_group)
 
     preprocessors = Preprocessors()
-    prompts = [
-        cfg.prompt,
-        cfg.prompt_left,
-        cfg.prompt_right,
-        cfg.prompt_back,
-        cfg.prompt_back_left,
-        cfg.prompt_back_right,
-    ]
 
-    if cfg.initial_condition_video:
-        cfg.is_lvg_model = True
-        checkpoint = BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
+    if cfg.waymo_example:
+        prompts = [
+            cfg.prompt,
+            cfg.prompt_left,
+            cfg.prompt_right,
+            cfg.prompt_back_left,
+            cfg.prompt_back_right,
+        ]   
+
+        checkpoint = SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH
+
     else:
-        cfg.is_lvg_model = False
-        cfg.num_input_frames = 0
-        checkpoint = BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
+        prompts = [
+            cfg.prompt,
+            cfg.prompt_left,
+            cfg.prompt_right,
+            cfg.prompt_back,
+            cfg.prompt_back_left,
+            cfg.prompt_back_right,
+        ]
+
+        if cfg.initial_condition_video:
+            cfg.is_lvg_model = True
+            checkpoint = BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
+        else:
+            cfg.is_lvg_model = False
+            cfg.num_input_frames = 0
+            checkpoint = BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
+
+    model_name = MODEL_NAME_DICT[checkpoint]
+    model_class = MODEL_CLASS_DICT[checkpoint]
 
     # Initialize transfer generation model pipeline
     pipeline = DiffusionControl2WorldMultiviewGenerationPipeline(
         checkpoint_dir=cfg.checkpoint_dir,
         checkpoint_name=checkpoint,
+        model_name=model_name,
+        model_class=model_class,
         offload_network=cfg.offload_diffusion_transformer,
         offload_text_encoder_model=cfg.offload_text_encoder_model,
         offload_guardrail_models=cfg.offload_guardrail_models,
@@ -308,6 +393,7 @@ def demo(cfg, control_inputs):
         width=1024,
         is_lvg_model=cfg.is_lvg_model,
         n_clip_max=cfg.n_clip_max,
+        waymo_example=cfg.waymo_example,
     )
 
     os.makedirs(cfg.video_save_folder, exist_ok=True)
