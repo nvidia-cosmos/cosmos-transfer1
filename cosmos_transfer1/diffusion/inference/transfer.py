@@ -268,6 +268,7 @@ def demo(cfg, control_inputs):
                         log.warning(f"Ignoring unknown control key in override: {hint_key}")
 
             # if control inputs are not provided, run respective preprocessor (for seg and depth)
+            log.info("running preprocessor")
             preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder)
             if hasattr(cfg, "regional_prompts") and cfg.regional_prompts:
                 log.info(f"regional_prompts after preprocessors: {cfg.regional_prompts}")
@@ -282,7 +283,7 @@ def demo(cfg, control_inputs):
                 if "region_definitions_path" in regional_prompt:
                     log.info(f"region_definitions_path: {regional_prompt['region_definitions_path']}")
                     region_definition_path = regional_prompt["region_definitions_path"]
-                    if region_definition_path.endswith(".json"):
+                    if isinstance(region_definition_path, str) and region_definition_path.endswith(".json"):
                         with open(region_definition_path, "r") as f:
                             region_definitions_json = json.load(f)
                         region_definitions.extend(region_definitions_json)

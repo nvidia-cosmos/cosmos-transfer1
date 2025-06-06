@@ -1,0 +1,29 @@
+{
+    "prompt": "The video shows a sequence of images where two women are facing each other, both wearing floral headscarves and traditional-style dresses. They appear to be engaged in a conversation, with their facial expressions and body language suggesting a friendly or intimate interaction. In the background, there is a man dressed in a military uniform, standing with his back to the camera, seemingly observing the women. The setting looks like a room with posters on the wall, and the overall atmosphere is casual and domestic.",
+    "input_video_path" : "assets/regionalprompt_test/rgb.mp4",
+    "num_video_frames": 121,
+    "seed": 1,
+    "edge": {
+        "control_weight": 0.5
+    },
+    "depth": {
+        "control_weight": 0.33
+    },
+    "seg": {
+        "control_weight": 0.25
+    },
+    "regional_prompts": [
+        {
+            "prompt": "Walls are filled with metal shelves and boxes and packages inside, worn grey concrete floor with a soft reflection of the surroundings.",
+            "region_definitions_path": "assets/regionalprompt_test/environment_mask.mp4"
+        },
+        {
+            "prompt": "Yellow and black forklift handtruck",
+            "region_definitions_path": "assets/regionalprompt_test/forklift_mask.mp4"
+        },
+        {
+            "prompt": "A worker stands in an orange safety vest, jeans and a black baseball cap.",
+            "region_definitions_path": "assets/regionalprompt_test/worker_mask.mp4"
+        }
+    ]
+}
