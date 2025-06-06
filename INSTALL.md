@@ -8,7 +8,7 @@ git submodule update --init --recursive
 ```
 
 Cosmos runs only on Linux systems. We have tested the installation with Ubuntu 24.04, 22.04, and 20.04.
-Cosmos requires the Python version to be `3.12.x`. 
+Cosmos requires the Python version to be `3.12.x`.
 
 ### Inference using conda
 
@@ -43,14 +43,14 @@ CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/test_environment.py
 ### Inference using docker
 
 If you prefer to use a containerized environment, you can build and run this repo's dockerfile to get an environment with all the packages pre-installed. This environment does not use conda. So, there is no need to specify `CUDA_HOME=$CONDA_PREFIX` when invoking this repo's scripts.
-    
+
 This requires docker to be already present on your system with the [Nvidia Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed.
 
 ```bash
 docker build -f Dockerfile . -t nvcr.io/$USER/cosmos-transfer1:latest
 ```
 
-Note: In case you encounter permission issues while mounting local files inside the docker, you can share the folders from your current directory to all users (including docker) using this helpful alias 
+Note: In case you encounter permission issues while mounting local files inside the docker, you can share the folders from your current directory to all users (including docker) using this helpful alias
 ```
 alias share='sudo chown -R ${USER}:users $PWD && sudo chmod g+w $PWD'
 ```
