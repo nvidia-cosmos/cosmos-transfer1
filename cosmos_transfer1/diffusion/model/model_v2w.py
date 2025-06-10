@@ -26,6 +26,7 @@ from cosmos_transfer1.diffusion.diffusion.functional.batch_ops import batch_mul
 from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.utils import log, misc
+from cosmos_transfer1.utils.intermediates import SAVE_INTERMEDIATES
 
 
 @dataclass
@@ -182,7 +183,7 @@ class DiffusionV2WModel(DiffusionT2WModel):
         add_input_frames_guidance: bool = False,
         x_sigma_max: Optional[torch.Tensor] = None,
         sigma_max: Optional[float] = None,
-    ) -> Tensor:
+    ) -> Tuple[Tensor, Optional[Tensor]]:
         """Generates video samples conditioned on input frames.
 
         Args:
@@ -238,12 +239,15 @@ class DiffusionV2WModel(DiffusionT2WModel):
         if self.net.is_context_parallel_enabled:
             x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
 
-        samples = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
+        samples, intermediates = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
 
         if self.net.is_context_parallel_enabled:
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
+            intermediates = (
+                cat_outputs_cp(intermediates, seq_dim=3, cp_group=self.net.cp_group) if SAVE_INTERMEDIATES else None
+            )
 
-        return samples
+        return samples, intermediates
 
     def get_x0_fn_from_batch_with_condition_latent(
         self,
