@@ -17,11 +17,16 @@ from hydra.core.config_store import ConfigStore
 
 from cosmos_transfer1.checkpoints import (
     BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
+    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH,
     BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
 )
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
-from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
+from cosmos_transfer1.diffusion.model.model_ctrl import (
+    VideoDiffusionModelWithCtrl,
+    VideoDiffusionT2VModelWithCtrl,
+    VideoDistillModelWithCtrl,
+)
 from cosmos_transfer1.diffusion.model.model_multi_camera_ctrl import MultiVideoDiffusionModelWithCtrl
 from cosmos_transfer1.diffusion.networks.general_dit_multi_view import MultiViewVideoExtendGeneralDIT
 from cosmos_transfer1.diffusion.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
@@ -231,3 +236,78 @@ for key in ["control_input_hdmap", "control_input_lidar"]:
         # Register 7B sv2mv configurations
         config_7b = make_ctrlnet_config_7b_mv(hint_key=key, num_control_blocks=num_control_blocks, t2w=t2w)
         cs.store(group="experiment", package="_global_", name=config_7b["job"]["name"], node=config_7b)
+
+
+def make_ctrlnet_config_7b_distilled(
+    hint_key: str = "control_input_edge",
+    num_control_blocks: int = 3,
+) -> LazyDict:
+    hint_mask = [True] * len(CTRL_HINT_KEYS_COMB[hint_key])
+
+    return LazyDict(
+        dict(
+            defaults=[
+                "/experiment/Base_7B_Config",
+                {"override /hint_key": hint_key},
+                {"override /net": "faditv2_7b"},
+                {"override /net_ctrl": "faditv2_7b"},
+                {"override /conditioner": "ctrlnet_add_fps_image_size_padding_mask"},
+                "_self_",
+            ],
+            job=dict(
+                group="DISTILL_CTRL_7Bv1",
+                name=f"CTRL_7Bv1pt3_lvg_fsdp_distilled_121frames_{hint_key}_block{num_control_blocks}",
+                project="cosmos_nano_v1",
+            ),
+            model=dict(
+                base_load_from=dict(
+                    load_path=f"checkpoints/{EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH}",
+                ),
+                hint_mask=hint_mask,
+                hint_dropout_rate=0.0,
+                conditioner=dict(
+                    video_cond_bool=dict(
+                        condition_location="first_random_n",
+                        cfg_unconditional_type="zero_condition_region_condition_mask",
+                        apply_corruption_to_condition_region="noise_with_sigma_fixed",
+                        condition_on_augment_sigma=False,
+                        dropout_rate=0.0,
+                        first_random_n_num_condition_t_max=2,
+                        first_random_n_num_condition_t_min=0,
+                        normalize_condition_latent=False,
+                        augment_sigma_sample_p_mean=-3.0,
+                        augment_sigma_sample_p_std=2.0,
+                        augment_sigma_sample_multiplier=1.0,
+                    )
+                ),
+                net=L(VideoExtendGeneralDIT)(
+                    extra_per_block_abs_pos_emb=True,
+                    pos_emb_learnable=True,
+                    extra_per_block_abs_pos_emb_type="learnable",
+                    rope_t_extrapolation_ratio=2,
+                ),
+                net_ctrl=dict(
+                    in_channels=17,
+                    hint_channels=128,
+                    num_blocks=28,
+                    layer_mask=[True if (i >= num_control_blocks) else False for i in range(28)],
+                    num_control_blocks=num_control_blocks,
+                    dropout_ctrl_branch=0,
+                    extra_per_block_abs_pos_emb=True,
+                    pos_emb_learnable=True,
+                    extra_per_block_abs_pos_emb_type="learnable",
+                ),
+            ),
+            model_obj=L(VideoDistillModelWithCtrl)(),
+        )
+    )
+
+
+# Register the specific distilled configuration
+distilled_config = make_ctrlnet_config_7b_distilled(hint_key="control_input_edge", num_control_blocks=3)
+cs.store(
+    group="experiment",
+    package="_global_",
+    name="dev_v2w_ctrl_7bv1pt3_VisControlCanny_video_only_dmd2_fsdp",
+    node=distilled_config,
+)

@@ -29,6 +29,7 @@ from cosmos_transfer1.checkpoints import (
     COSMOS_TOKENIZER_CHECKPOINT,
     DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH,
     HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
@@ -64,7 +65,11 @@ from cosmos_transfer1.diffusion.inference.inference_utils import (
     split_video_into_patches,
     valid_hint_keys,
 )
-from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
+from cosmos_transfer1.diffusion.model.model_ctrl import (
+    VideoDiffusionModelWithCtrl,
+    VideoDiffusionT2VModelWithCtrl,
+    VideoDistillModelWithCtrl,
+)
 from cosmos_transfer1.diffusion.model.model_multi_camera_ctrl import MultiVideoDiffusionModelWithCtrl
 from cosmos_transfer1.diffusion.module.parallel import broadcast
 from cosmos_transfer1.utils import log
@@ -86,6 +91,7 @@ MODEL_NAME_DICT = {
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_sv2mv_v2w_57frames_control_input_hdmap_block3",
     SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_block3",
     SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_lidar_block3",
+    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH: "dev_v2w_ctrl_7bv1pt3_VisControlCanny_video_only_dmd2_fsdp",
 }
 MODEL_CLASS_DICT = {
     BASE_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
@@ -104,6 +110,7 @@ MODEL_CLASS_DICT = {
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: MultiVideoDiffusionModelWithCtrl,
     SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH: VideoDistillModelWithCtrl,
 }
 
 from collections import defaultdict
@@ -1194,3 +1201,196 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         log.info("Pass guardrail on generated video")
 
         return video, mv_prompts
+
+
+class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationPipeline):
+    """Pipeline for distilled ControlNet video2video inference."""
+
+    def _load_network(self):
+        log.info("Loading distilled consolidated checkpoint")
+
+        # Load consolidated checkpoint
+        from cosmos_transfer1.diffusion.inference.inference_utils import skip_init_linear
+
+        with skip_init_linear():
+            self.model.set_up_model()
+        checkpoint_path = f"{self.checkpoint_dir}/{self.checkpoint_name}"
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        state_dict = checkpoint.get("model", checkpoint)
+
+        # Split into base and control components
+        base_state_dict = {}
+        ctrl_state_dict = {}
+
+        for k, v in state_dict.items():
+            if k.startswith("net.base_model.net."):
+                base_key = k[len("net.base_model.net.") :]
+                base_state_dict[base_key] = v
+            elif k.startswith("net.net_ctrl."):
+                ctrl_key = k[len("net.net_ctrl.") :]
+                ctrl_state_dict[ctrl_key] = v
+
+        # Load base model weights
+        if base_state_dict:
+            self.model.model["net"].base_model.net.load_state_dict(base_state_dict, strict=False)
+            self.model.model.base_model.load_state_dict(base_state_dict, strict=False)
+        # Load control weights
+        if ctrl_state_dict:
+            self.model.model["net"].net_ctrl.load_state_dict(ctrl_state_dict, strict=False)
+        self.model.model.cuda()
+
+        if self.process_group is not None:
+            log.info("Enabling CP in base model")
+            self.model.model.net.enable_context_parallel(self.process_group)
+
+    def _run_model(
+        self,
+        prompt_embeddings: torch.Tensor,  # [B, ...]
+        video_paths: list[str],  # [B]
+        negative_prompt_embeddings: Optional[torch.Tensor] = None,  # [B, ...] or None
+        control_inputs_list: list[dict] = None,  # [B] list of dicts
+    ) -> np.ndarray:
+        """
+        Batched world generation with model offloading.
+        Each batch element corresponds to a (prompt, video, control_inputs) triple.
+        """
+        B = len(video_paths)
+        print(f"video paths: {video_paths}")
+        assert prompt_embeddings.shape[0] == B, "Batch size mismatch for prompt embeddings"
+        if negative_prompt_embeddings is not None:
+            assert negative_prompt_embeddings.shape[0] == B, "Batch size mismatch for negative prompt embeddings"
+        assert len(control_inputs_list) == B, "Batch size mismatch for control_inputs_list"
+
+        log.info("Starting data augmentation")
+
+        log.info(f"Regional prompts not supported when using distilled model, dropping: {self.regional_prompts}")
+
+        # Get video batch and state shape
+        data_batch, state_shape = get_batched_ctrl_batch(
+            model=self.model,
+            prompt_embeddings=prompt_embeddings,  # [B, ...]
+            negative_prompt_embeddings=negative_prompt_embeddings,
+            height=self.height,
+            width=self.width,
+            fps=self.fps,
+            num_video_frames=self.num_video_frames,
+            input_video_paths=video_paths,  # [B]
+            control_inputs_list=control_inputs_list,  # [B]
+            blur_strength=self.blur_strength,
+            canny_threshold=self.canny_threshold,
+        )
+
+        log.info("Completed data augmentation")
+
+        hint_key = data_batch["hint_key"]
+        control_input = data_batch[hint_key]  # [B, C, T, H, W]
+        input_video = data_batch.get("input_video", None)
+        control_weight = data_batch.get("control_weight", None)
+        num_new_generated_frames = self.num_video_frames - self.num_input_frames
+        B, C, T, H, W = control_input.shape
+        if (T - self.num_input_frames) % num_new_generated_frames != 0:  # pad duplicate frames at the end
+            pad_t = num_new_generated_frames - ((T - self.num_input_frames) % num_new_generated_frames)
+            pad_frames = control_input[:, :, -1:].repeat(1, 1, pad_t, 1, 1)
+            control_input = torch.cat([control_input, pad_frames], dim=2)
+            if input_video is not None:
+                pad_video = input_video[:, :, -1:].repeat(1, 1, pad_t, 1, 1)
+                input_video = torch.cat([input_video, pad_video], dim=2)
+            num_total_frames_with_padding = control_input.shape[2]
+            if (
+                isinstance(control_weight, torch.Tensor)
+                and control_weight.ndim > 5
+                and num_total_frames_with_padding > control_weight.shape[3]
+            ):
+                pad_t = num_total_frames_with_padding - control_weight.shape[3]
+                pad_weight = control_weight[:, :, :, -1:].repeat(1, 1, 1, pad_t, 1, 1)
+                control_weight = torch.cat([control_weight, pad_weight], dim=3)
+        else:
+            num_total_frames_with_padding = T
+        N_clip = (num_total_frames_with_padding - self.num_input_frames) // num_new_generated_frames
+
+        video = []
+        initial_condition_input = None
+
+        prev_frames = None
+        if input_video is not None:
+            prev_frames = torch.zeros_like(input_video).cuda()
+            prev_frames[:, :, : self.num_input_frames] = (input_video[:, :, : self.num_input_frames] + 1) * 255.0 / 2
+        log.info(f"N_clip: {N_clip}")
+        for i_clip in tqdm(range(N_clip)):
+            log.info(f"input_video shape: {input_video.shape}")
+            # data_batch_i = {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in data_batch.items()}
+            data_batch_i = {k: v for k, v in data_batch.items()}
+            start_frame = num_new_generated_frames * i_clip
+            end_frame = num_new_generated_frames * (i_clip + 1) + self.num_input_frames
+
+            # Prepare x_sigma_max
+            if input_video is not None:
+                input_frames = input_video[:, :, start_frame:end_frame].cuda()
+                x0 = self.model.encode(input_frames).contiguous()
+                x_sigma_max = self.model.get_x_from_clean(x0, self.sigma_max, seed=(self.seed + i_clip))
+            else:
+                assert False
+                x_sigma_max = None
+
+            data_batch_i[hint_key] = control_input[:, :, start_frame:end_frame].cuda()
+            latent_hint = []
+            log.info("Starting latent encoding")
+            for b in range(B):
+                data_batch_p = {k: v for k, v in data_batch_i.items()}
+                data_batch_p[hint_key] = data_batch_i[hint_key][b : b + 1]
+                if len(control_inputs_list) >= 1 and len(control_inputs_list[0]) > 1:
+                    latent_hint_i = []
+                    for idx in range(0, data_batch_p[hint_key].size(1), 3):
+                        x_rgb = data_batch_p[hint_key][:, idx : idx + 3]
+                        latent_hint_i.append(self.model.encode(x_rgb))
+                    latent_hint.append(torch.cat(latent_hint_i).unsqueeze(0))
+                else:
+                    latent_hint.append(self.model.encode_latent(data_batch_p))
+            data_batch_i["latent_hint"] = latent_hint = torch.cat(latent_hint)
+            log.info("Completed latent encoding")
+
+            # Resize control_weight if needed
+            if isinstance(control_weight, torch.Tensor) and control_weight.ndim > 4:
+                control_weight_t = control_weight[..., start_frame:end_frame, :, :]
+                t, h, w = latent_hint.shape[-3:]
+                data_batch_i["control_weight"] = resize_control_weight_map(control_weight_t, (t, h // 2, w // 2))
+
+            num_input_frames = self.num_input_frames
+            prev_frames_patched = split_video_into_patches(
+                prev_frames, control_input.shape[-2], control_input.shape[-1]
+            )
+            input_frames = prev_frames_patched.bfloat16() / 255.0 * 2 - 1
+            condition_latent = self.model.encode(input_frames).contiguous()
+
+            # Generate video frames for this clip (batched)
+            log.info("Starting diffusion sampling")
+            latents = generate_world_from_control(
+                model=self.model,
+                state_shape=state_shape,
+                is_negative_prompt=True,
+                data_batch=data_batch_i,
+                guidance=self.guidance,
+                num_steps=self.num_steps,
+                seed=(self.seed + i_clip),
+                condition_latent=condition_latent,
+                num_input_frames=num_input_frames,
+                sigma_max=self.sigma_max if x_sigma_max is not None else None,
+                x_sigma_max=x_sigma_max,
+            )
+            log.info("Completed diffusion sampling")
+
+            log.info("Starting VAE decode")
+            frames = self._run_tokenizer_decoding(latents)  # [B, T, H, W, C] or similar
+            log.info("Completed VAE decode")
+
+            if i_clip == 0:
+                video.append(frames)
+            else:
+                video.append(frames[:, :, self.num_input_frames :])
+
+            prev_frames = torch.zeros_like(frames)
+            prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
+
+        video = torch.cat(video, dim=2)[:, :, :T]
+        video = video.permute(0, 2, 3, 4, 1).numpy()
+        return video

@@ -31,6 +31,7 @@ from cosmos_transfer1.auxiliary.guardrail.common.io_utils import save_video
 from cosmos_transfer1.checkpoints import (
     DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH,
     HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
@@ -83,6 +84,10 @@ default_model_names = {
     "upscale": UPSCALER_CONTROLNET_7B_CHECKPOINT_PATH,
     "hdmap": HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     "lidar": LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+}
+
+default_distilled_model_names = {
+    "edge": EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH,
 }
 
 
@@ -1221,6 +1226,7 @@ def validate_controlnet_specs(cfg, controlnet_specs) -> Dict[str, Any]:
     checkpoint_dir = cfg.checkpoint_dir
     sigma_max = cfg.sigma_max
     input_video_path = cfg.input_video_path
+    use_distilled = cfg.use_distilled
 
     for hint_key, config in controlnet_specs.items():
         if hint_key not in valid_hint_keys:
@@ -1236,7 +1242,14 @@ def validate_controlnet_specs(cfg, controlnet_specs) -> Dict[str, Any]:
 
         if "ckpt_path" not in config:
             log.info(f"No checkpoint path specified for {hint_key}. Using default.")
-            config["ckpt_path"] = os.path.join(checkpoint_dir, default_model_names[hint_key])
+            ckpt_path = os.path.join(checkpoint_dir, default_model_names[hint_key])
+            if use_distilled:
+                if hint_key in default_distilled_model_names:
+                    ckpt_path = os.path.join(checkpoint_dir, default_distilled_model_names[hint_key])
+                else:
+                    log.info(f"No default distilled checkpoint for {hint_key}. Using full checkpoint")
+
+            config["ckpt_path"] = ckpt_path
             log.info(f"Using default checkpoint path: {config['ckpt_path']}")
 
         # Regardless whether "control_weight_prompt" is provided (i.e. whether we automatically
