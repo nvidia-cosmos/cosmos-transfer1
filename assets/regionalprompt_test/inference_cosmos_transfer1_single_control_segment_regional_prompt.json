@@ -1,0 +1,18 @@
+{
+    "prompt": "The video shows a sequence of images where two women are facing each other, both wearing floral headscarves and traditional-style dresses. They appear to be engaged in a conversation, with their facial expressions and body language suggesting a friendly or intimate interaction. In the background, there is a man dressed in a military uniform, standing with his back to the camera, seemingly observing the women. The setting looks like a room with posters on the wall, and the overall atmosphere is casual and domestic.",
+    "input_video_path" : "assets/regionalprompt_test/example3_regional_prompt_input_segment.mp4",
+    "seg": {
+        "control_weight": 1.0
+    },
+    "regional_prompts": [
+        {
+            "prompt": "blue dress",
+            "mask_prompt": "woman on the right"
+        },
+        {
+            "prompt": "red dress",
+            "region_definitions_path": [0.0, 0.0, 0.5, 1.0]
+        }
+
+    ]
+}
