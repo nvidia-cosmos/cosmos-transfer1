@@ -416,7 +416,7 @@ def get_video_batch_for_multiview_model(
     return raw_video_batch, state_shape
 
 
-def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs, num_views,num_video_frames):
+def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs, num_views, num_video_frames):
     # Initialize control input dictionary
     control_input_dict = {k: v for k, v in data_batch.items()}
     control_weights = []
@@ -475,7 +475,7 @@ def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs, num_vi
         mapped_indices = [0, 1, 2, 4, 5]
         view_indices_conditioning = []
         for v_index in mapped_indices:
-            view_indices_conditioning.append(torch.ones(num_video_frames, device='cuda') * v_index)
+            view_indices_conditioning.append(torch.ones(num_video_frames, device="cuda") * v_index)
         view_indices_conditioning = torch.cat(view_indices_conditioning, dim=0)
         data_batch["view_indices"] = view_indices_conditioning.unsqueeze(0).contiguous()
 

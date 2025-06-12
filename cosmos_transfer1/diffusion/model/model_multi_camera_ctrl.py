@@ -143,9 +143,9 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
             condition, uncondition = self.conditioner.get_condition_uncondition(data_batch)
 
         if "view_indices" in data_batch:
-            if hasattr(self, 'vae'):
+            if hasattr(self, "vae"):
                 comp_factor = getattr(self.vae, "temporal_compression_factor", 8)
-            elif hasattr(self, 'tokenizer'):
+            elif hasattr(self, "tokenizer"):
                 comp_factor = getattr(self.tokenizer, "temporal_compression_factor", 8)
             else:
                 comp_factor = 8

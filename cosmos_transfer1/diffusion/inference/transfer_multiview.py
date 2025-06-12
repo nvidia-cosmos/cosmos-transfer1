@@ -57,12 +57,11 @@ from cosmos_transfer1.checkpoints import (
     BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
     SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH,
     SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH,
 )
-
 from cosmos_transfer1.diffusion.model.model_ctrl import VideoDiffusionModelWithCtrl, VideoDiffusionT2VModelWithCtrl
 from cosmos_transfer1.diffusion.model.model_multi_camera_ctrl import MultiVideoDiffusionModelWithCtrl
 
@@ -346,7 +345,7 @@ def demo(cfg, control_inputs):
             cfg.prompt_right,
             cfg.prompt_back_left,
             cfg.prompt_back_right,
-        ]   
+        ]
 
         checkpoint = SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH
 

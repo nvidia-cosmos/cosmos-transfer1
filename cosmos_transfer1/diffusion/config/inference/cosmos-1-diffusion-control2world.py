@@ -287,6 +287,7 @@ def make_ctrlnet_config_7b_mv_waymo(
         )
     )
 
+
 # Register base configs
 cs.store(group="experiment", package="_global_", name=Base_7B_Config["job"]["name"], node=Base_7B_Config)
 # Register all control configurations

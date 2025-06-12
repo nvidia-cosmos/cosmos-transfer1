@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+from collections import defaultdict
 from typing import List, Optional, Union
 
 import cv2
@@ -23,10 +24,7 @@ import torch
 from tqdm import tqdm
 
 from cosmos_transfer1.auxiliary.upsampler.model.upsampler import PixtralPromptUpsampler
-from cosmos_transfer1.checkpoints import (
-    COSMOS_TOKENIZER_CHECKPOINT,
-)
-
+from cosmos_transfer1.checkpoints import COSMOS_TOKENIZER_CHECKPOINT
 from cosmos_transfer1.diffusion.inference.inference_utils import (
     detect_aspect_ratio,
     generate_control_input,
@@ -49,16 +47,10 @@ from cosmos_transfer1.diffusion.inference.inference_utils import (
     split_video_into_patches,
     valid_hint_keys,
 )
-
 from cosmos_transfer1.diffusion.module.parallel import broadcast
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.utils.base_world_generation_pipeline import BaseWorldGenerationPipeline
 from cosmos_transfer1.utils.regional_prompting_utils import prepare_regional_prompts
-
-
-
-
-from collections import defaultdict
 
 
 class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
@@ -859,7 +851,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
             initial_condition_video = None
 
         data_batch = get_ctrl_batch_mv(
-            self.height, self.width, data_batch, total_T, control_inputs,self.model.n_views,self.num_video_frames
+            self.height, self.width, data_batch, total_T, control_inputs, self.model.n_views, self.num_video_frames
         )  # multicontrol inputs are concatenated channel wise, [-1,1] range
 
         hint_key = data_batch["hint_key"]
