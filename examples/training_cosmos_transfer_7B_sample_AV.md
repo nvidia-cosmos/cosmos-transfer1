@@ -13,10 +13,10 @@ We support the following Cosmos-Transfer1-Sample-AV models for pre-training and 
 |-------------------------------------------------------------------|--------------|----------------------------------------|
 | Cosmos-Transfer1-7B-Sample-AV [Lidar]                             | **Supported**| 8 NVIDIA GPUs*                         |
 | Cosmos-Transfer1-7B-Sample-AV [HDMap]                             | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_model [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_model [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/v2w_model [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
-| Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/v2w_model [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-Sample-AV-Single2MultiView/t2w_model [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-Sample-AV-Single2MultiView/t2w_model [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-Sample-AV-Single2MultiView/v2w_model [Lidar] | **Supported**| 8 NVIDIA GPUs*                         |
+| Cosmos-Transfer1-7B-Sample-AV-Single2MultiView/v2w_model [HDMap] | **Supported**| 8 NVIDIA GPUs*                         |
 
 **\*** 80GB GPU memory required for training. `H100-80GB` or `A100-80GB` GPUs are recommended.
 
@@ -67,7 +67,7 @@ checkpoints/
 │   │   ├── hdmap_control.pt
 │   │   └── lidar_control.pt
 │   │
-│   ├── Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/
+│   ├── Cosmos-Transfer1-7B-Sample-AV-Single2MultiView/
 │   │   ├── v2w_base_model.pt
 │   │   ├── v2w_hdmap_control.pt
 │   │   ├── v2w_lidar_control.pt
@@ -124,11 +124,11 @@ Due to the large model size, we leverage TensorParallel (TP) to split the model 
 PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV/t2w_base_model.pt
 # Example: for LidarControl checkpoint splitting for post-train.
 PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV/t2w_lidar_control.pt
-# Example: for SingleToMultiView, the base model checkpoint is different
-PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_base_model.pt
-# Example: for SingleToMultiView HDMapControl
-PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/t2w_hdmap_control.pt
 
+# Example: for Single2MultiView, the base model checkpoint is different
+PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV-Single2MultiView/t2w_base_model.pt
+# Example: for Single2MultiView HDMapControl
+PYTHONPATH=. python scripts/convert_ckpt_fsdp_to_tp.py checkpoints/nvidia/Cosmos-Transfer1-7B-Sample-AV-Single2MultiView/t2w_hdmap_control.pt
 ```
 This will generate the TP checkpoints under `checkpoints/checkpoints_tp/*_mp_*.pt`, which we load in the training below.
 
@@ -161,8 +161,8 @@ Now we can start a real training job! Removing the `--dryrun` and set `--nproc_p
 ```bash
 torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain
 ```
-#### 4.b Launch Training of Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV
-In this example, we instead launch a training run of the SingleToMultiView model with HDMap condition:
+#### 4.b Launch Training of Cosmos-Transfer1-7B-Sample-AV-Single2MultiView
+In this example, we instead launch a training run of the Single2MultiView model with HDMap condition:
 
 ```bash
 torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_sv2mv_57frames_control_input_hdmap_block3_pretrain

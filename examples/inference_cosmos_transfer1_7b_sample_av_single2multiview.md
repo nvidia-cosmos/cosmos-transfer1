@@ -52,7 +52,7 @@ checkpoints/
 │   │   ├── hdmap_control.pt
 │   │   └── lidar_control.pt
 │   │
-│   ├── Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/
+│   ├── Cosmos-Transfer1-7B-Sample-AV-Single2MultiView/
 │   │   ├── t2w_base_model.pt
 │   │   ├── t2w_hdmap_control.pt
 │   │   ├── t2w_lidar_control.pt

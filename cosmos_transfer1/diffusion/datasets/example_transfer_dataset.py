@@ -199,6 +199,9 @@ class ExampleTransferDataset(Dataset):
                     }
                     with open(data["video_name"]["t5_embedding_path"], "rb") as f:
                         t5_embedding = pickle.load(f)["pickle"]["ground_truth"]["embeddings"]["t5_xxl"]
+                    # Ensure t5_embedding is a numpy array
+                    if isinstance(t5_embedding, list):
+                        t5_embedding = np.array(t5_embedding[0] if len(t5_embedding) > 0 else t5_embedding)
                     data["t5_text_embeddings"] = torch.from_numpy(t5_embedding)  # .cuda()
                     data["t5_text_mask"] = torch.ones(512, dtype=torch.int64)  # .cuda()
                 else:
@@ -209,6 +212,9 @@ class ExampleTransferDataset(Dataset):
                     }
                     with open(data["video_name"]["t5_embedding_path"], "rb") as f:
                         t5_embedding = pickle.load(f)
+                    # Ensure t5_embedding is a numpy array
+                    if isinstance(t5_embedding, list):
+                        t5_embedding = np.array(t5_embedding[0] if len(t5_embedding) > 0 else t5_embedding)
                     data["t5_text_embeddings"] = torch.from_numpy(t5_embedding)  # .cuda()
                     data["t5_text_mask"] = torch.ones(512, dtype=torch.int64)  # .cuda()
 

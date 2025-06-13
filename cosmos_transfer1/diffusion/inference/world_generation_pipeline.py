@@ -529,7 +529,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 prev_frames_patched = split_video_into_patches(
                     prev_frames, control_input.shape[-2], control_input.shape[-1]
                 )
-                input_frames = prev_frames_patched.bfloat16() / 255.0 * 2 - 1
+                input_frames = prev_frames_patched.bfloat16().cuda() / 255.0 * 2 - 1
                 condition_latent = self.model.encode(input_frames).contiguous()
 
             # Generate video frames for this clip (batched)
@@ -976,7 +976,8 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
                 video.append(frames_BVCT_non_overlap)
 
             prev_frames = torch.zeros_like(frames_BVCT)
-            prev_frames[:, :, :, : self.num_input_frames] = frames_BVCT[:, :, :, -self.num_input_frames :]
+            n_copy = max(1, abs(self.num_input_frames))
+            prev_frames[:, :, :, :n_copy] = frames_BVCT[:, :, :, -n_copy:]
             prev_frames = einops.rearrange(prev_frames, "B V C T H W -> B C (V T) H W")
 
         video = torch.cat(video, dim=3)

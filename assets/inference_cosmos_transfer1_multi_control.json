@@ -1,0 +1,14 @@
+{
+    "prompt": "Captured from a camera mounted on a vehicle roof, we see the famous Shibuya scramble crossing in Tokyo during morning rush hour where a light drizzle coats umbrellas moving in every direction, neon storefronts behind streams of commuters, and orderly traffic pauses for the sea of people.",
+
+    "input_video_path" : "assets/nurec2.mp4",
+    "vis": {
+        "control_weight": 0.3
+    },
+    "edge": {
+        "control_weight": 0.7
+    },
+    "depth": {
+        "control_weight": 0.1
+    }
+}
