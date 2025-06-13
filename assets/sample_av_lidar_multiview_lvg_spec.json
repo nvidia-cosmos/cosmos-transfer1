@@ -9,6 +9,7 @@
             "assets/sample_av_mv_input_lidar_rear_left.mp4",
             "assets/sample_av_mv_input_lidar_rear_right.mp4"
         ],
-        "ckpt_path": "nvidia/Cosmos-Transfer1-7B-SingleToMultiView-Sample-AV/v2w_lidar_control.pt"
+
+        "ckpt_path": "nvidia/Cosmos-Transfer1-7B-Sample-AV-Single2MultiView/v2w_lidar_control.pt"
     }
 }

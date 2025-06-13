@@ -13,18 +13,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: cosmos-transfer1
-channels:
-  - conda-forge
-dependencies:
-  - python=3.12
-  - pip=25.0
-  - cmake
-  - ninja
-  - libgl
-  - ffmpeg
-  - gcc=12.4.0
-  - gxx=12.4.0
-  - cuda=12.4
-  - cuda-nvcc=12.4
-  - cuda-toolkit=12.4
+# Please keep requirements sorted alphabetically
+
+av==14.2.0
+better-profanity==0.7.0
+boto3==1.35.99
+diffusers==0.32.2
+einx==0.1.3
+huggingface-hub==0.29.2
+hydra-core==1.3.2
+imageio[pyav,ffmpeg]==2.37.0
+iopath==0.1.10
+ipdb==0.13.13
+loguru==0.7.3
+mediapy==1.2.2
+megatron-core==0.10.0
+natsort==8.4.0
+nltk==3.9.1
+omegaconf==2.3.0
+opencv-python==4.10.0.84
+pandas==2.2.3
+peft==0.14.0
+pillow
+pycocotools
+retinaface-py==0.0.2
+rtmlib==0.0.13
+scikit-image==0.25.2
+sentencepiece==0.2.0
+termcolor==2.5.0
+transformers==4.49.0

@@ -32,7 +32,8 @@ from packaging import version
 from torch import nn
 from torch.nn.attention import SDPBackend
 from torch.utils.checkpoint import checkpoint
-from transformer_engine.pytorch.attention import DotProductAttention, apply_rotary_pos_emb
+from transformer_engine.pytorch.attention.dot_product_attention.dot_product_attention import DotProductAttention
+from transformer_engine.pytorch.attention.rope import apply_rotary_pos_emb
 
 from cosmos_transfer1.utils import log
 

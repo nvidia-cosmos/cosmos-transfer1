@@ -23,13 +23,18 @@ RUN apt-get install -y libglib2.0-0
 
 # Copy the cosmos-transfer1.yaml and requirements.txt files to the container
 COPY ./cosmos-transfer1.yaml /cosmos-transfer1.yaml
-COPY ./requirements.txt /requirements.txt
+COPY ./requirements_docker.txt /requirements.txt
 
 RUN ls -l /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info && rm -rf /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info
 RUN echo "Installing dependencies. This will take a while..." && \
     pip install --no-cache-dir -r /requirements.txt && \
     pip install -v --upgrade --no-build-isolation --no-dependencies sam2==1.1.0 && \
     pip install transformer-engine[pytorch] && \
+    pip install decord==0.6.0 && \
+    git clone https://github.com/NVIDIA/apex && \
+    pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./apex && \
+    rm -rf apex && \
+    pip install -v decord==0.6.0 && \
     echo "Environment setup complete"
 
 # Create Python symlink

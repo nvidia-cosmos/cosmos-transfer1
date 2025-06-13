@@ -49,18 +49,13 @@ if not (sys.version_info.major == 3 and sys.version_info.minor >= 10):
     sys.exit(1)
 
 if "CONDA_PREFIX" not in os.environ:
-    print("\033[93m[WARNING]\033[0m Cosmos should be run under a conda environment.")
+    print(
+        "\033[93m[WARNING]\033[0m CONDA_PREFIX is not set. When manually installed, Cosmos should run under the cosmos-transfer1 conda environment (see INSTALL.md). This warning can be ignored when running in the container."
+    )
 
 print("Attempting to import critical packages...")
 
-packages = [
-    "torch",
-    "torchvision",
-    "transformers",
-    "megatron.core",
-    "transformer_engine",
-    "vllm",
-]
+packages = ["torch", "torchvision", "transformers", "megatron.core", "transformer_engine", "vllm", "pandas"]
 packages_training = [
     "apex.multi_tensor_apply",
 ]
