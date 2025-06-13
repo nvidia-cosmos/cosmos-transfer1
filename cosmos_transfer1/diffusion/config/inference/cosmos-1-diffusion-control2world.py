@@ -240,7 +240,7 @@ def make_ctrlnet_config_7b_mv_waymo(
                 hint_dropout_rate=0.15,
                 conditioner=dict(
                     video_cond_bool=dict(
-                        condition_location="first_cam" if t2w else "first_cam_and_random_n",
+                        condition_location="first_cam" if t2w else "first_cam_and_first_n",
                         cfg_unconditional_type="zero_condition_region_condition_mask",
                         apply_corruption_to_condition_region="noise_with_sigma",
                         condition_on_augment_sigma=False,
