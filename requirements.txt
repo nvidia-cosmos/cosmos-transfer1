@@ -20,7 +20,7 @@ attr==0.3.2
 attrs==25.3.0
 better_profanity==0.7.0
 cloudpickle==3.1.1
-decord==0.6.0
+decord2==0.7.0
 dill==0.4.0
 einops==0.8.1
 hydra-core==1.3.2
