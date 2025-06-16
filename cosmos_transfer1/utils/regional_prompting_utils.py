@@ -207,7 +207,9 @@ def prepare_regional_prompts(
             segmentation_map = torch.load(region_definition, weights_only=False)
             # Validate segmentation map dimensions
             if len(segmentation_map.shape) not in [3, 4]:
-                raise ValueError(f"Segmentation map should have shape [T,H,W] or [C,T,H,W], got shape {segmentation_map.shape}")
+                raise ValueError(
+                    f"Segmentation map should have shape [T,H,W] or [C,T,H,W], got shape {segmentation_map.shape}"
+                )
 
             segmentation_map = compress_segmentation_map(segmentation_map, compression_factor)
             log.info(f"segmentation_map shape: {segmentation_map.shape}")

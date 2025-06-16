@@ -300,7 +300,13 @@ def demo(cfg, control_inputs):
 
             # if control inputs are not provided, run respective preprocessor (for seg and depth)
             log.info("running preprocessor")
-            preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder, cfg.regional_prompts if hasattr(cfg, "regional_prompts") else None)
+            preprocessors(
+                current_video_path,
+                current_prompt,
+                current_control_inputs,
+                video_save_subfolder,
+                cfg.regional_prompts if hasattr(cfg, "regional_prompts") else None,
+            )
             batch_control_inputs.append(current_control_inputs)
 
         regional_prompts = []
