@@ -179,6 +179,7 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
         target_w: int = 160,
         patch_h: int = 88,
         patch_w: int = 160,
+        use_batch_processing: bool = True,
     ) -> Callable:
         """
         Generates a callable function `x0_fn` based on the provided data batch and guidance factor.
@@ -214,15 +215,22 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             num_condition_t = 0
             condition_video_augment_sigma_in_inference = 1000
 
+        if use_batch_processing:
+            condition = self.add_condition_video_indicator_and_video_input_mask(
+                condition_latent, condition, num_condition_t
+            )
+            uncondition = self.add_condition_video_indicator_and_video_input_mask(
+                condition_latent, uncondition, num_condition_t
+            )
+        else:
+            condition = self.add_condition_video_indicator_and_video_input_mask(
+                condition_latent[:1], condition, num_condition_t
+            )
+            uncondition = self.add_condition_video_indicator_and_video_input_mask(
+                condition_latent[:1], uncondition, num_condition_t
+            )
         condition.video_cond_bool = True
-        condition = self.add_condition_video_indicator_and_video_input_mask(
-            condition_latent, condition, num_condition_t
-        )
-
         uncondition.video_cond_bool = False  # Not do cfg on condition frames
-        uncondition = self.add_condition_video_indicator_and_video_input_mask(
-            condition_latent, uncondition, num_condition_t
-        )
 
         # Add extra conditions for ctrlnet.
         latent_hint = data_batch["latent_hint"]
@@ -285,31 +293,65 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
                 overlap_size_h = (n_img_h * patch_h - h) // (n_img_h - 1)
                 assert n_img_h * patch_h - overlap_size_h * (n_img_h - 1) == h
 
-            condition.gt_latent = condition_latent
-            uncondition.gt_latent = condition_latent
-            setattr(condition, hint_key, latent_hint)
-            if getattr(uncondition, hint_key) is not None:
-                setattr(uncondition, hint_key, latent_hint)
-            # Batch denoising
-            cond_x0 = self.denoise(
-                noise_x,
-                sigma,
-                condition,
-                condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                seed=seed,
-            ).x0_pred_replaced
+            if use_batch_processing:
+                condition.gt_latent = condition_latent
+                uncondition.gt_latent = condition_latent
+                setattr(condition, hint_key, latent_hint)
+                if getattr(uncondition, hint_key) is not None:
+                    setattr(uncondition, hint_key, latent_hint)
+                # Batch denoising
+                cond_x0 = self.denoise(
+                    noise_x,
+                    sigma,
+                    condition,
+                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+                    seed=seed,
+                ).x0_pred_replaced
 
-            uncond_x0 = self.denoise(
-                noise_x,
-                sigma,
-                uncondition,
-                condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
-                seed=seed,
-            ).x0_pred_replaced
-            x0 = cond_x0 + guidance * (cond_x0 - uncond_x0)
+                uncond_x0 = self.denoise(
+                    noise_x,
+                    sigma,
+                    uncondition,
+                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+                    seed=seed,
+                ).x0_pred_replaced
+                x0 = cond_x0 + guidance * (cond_x0 - uncond_x0)
 
-            merged = merge_patches_into_video(x0, overlap_size_h, overlap_size_w, n_img_h, n_img_w)
-            return split_video_into_patches(merged, patch_h, patch_w)
+                merged = merge_patches_into_video(x0, overlap_size_h, overlap_size_w, n_img_h, n_img_w)
+                return split_video_into_patches(merged, patch_h, patch_w)
+
+            batch_images = noise_x
+            batch_sigma = sigma
+            output = []
+            for idx, cur_images in enumerate(batch_images):
+                noise_x = cur_images.unsqueeze(0)
+                sigma = batch_sigma[idx : idx + 1]
+                condition.gt_latent = condition_latent[idx : idx + 1]
+                uncondition.gt_latent = condition_latent[idx : idx + 1]
+                setattr(condition, hint_key, latent_hint[idx : idx + 1])
+                if getattr(uncondition, hint_key) is not None:
+                    setattr(uncondition, hint_key, latent_hint[idx : idx + 1])
+
+                cond_x0 = self.denoise(
+                    noise_x,
+                    sigma,
+                    condition,
+                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+                    seed=seed,
+                ).x0_pred_replaced
+                uncond_x0 = self.denoise(
+                    noise_x,
+                    sigma,
+                    uncondition,
+                    condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
+                    seed=seed,
+                ).x0_pred_replaced
+                x0 = cond_x0 + guidance * (cond_x0 - uncond_x0)
+                output.append(x0)
+            output = rearrange(torch.stack(output), "(n t) b ... -> (b n t) ...", n=n_img_h, t=n_img_w)
+            final_output = merge_patches_into_video(output, overlap_size_h, overlap_size_w, n_img_h, n_img_w)
+            final_output = split_video_into_patches(final_output, patch_h, patch_w)
+            return final_output
 
         return x0_fn
 
@@ -331,6 +373,7 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
         target_w: int = 160,
         patch_h: int = 88,
         patch_w: int = 160,
+        use_batch_processing: bool = True,
     ) -> Tensor:
         """
         Generate samples from the batch. Based on given batch, it will automatically determine whether to generate image or video samples.
@@ -360,6 +403,7 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             target_w=target_w,
             patch_h=patch_h,
             patch_w=patch_w,
+            use_batch_processing=use_batch_processing,
         )
 
         if sigma_max is None:

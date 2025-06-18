@@ -92,7 +92,7 @@ class GeneralDITEncoder(GeneralDIT):
             padding_mask = transforms.functional.resize(
                 padding_mask, list(x_B_C_T_H_W.shape[-2:]), interpolation=transforms.InterpolationMode.NEAREST
             )
-            padding_mask = padding_mask.unsqueeze(2).expand(-1, -1, x_B_C_T_H_W.size(2), -1, -1)
+            padding_mask = padding_mask.unsqueeze(2).expand(x_B_C_T_H_W.size(0), -1, x_B_C_T_H_W.size(2), -1, -1)
             x_B_C_T_H_W = torch.cat([x_B_C_T_H_W, padding_mask], dim=1)  # [B, C+1, T, H, W]
 
         x_B_T_H_W_D = self.x_embedder2(x_B_C_T_H_W)

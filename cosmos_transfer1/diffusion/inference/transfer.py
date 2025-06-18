@@ -270,6 +270,9 @@ def demo(cfg, control_inputs):
         prompts = [{"prompt": cfg.prompt, "visual_input": cfg.input_video_path}]
 
     batch_size = cfg.batch_size if hasattr(cfg, "batch_size") else 1
+    if any("upscale" in control_input for control_input in control_inputs) and batch_size > 1:
+        batch_size = 1
+        log.info("Setting batch_size=1 as upscale does not support batch generation")
     os.makedirs(cfg.video_save_folder, exist_ok=True)
     for batch_start in range(0, len(prompts), batch_size):
         # Get current batch
@@ -300,7 +303,13 @@ def demo(cfg, control_inputs):
 
             # if control inputs are not provided, run respective preprocessor (for seg and depth)
             log.info("running preprocessor")
-            preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder, cfg.regional_prompts if hasattr(cfg, "regional_prompts") else None)
+            preprocessors(
+                current_video_path,
+                current_prompt,
+                current_control_inputs,
+                video_save_subfolder,
+                cfg.regional_prompts if hasattr(cfg, "regional_prompts") else None,
+            )
             batch_control_inputs.append(current_control_inputs)
 
         regional_prompts = []

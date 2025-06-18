@@ -313,9 +313,8 @@ class GeneralDIT(nn.Module):
             padding_mask = transforms.functional.resize(
                 padding_mask, list(x_B_C_T_H_W.shape[-2:]), interpolation=transforms.InterpolationMode.NEAREST
             )
-            x_B_C_T_H_W = torch.cat(
-                [x_B_C_T_H_W, padding_mask.unsqueeze(1).repeat(1, 1, x_B_C_T_H_W.shape[2], 1, 1)], dim=1
-            )
+            padding_mask = padding_mask.unsqueeze(2).expand(x_B_C_T_H_W.size(0), -1, x_B_C_T_H_W.size(2), -1, -1)
+            x_B_C_T_H_W = torch.cat([x_B_C_T_H_W, padding_mask], dim=1)  # [B, C+1, T, H, W]
         x_B_T_H_W_D = self.x_embedder(x_B_C_T_H_W)
 
         if self.extra_per_block_abs_pos_emb:

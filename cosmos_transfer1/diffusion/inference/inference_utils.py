@@ -700,6 +700,7 @@ def generate_world_from_control(
     sigma_max: float,
     x_sigma_max=None,
     augment_sigma=None,
+    use_batch_processing: bool = True,
 ) -> Tuple[np.array, list, list]:
     """Generate video using a conditioning video/image input.
 
@@ -750,6 +751,7 @@ def generate_world_from_control(
         target_w=data_batch["target_w"],
         patch_h=h,
         patch_w=w,
+        use_batch_processing=use_batch_processing,
     )
     return sample
 
