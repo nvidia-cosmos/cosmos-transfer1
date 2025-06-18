@@ -25,10 +25,17 @@ from io import BytesIO
 
 import torch
 
-from cosmos_transfer1.checkpoints import BASE_7B_CHECKPOINT_AV_SAMPLE_PATH, BASE_7B_CHECKPOINT_PATH
+from cosmos_transfer1.checkpoints import (
+    BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
+    BASE_7B_CHECKPOINT_PATH,
+    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH,
+)
 from cosmos_transfer1.diffusion.inference.inference_utils import load_controlnet_specs, validate_controlnet_specs
 from cosmos_transfer1.diffusion.inference.preprocessors import Preprocessors
-from cosmos_transfer1.diffusion.inference.world_generation_pipeline import DiffusionControl2WorldGenerationPipeline
+from cosmos_transfer1.diffusion.inference.world_generation_pipeline import (
+    DiffusionControl2WorldGenerationPipeline,
+    DistilledControl2WorldGenerationPipeline,
+)
 from cosmos_transfer1.utils import log, misc
 from cosmos_transfer1.utils.io import read_prompts_from_file, save_video
 
@@ -146,6 +153,7 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Offload prompt upsampler model after inference",
     )
+    parser.add_argument("--use_distilled", action="store_true", help="Use distilled ControlNet model variant")
 
     cmd_args = parser.parse_args()
 
@@ -208,28 +216,51 @@ def demo(cfg, control_inputs):
 
     preprocessors = Preprocessors()
 
-    checkpoint = BASE_7B_CHECKPOINT_AV_SAMPLE_PATH if cfg.is_av_sample else BASE_7B_CHECKPOINT_PATH
+    if cfg.use_distilled:
+        assert not cfg.is_av_sample
+        checkpoint = EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH
+        pipeline = DistilledControl2WorldGenerationPipeline(
+            checkpoint_dir=cfg.checkpoint_dir,
+            checkpoint_name=checkpoint,
+            offload_network=cfg.offload_diffusion_transformer,
+            offload_text_encoder_model=cfg.offload_text_encoder_model,
+            offload_guardrail_models=cfg.offload_guardrail_models,
+            guidance=cfg.guidance,
+            num_steps=cfg.num_steps,
+            fps=cfg.fps,
+            seed=cfg.seed,
+            num_input_frames=cfg.num_input_frames,
+            control_inputs=control_inputs,
+            sigma_max=cfg.sigma_max,
+            blur_strength=cfg.blur_strength,
+            canny_threshold=cfg.canny_threshold,
+            upsample_prompt=cfg.upsample_prompt,
+            offload_prompt_upsampler=cfg.offload_prompt_upsampler,
+            process_group=process_group,
+        )
+    else:
+        checkpoint = BASE_7B_CHECKPOINT_AV_SAMPLE_PATH if cfg.is_av_sample else BASE_7B_CHECKPOINT_PATH
 
-    # Initialize transfer generation model pipeline
-    pipeline = DiffusionControl2WorldGenerationPipeline(
-        checkpoint_dir=cfg.checkpoint_dir,
-        checkpoint_name=checkpoint,
-        offload_network=cfg.offload_diffusion_transformer,
-        offload_text_encoder_model=cfg.offload_text_encoder_model,
-        offload_guardrail_models=cfg.offload_guardrail_models,
-        guidance=cfg.guidance,
-        num_steps=cfg.num_steps,
-        fps=cfg.fps,
-        seed=cfg.seed,
-        num_input_frames=cfg.num_input_frames,
-        control_inputs=control_inputs,
-        sigma_max=cfg.sigma_max,
-        blur_strength=cfg.blur_strength,
-        canny_threshold=cfg.canny_threshold,
-        upsample_prompt=cfg.upsample_prompt,
-        offload_prompt_upsampler=cfg.offload_prompt_upsampler,
-        process_group=process_group,
-    )
+        # Initialize transfer generation model pipeline
+        pipeline = DiffusionControl2WorldGenerationPipeline(
+            checkpoint_dir=cfg.checkpoint_dir,
+            checkpoint_name=checkpoint,
+            offload_network=cfg.offload_diffusion_transformer,
+            offload_text_encoder_model=cfg.offload_text_encoder_model,
+            offload_guardrail_models=cfg.offload_guardrail_models,
+            guidance=cfg.guidance,
+            num_steps=cfg.num_steps,
+            fps=cfg.fps,
+            seed=cfg.seed,
+            num_input_frames=cfg.num_input_frames,
+            control_inputs=control_inputs,
+            sigma_max=cfg.sigma_max,
+            blur_strength=cfg.blur_strength,
+            canny_threshold=cfg.canny_threshold,
+            upsample_prompt=cfg.upsample_prompt,
+            offload_prompt_upsampler=cfg.offload_prompt_upsampler,
+            process_group=process_group,
+        )
 
     if cfg.batch_input_path:
         log.info(f"Reading batch inputs from path: {cfg.batch_input_path}")
@@ -268,9 +299,8 @@ def demo(cfg, control_inputs):
                         log.warning(f"Ignoring unknown control key in override: {hint_key}")
 
             # if control inputs are not provided, run respective preprocessor (for seg and depth)
-            preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder)
-            if hasattr(cfg, "regional_prompts") and cfg.regional_prompts:
-                log.info(f"regional_prompts after preprocessors: {cfg.regional_prompts}")
+            log.info("running preprocessor")
+            preprocessors(current_video_path, current_prompt, current_control_inputs, video_save_subfolder, cfg.regional_prompts if hasattr(cfg, "regional_prompts") else None)
             batch_control_inputs.append(current_control_inputs)
 
         regional_prompts = []
@@ -282,7 +312,7 @@ def demo(cfg, control_inputs):
                 if "region_definitions_path" in regional_prompt:
                     log.info(f"region_definitions_path: {regional_prompt['region_definitions_path']}")
                     region_definition_path = regional_prompt["region_definitions_path"]
-                    if region_definition_path.endswith(".json"):
+                    if isinstance(region_definition_path, str) and region_definition_path.endswith(".json"):
                         with open(region_definition_path, "r") as f:
                             region_definitions_json = json.load(f)
                         region_definitions.extend(region_definitions_json)

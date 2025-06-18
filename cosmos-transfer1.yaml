@@ -17,7 +17,7 @@ name: cosmos-transfer1
 channels:
   - conda-forge
 dependencies:
-  - python=3.10
+  - python=3.12
   - pip=25.0
   - cmake
   - ninja

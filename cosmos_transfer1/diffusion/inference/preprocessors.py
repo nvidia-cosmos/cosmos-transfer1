@@ -16,6 +16,7 @@
 import json
 import os
 
+from cosmos_transfer1.utils.video_utils import is_valid_video, video_to_tensor
 import torch
 
 from cosmos_transfer1.auxiliary.depth_anything.model.depth_anything import DepthAnythingModel
@@ -60,23 +61,34 @@ class Preprocessors:
                         binarize_video=True,
                     )
                     control_input["control_weight"] = out_tensor
-                if regional_prompts and len(regional_prompts):
-                    for i, regional_prompt in enumerate(regional_prompts):
-                        log.info(f"generating regional context for {regional_prompt}")
-                        if "mask_prompt" in regional_prompt:
-                            prompt = regional_prompt["mask_prompt"]
-                            out_tensor = os.path.join(output_folder, f"regional_context_{i}.pt")
-                            out_video = os.path.join(output_folder, f"regional_context_{i}.mp4")
-                            self.segmentation(
-                                in_video=input_video,
-                                out_tensor=out_tensor,
-                                out_video=out_video,
-                                prompt=prompt,
-                                weight_scaler=1.0,
-                                legacy_mask=True,
-                            )
-                            if os.path.exists(out_tensor):
-                                regional_prompt["region_definitions_path"] = out_tensor
+        if regional_prompts and len(regional_prompts):
+            log.info(f"processing regional prompts: {regional_prompts}")
+            for i, regional_prompt in enumerate(regional_prompts):
+                log.info(f"generating regional context for {regional_prompt}")
+                out_tensor = os.path.join(output_folder, f"regional_context_{i}.pt")
+                if "mask_prompt" in regional_prompt:
+                    prompt = regional_prompt["mask_prompt"]
+                    out_video = os.path.join(output_folder, f"regional_context_{i}.mp4")
+                    self.segmentation(
+                        in_video=input_video,
+                        out_tensor=out_tensor,
+                        out_video=out_video,
+                        prompt=prompt,
+                        weight_scaler=1.0,
+                        legacy_mask=True,
+                    )
+                    if os.path.exists(out_tensor):
+                        regional_prompt["region_definitions_path"] = out_tensor
+                elif "region_definitions_path" in regional_prompt and isinstance(regional_prompt['region_definitions_path'], str):
+                    if is_valid_video(regional_prompt['region_definitions_path']):
+                        log.info(f"converting video to tensor: {regional_prompt['region_definitions_path']}")
+                        video_to_tensor(regional_prompt['region_definitions_path'], out_tensor)
+                        regional_prompt["region_definitions_path"] = out_tensor
+                    else:
+                        raise ValueError(f"Invalid video file: {regional_prompt['region_definitions_path']}")
+                else:
+                    log.info("do nothing!")
+
         return control_inputs
 
     def gen_input_control(self, in_video, in_prompt, hint_key, control_input, output_folder):
