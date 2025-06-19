@@ -214,6 +214,85 @@ def make_ctrlnet_config_7b_mv(
     )
 
 
+def make_ctrlnet_config_7b_mv_waymo(
+    hint_key: str = "control_input_seg",
+    num_control_blocks: int = 3,
+    t2w: bool = True,
+) -> LazyDict:
+    hint_mask = [True] * len(CTRL_HINT_KEYS_COMB[hint_key])
+
+    return LazyDict(
+        dict(
+            defaults=[
+                "/experiment/Base_7B_Config",
+                {"override /hint_key": hint_key},
+                {"override /net_ctrl": "faditv2_7b_mv"},
+                {"override /conditioner": "view_cond_ctrlnet_add_fps_image_size_padding_mask"},
+            ],
+            job=dict(
+                group="CTRL_7Bv1_mv",
+                name=f"CTRL_7Bv1pt3_sv2mv_{'t2w' if t2w else 'v2w'}_57frames_{hint_key}_waymo_block{num_control_blocks}",
+                project="cosmos_ctrlnet1",
+            ),
+            model=dict(
+                n_views=5,
+                base_load_from=dict(
+                    load_path=f"checkpoints/{BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}"
+                    if t2w
+                    else f"checkpoints/{BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}",
+                ),
+                hint_mask=hint_mask,
+                hint_dropout_rate=0.15,
+                conditioner=dict(
+                    video_cond_bool=dict(
+                        condition_location="first_cam" if t2w else "first_cam_and_first_n",
+                        cfg_unconditional_type="zero_condition_region_condition_mask",
+                        apply_corruption_to_condition_region="noise_with_sigma",
+                        condition_on_augment_sigma=False,
+                        dropout_rate=0.0,
+                        first_random_n_num_condition_t_max=0 if t2w else 2,
+                        normalize_condition_latent=False,
+                        augment_sigma_sample_p_mean=-3.0,
+                        augment_sigma_sample_p_std=2.0,
+                        augment_sigma_sample_multiplier=1.0,
+                    )
+                ),
+                net=L(MultiViewVideoExtendGeneralDIT)(
+                    n_views=5,
+                    n_views_emb=7,
+                    camera_condition_dim=6,
+                    add_repeat_frame_embedding=True,
+                    extra_per_block_abs_pos_emb=True,
+                    pos_emb_learnable=True,
+                    extra_per_block_abs_pos_emb_type="learnable",
+                    num_blocks=28,
+                ),
+                adjust_video_noise=True,
+                net_ctrl=dict(
+                    in_channels=16,
+                    hint_channels=16,
+                    num_blocks=28,
+                    n_views=5,
+                    n_views_emb=7,
+                    camera_condition_dim=6,
+                    add_repeat_frame_embedding=True,
+                    is_extend_model=True,
+                    layer_mask=[True if (i >= num_control_blocks) else False for i in range(28)],
+                    extra_per_block_abs_pos_emb=True,
+                    pos_emb_learnable=True,
+                    extra_per_block_abs_pos_emb_type="learnable",
+                ),
+                tokenizer=dict(
+                    video_vae=dict(
+                        pixel_chunk_duration=57,
+                    )
+                ),
+            ),
+            model_obj=L(MultiVideoDiffusionModelWithCtrl)(),
+        )
+    )
+
+
 # Register base configs
 cs.store(group="experiment", package="_global_", name=Base_7B_Config["job"]["name"], node=Base_7B_Config)
 # Register all control configurations
@@ -235,6 +314,15 @@ for key in ["control_input_hdmap", "control_input_lidar"]:
     for t2w in [True, False]:
         # Register 7B sv2mv configurations
         config_7b = make_ctrlnet_config_7b_mv(hint_key=key, num_control_blocks=num_control_blocks, t2w=t2w)
+        cs.store(group="experiment", package="_global_", name=config_7b["job"]["name"], node=config_7b)
+
+
+# Register waymo example
+num_control_blocks = 3
+for key in ["control_input_hdmap", "control_input_lidar"]:
+    for t2w in [True, False]:
+        # Register 7B sv2mv configurations
+        config_7b = make_ctrlnet_config_7b_mv_waymo(hint_key=key, num_control_blocks=num_control_blocks, t2w=t2w)
         cs.store(group="experiment", package="_global_", name=config_7b["job"]["name"], node=config_7b)
 
 

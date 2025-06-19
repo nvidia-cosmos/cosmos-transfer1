@@ -179,6 +179,8 @@ class MultiViewGeneralDIT(GeneralDIT):
         latent_condition: Optional[torch.Tensor] = None,
         latent_condition_sigma: Optional[torch.Tensor] = None,
         view_indices_B_T: Optional[torch.Tensor] = None,
+        regional_contexts: Optional[torch.Tensor] = None,
+        region_masks: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> dict:
         """
@@ -248,6 +250,8 @@ class MultiViewGeneralDIT(GeneralDIT):
             "adaln_lora_B_3D": adaln_lora_B_3D,
             "original_shape": original_shape,
             "extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D": extra_pos_emb_B_T_H_W_D_or_T_H_W_B_D,
+            "regional_contexts": regional_contexts,
+            "region_masks": region_masks,
         }
         return output
 

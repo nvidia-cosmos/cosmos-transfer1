@@ -16,7 +16,6 @@
 import json
 import os
 
-from cosmos_transfer1.utils.video_utils import is_valid_video, video_to_tensor
 import torch
 
 from cosmos_transfer1.auxiliary.depth_anything.model.depth_anything import DepthAnythingModel
@@ -24,6 +23,7 @@ from cosmos_transfer1.auxiliary.human_keypoint.human_keypoint import HumanKeypoi
 from cosmos_transfer1.auxiliary.sam2.sam2_model import VideoSegmentationModel
 from cosmos_transfer1.diffusion.inference.inference_utils import valid_hint_keys
 from cosmos_transfer1.utils import log
+from cosmos_transfer1.utils.video_utils import is_valid_video, video_to_tensor
 
 
 class Preprocessors:
@@ -79,10 +79,12 @@ class Preprocessors:
                     )
                     if os.path.exists(out_tensor):
                         regional_prompt["region_definitions_path"] = out_tensor
-                elif "region_definitions_path" in regional_prompt and isinstance(regional_prompt['region_definitions_path'], str):
-                    if is_valid_video(regional_prompt['region_definitions_path']):
+                elif "region_definitions_path" in regional_prompt and isinstance(
+                    regional_prompt["region_definitions_path"], str
+                ):
+                    if is_valid_video(regional_prompt["region_definitions_path"]):
                         log.info(f"converting video to tensor: {regional_prompt['region_definitions_path']}")
-                        video_to_tensor(regional_prompt['region_definitions_path'], out_tensor)
+                        video_to_tensor(regional_prompt["region_definitions_path"], out_tensor)
                         regional_prompt["region_definitions_path"] = out_tensor
                     else:
                         raise ValueError(f"Invalid video file: {regional_prompt['region_definitions_path']}")
