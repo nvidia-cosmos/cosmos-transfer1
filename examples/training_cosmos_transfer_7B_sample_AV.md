@@ -172,16 +172,16 @@ torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --confi
 
 To customize your training, see the job (experiment) config in `cosmos_transfer1/diffusion/config/training/experiment/ctrl_7b_tp_sample_av.py` to understand how they are defined, and edit as needed.
 
-It is also possible to modify config parameters from command line. For example:
+It is also possible to modify config parameters from the command line. For example:
 
 ```bash
 torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain trainer.max_iter=100 checkpoint.save_iter=40
 ```
 
-This will update the maximum training iterations to 100 (default in the registered experiments: 999999999) and checkpoint saving frequency to 50 (default: 1000).
+This will update the maximum training iterations to 100 (default in the registered experiments: 999999999) and checkpoint saving frequency to 40 (default: 1000).
 
 **Saving Checkpoints and Resuming Training.**
-During the training, the checkpoints will be saved in the below structure. Since we use TensorParallel across 8 GPUs, 8 checkpoints will be saved each time.
+During training, the checkpoints will be saved in the structure below. Since we use TensorParallel across 8 GPUs, 8 checkpoints will be saved each time.
 
 ```
 checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_sampleAV/CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_pretrain/checkpoints/
@@ -194,7 +194,31 @@ checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_sampleAV/CTRL_7Bv1pt3_t2w_121fra
 
 Since the `experiment` is uniquely associated with its checkpoint directory, rerunning the same training command after an unexpected interruption will automatically resume from the latest saved checkpoint.
 
-
 ### 5. Inference Using Trained Models
-- Convert the TP checkpoints to FSDP checkpoint using [this script](../scripts/convert_ckpt_tp_to_fsdp.py). Note: this script requires TP_SIZE gpus available.
-- Run inference steps as in the [inference README](./inference_cosmos_transfer1_7b_sample_av.md).
+
+**Converting the TP checkpoints to FSDP checkpoint:** To convert Tensor Parallel (TP) checkpoints to Fully Sharded Data Parallel (FSDP) format, use the conversion script `convert_ckpt_tp_to_fsdp.py`. This script requires the same number of GPUs as your TP size (e.g., if you trained with TP_SIZE=8, you need 8 GPUs for conversion).
+
+Example usage for Sample-AV models:
+```bash
+# For single-view models
+torchrun --nproc_per_node=8 convert_ckpt_tp_to_fsdp.py \
+    --experiment CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_posttrain \
+    --checkpoint-path checkpoints/cosmos_transfer1_posttrain/CTRL_7Bv1_sampleAV/CTRL_7Bv1pt3_t2w_121frames_control_input_lidar_block3_posttrain/checkpoints/iter_000000100.pt
+
+# For SingleToMultiView models
+torchrun --nproc_per_node=8 convert_ckpt_tp_to_fsdp.py \
+    --experiment CTRL_7Bv1pt3_t2w_sv2mv_57frames_control_input_hdmap_block3_posttrain \
+    --checkpoint-path checkpoints/cosmos_transfer1_posttrain/CTRL_7Bv1_sampleAV/CTRL_7Bv1pt3_t2w_sv2mv_57frames_control_input_hdmap_block3_posttrain/checkpoints/iter_000000100.pt
+```
+
+Optional arguments:
+- `--output-directory`: Custom directory for saving FSDP checkpoints (default: automatically generated from checkpoint path)
+- `--include-base-model`: Include base model in ControlNet checkpoint (default: False)
+
+The script will create two files in the output directory:
+1. `*_reg_model.pt`: Regular model checkpoint
+2. `*_ema_model.pt`: EMA model checkpoint
+
+The EMA model checkpoint (`*_ema_model.pt`) typically presents better quality results and is recommended for running inference in the next stage. For more details about the conversion process and available options, refer to the script's docstring.
+
+**Run inference:** Follow the steps in the [inference README](./inference_cosmos_transfer1_7b_sample_av.md).

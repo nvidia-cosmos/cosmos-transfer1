@@ -15,7 +15,9 @@
 
 """
 Usage:
-    torchrun --nproc_per_node=8 -m scripts.convert_ckpt_tp_to_fsdp > output.txt
+    torchrun --nproc_per_node=8 convert_ckpt_tp_to_fsdp.py \
+        --experiment CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain \
+        --checkpoint-path checkpoints/cosmos_transfer1_posttrain/CTRL_7Bv1_lvg/CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain/checkpoints/iter_000000100.pt
 
 This script is designed to convert a Tensor Parallel (TP) checkpoint
 to a Fully Sharded Data Parallel (FSDP) compatible format for a video diffusion model.
@@ -43,6 +45,7 @@ iter_000000100_ema_model.pt
 ```
 """
 
+import argparse
 import os
 from collections import OrderedDict
 
@@ -253,7 +256,6 @@ def convert_tp_checkpoint_to_fsdp(
         checkpoint_name = os.path.basename(checkpoint_path)
         reg_model_checkpoint_name = checkpoint_name.replace(".pt", "_reg_model.pt")
         reg_model_path = os.path.join(output_directory, reg_model_checkpoint_name)
-        easy_io.dump(model.state_dict()["model"], reg_model_path)
 
         # Save EMA model checkpoint with necessary post-processing
         ema_state_dict = {k.replace("-", "."): v for k, v in model.state_dict()["ema"].items()}
@@ -272,6 +274,19 @@ def convert_tp_checkpoint_to_fsdp(
         ema_model_path = os.path.join(output_directory, ema_model_checkpoint_name)
         easy_io.dump(ema_state_dict, ema_model_path)
 
+        # clean up the base model in the state dict if include_base_model_in_ctrlnet_ckpt is False
+        if not include_base_model_in_ctrlnet_ckpt:
+            # Get the state dict first
+            state_dict = model.state_dict()["model"]
+            # Create a new dict without base_model keys
+            filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith("base_model")}
+
+            # Save the filtered state dict directly
+            easy_io.dump(filtered_state_dict, reg_model_path)
+        else:
+            # Save the original state dict
+            easy_io.dump(model.state_dict()["model"], reg_model_path)
+
         log.info(
             f"Conversion complete. FSDP-compatible checkpoints saved for experiment: {experiment}\n"
             f"Regular model saved at {reg_model_path}\n"
@@ -280,11 +295,52 @@ def convert_tp_checkpoint_to_fsdp(
 
 
 if __name__ == "__main__":
-    # Example: Assume the TP checkpoint is saved for the VisControl at iteration 100 in the path below.
-    experiment = "CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain"
-    checkpoint_path = f"checkpoints/cosmos_transfer1_posttrain/CTRL_7Bv1_lvg/{experiment}/checkpoints/iter_000000100.pt"
-    output_directory = os.path.dirname(checkpoint_path).replace(
-        f"{experiment}/checkpoints", f"{experiment}/fsdp_checkpoints"
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description="Convert Tensor Parallel checkpoint to FSDP format")
+    parser.add_argument(
+        "--experiment",
+        type=str,
+        default="CTRL_7Bv1pt3_lvg_tp_121frames_control_input_seg_block3_posttrain",
+        help="Name of the experiment",
     )
-    os.makedirs(output_directory, exist_ok=True)
-    convert_tp_checkpoint_to_fsdp(experiment, checkpoint_path, output_directory)
+    parser.add_argument(
+        "--checkpoint-path",
+        type=str,
+        help="Path to the checkpoint file. If not provided, will be constructed using experiment name",
+    )
+    parser.add_argument(
+        "--output-directory",
+        type=str,
+        help="Directory to save the converted checkpoints. If not provided, will be constructed using checkpoint path",
+    )
+    parser.add_argument(
+        "--include-base-model",
+        action="store_true",
+        default=False,
+        help="Include base model in controlnet checkpoint (default: False)",
+    )
+
+    args = parser.parse_args()
+
+    # Set default checkpoint path if not provided
+    if args.checkpoint_path is None:
+        args.checkpoint_path = (
+            f"checkpoints/cosmos_transfer1_posttrain/CTRL_7Bv1_lvg/{args.experiment}/checkpoints/iter_000000100.pt"
+        )
+
+    # Set default output directory if not provided
+    if args.output_directory is None:
+        args.output_directory = os.path.dirname(args.checkpoint_path).replace(
+            f"{args.experiment}/checkpoints", f"{args.experiment}/fsdp_checkpoints"
+        )
+
+    # Create output directory
+    os.makedirs(args.output_directory, exist_ok=True)
+
+    # Convert checkpoint
+    convert_tp_checkpoint_to_fsdp(
+        experiment=args.experiment,
+        checkpoint_path=args.checkpoint_path,
+        output_directory=args.output_directory,
+        include_base_model_in_ctrlnet_ckpt=args.include_base_model,
+    )
