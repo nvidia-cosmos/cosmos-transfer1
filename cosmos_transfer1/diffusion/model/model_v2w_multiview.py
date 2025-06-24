@@ -169,6 +169,7 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
         add_input_frames_guidance: bool = False,
         x_sigma_max: Optional[torch.Tensor] = None,
         sigma_max: Optional[float] = None,
+        **kwargs,
     ) -> Tensor:
         """Generates video samples conditioned on input frames.
 

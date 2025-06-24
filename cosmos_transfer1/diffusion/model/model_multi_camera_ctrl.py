@@ -231,10 +231,7 @@ class MultiVideoDiffusionModelWithCtrl(DiffusionV2WMultiviewModel):
         condition_video_augment_sigma_in_inference: float = None,
         x_sigma_max: Optional[torch.Tensor] = None,
         sigma_max: float | None = None,
-        target_h: int = 88,
-        target_w: int = 160,
-        patch_h: int = 88,
-        patch_w: int = 160,
+        **kwargs,
     ) -> Tensor:
         """
         Generate samples from the batch. Based on given batch, it will automatically determine whether to generate image or video samples.
