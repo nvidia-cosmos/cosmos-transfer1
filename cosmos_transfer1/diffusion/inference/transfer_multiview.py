@@ -375,7 +375,6 @@ def demo(cfg, control_inputs):
             cfg.num_input_frames = 0
             checkpoint = BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
 
-
     # Initialize transfer generation model pipeline
     pipeline = DiffusionControl2WorldMultiviewGenerationPipeline(
         checkpoint_dir=cfg.checkpoint_dir,
