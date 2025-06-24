@@ -375,15 +375,11 @@ def demo(cfg, control_inputs):
             cfg.num_input_frames = 0
             checkpoint = BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH
 
-    model_name = MODEL_NAME_DICT[checkpoint]
-    model_class = MODEL_CLASS_DICT[checkpoint]
 
     # Initialize transfer generation model pipeline
     pipeline = DiffusionControl2WorldMultiviewGenerationPipeline(
         checkpoint_dir=cfg.checkpoint_dir,
         checkpoint_name=checkpoint,
-        model_name=model_name,
-        model_class=model_class,
         offload_network=cfg.offload_diffusion_transformer,
         offload_text_encoder_model=cfg.offload_text_encoder_model,
         offload_guardrail_models=cfg.offload_guardrail_models,

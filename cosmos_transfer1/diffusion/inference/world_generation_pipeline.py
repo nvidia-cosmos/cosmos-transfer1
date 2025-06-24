@@ -40,8 +40,10 @@ from cosmos_transfer1.checkpoints import (
     BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
     SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH,
     SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH,
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.inference.inference_utils import (
@@ -92,6 +94,8 @@ MODEL_NAME_DICT = {
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: "CTRL_7Bv1pt3_sv2mv_v2w_57frames_control_input_hdmap_block3",
     SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_block3",
     SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_lidar_block3",
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_waymo_block3",
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_v2w_57frames_control_input_hdmap_waymo_block3",
     EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH: "dev_v2w_ctrl_7bv1pt3_VisControlCanny_video_only_dmd2_fsdp",
 }
 MODEL_CLASS_DICT = {
@@ -111,6 +115,8 @@ MODEL_CLASS_DICT = {
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH: MultiVideoDiffusionModelWithCtrl,
     SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
+    SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
     EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH: VideoDistillModelWithCtrl,
 }
 
@@ -122,8 +128,6 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         self,
         checkpoint_dir: str,
         checkpoint_name: str,
-        model_name: str,
-        model_class: str,
         has_text_input: bool = True,
         offload_network: bool = False,
         offload_tokenizer: bool = False,
@@ -153,8 +157,6 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         Args:
             checkpoint_dir: Base directory containing model checkpoints
             checkpoint_name: Name of the diffusion transformer checkpoint to use
-            model_name: Name of the diffusion model to use
-            model_class: Class of the diffusion model to use
             has_text_input: Whether the pipeline takes text input for world generation
             offload_network: Whether to offload diffusion transformer after inference
             offload_tokenizer: Whether to offload tokenizer after inference
@@ -188,8 +190,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         self.upsampler_hint_key = None
         self.hint_details = None
         self.process_group = process_group
-        self.model_name = model_name
-        self.model_class = model_class
+        self.model_name = MODEL_NAME_DICT[checkpoint_name]
+        self.model_class = MODEL_CLASS_DICT[checkpoint_name]
         self.guidance = guidance
         self.num_steps = num_steps
         self.height = height
