@@ -21,7 +21,7 @@ huggingface-cli login
 4. Download the Cosmos model weights from [Hugging Face](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e):
 
 ```bash
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
+PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/
 ```
 
 Note that this will require about 300GB of free storage. Not all these checkpoints will be used in every generation.
@@ -88,7 +88,7 @@ Here's an example command:
 ```bash
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export NUM_GPU="${NUM_GPU:=1}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir checkpoints \
     --input_video_path path/to/input_video.mp4 \
     --video_save_name output_video \
@@ -107,7 +107,7 @@ The following `controlnet_specs` only activates the edge controlnet.
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPU="${NUM_GPU:=1}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example1_single_control_edge \
     --controlnet_specs assets/inference_cosmos_transfer1_single_control_edge.json \
@@ -122,7 +122,7 @@ You can also choose to run the inference on multiple GPUs as follows:
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0,1,2,3}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPU="${NUM_GPU:=4}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example1_single_control_edge \
     --controlnet_specs assets/inference_cosmos_transfer1_single_control_edge.json \
@@ -162,7 +162,7 @@ You can use our prompt upsampler to convert your short prompt into a longer, mor
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPU="${NUM_GPU:=1}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0  cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0  cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example1_single_control_edge_upsampled_prompt \
     --controlnet_specs assets/inference_cosmos_transfer1_single_control_edge_short_prompt.json \
@@ -192,7 +192,7 @@ The following `controlnet_specs` activates vis, edge, depth, seg controls at the
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPU="${NUM_GPU:=1}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example2_uniform_weights \
     --controlnet_specs assets/inference_cosmos_transfer1_uniform_weights.json \
@@ -254,7 +254,7 @@ The following `controlnet_specs` activates vis, edge, depth, seg controls at the
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPU="${NUM_GPU:=1}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example3_spatiotemporal_weights \
     --controlnet_specs assets/inference_cosmos_transfer1_spatiotemporal_weights_auto.json \
@@ -321,7 +321,7 @@ Inference command (with 9 input frames):
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPU="${NUM_GPU:=1}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
     --checkpoint_dir $CHECKPOINT_DIR \
     --video_save_folder outputs/example2_uniform_weights \
     --controlnet_specs assets/inference_cosmos_transfer1_uniform_weights.json \

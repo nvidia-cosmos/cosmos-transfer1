@@ -5,7 +5,7 @@ Here is another simple example of using multi control with regionwise prompts. M
 ```bash
 export CUDA_VISIBLE_DEVICES=0
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
+PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/inference/transfer.py \
     --video_save_folder outputs/example1_multi_control_regional_prompt_video_mask \
     --controlnet_specs assets/regionalprompt_test/inference_cosmos_transfer1_multi_control_regional_prompt_video_mask.json \
     --offload_text_encoder_model --sigma_max 80 --offload_guardrail_models

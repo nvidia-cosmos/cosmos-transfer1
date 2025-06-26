@@ -37,7 +37,7 @@ pip install transformer-engine[pytorch]
 
 To test the environment setup for inference run
 ```bash
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/test_environment.py
+PYTHONPATH=$(pwd) python scripts/test_environment.py
 ```
 
 ### Inference using docker
@@ -79,10 +79,10 @@ ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREF
 pip install transformer-engine[pytorch]
 # Install Apex for full training with bfloat16.
 git clone https://github.com/NVIDIA/apex
-CUDA_HOME=$CONDA_PREFIX pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./apex
+pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./apex
 ```
 
 You can test the environment setup for post-training with
 ```bash
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/test_environment.py --training
+PYTHONPATH=$(pwd) python scripts/test_environment.py --training
 ```

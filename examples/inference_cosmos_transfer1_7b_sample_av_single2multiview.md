@@ -21,7 +21,7 @@ huggingface-cli login
 4. Download the Cosmos model weights from [Hugging Face](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e):
 
 ```bash
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/ --model 7b_av
+PYTHONPATH=$(pwd) python scripts/download_checkpoints.py --output_dir checkpoints/ --model 7b_av
 ```
 
 Note that this will require about 300GB of free storage. Not all these checkpoints will be used in every generation.
@@ -87,7 +87,7 @@ export PROMPT="The video is captured from a camera mounted on a car. The camera 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPUS=1
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} cosmos_transfer1/diffusion/inference/transfer_multiview.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} cosmos_transfer1/diffusion/inference/transfer_multiview.py \
 --checkpoint_dir $CHECKPOINT_DIR \
 --video_save_name output_video_1_30_0 \
 --video_save_folder outputs/sample_av_multiview \
@@ -106,7 +106,7 @@ export PROMPT="The video is captured from a camera mounted on a car. The camera 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPUS=1
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} cosmos_transfer1/diffusion/inference/transfer_multiview.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} cosmos_transfer1/diffusion/inference/transfer_multiview.py \
 --checkpoint_dir $CHECKPOINT_DIR \
 --video_save_name output_video_extension \
 --video_save_folder outputs/sample_av_multiview \
@@ -135,7 +135,7 @@ export PROMPT="The video is captured from a camera mounted on a car. The camera 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
 export NUM_GPUS=1
-CUDA_HOME=$CONDA_PREFIX PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} cosmos_transfer1/diffusion/inference/transfer_multiview.py \
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=${NUM_GPUS} cosmos_transfer1/diffusion/inference/transfer_multiview.py \
 --checkpoint_dir $CHECKPOINT_DIR \
 --video_save_name output_video \
 --video_save_folder outputs/sample_av_multiview_waymo \
