@@ -29,6 +29,7 @@ from cosmos_transfer1.diffusion.inference.inference_utils import (
 )
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.diffusion.training.models.extend_model import ExtendDiffusionModel as ExtendVideoDiffusionModel
+from cosmos_transfer1.diffusion.training.models.model import DiffusionModel as VideoDiffusionModel
 from cosmos_transfer1.diffusion.training.models.model import _broadcast, broadcast_condition
 from cosmos_transfer1.diffusion.training.models.model_image import diffusion_fsdp_class_decorator
 from cosmos_transfer1.utils import log, misc
@@ -51,6 +52,7 @@ def ctrlnet_decorator(base_class: Type[T]) -> Type[T]:
             base_model = super().build_model()
             # initialize base model
             config = self.config
+            
             self.load_base_model(base_model)
             log.info("Done creating base model")
 
@@ -60,6 +62,8 @@ def ctrlnet_decorator(base_class: Type[T]) -> Type[T]:
             logvar = base_model.logvar
             # initialize controlnet encoder
             model = torch.nn.ModuleDict({"net": net, "conditioner": conditioner, "logvar": logvar})
+
+            log.info(f"loading base model's state dict into the full controlnet model.....")
             model.load_state_dict(base_model.state_dict(), strict=False)
 
             model.base_model = base_model
@@ -109,8 +113,11 @@ def ctrlnet_decorator(base_class: Type[T]) -> Type[T]:
                 checkpoint_path = checkpoint_path.replace("*", f"{mp_rank}")
 
             if checkpoint_path:
-                log.info(f"Loading base model checkpoint (local): {checkpoint_path}")
+                # log.info(f"Loading base model checkpoint (local): {checkpoint_path}")
                 state_dict = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
+
+                weight_raw = state_dict['model']['base_model.net.blocks.block24.blocks.0.block.attn.to_k.1.weight']
+                log.info(f"\n\n===============loaded from TP checkpoint {checkpoint_path}: weight min: {weight_raw.min()}, weight max: {weight_raw.max()}, weight mean: {weight_raw.mean()}", rank0_only=True)
                 log.success(f"Complete loading base model checkpoint (local): {checkpoint_path}")
 
                 if state_dict.get("ema") is not None:
@@ -125,11 +132,24 @@ def ctrlnet_decorator(base_class: Type[T]) -> Type[T]:
                     log.info("Loading from an EMA only model")
                     base_state_dict = state_dict
                 try:
-                    base_model.load_state_dict(base_state_dict, strict=False)
+                    log.critical("FOR BASE MODEL:load model in STRICT mode")
+
+                    # This might be the culprit: the base model state dict keys has 'base_model.' prefix for all weights
+                    # e.g. "base_model.net.blocks.block0.blocks.0.block.attn.to_k.0.weight"
+                    # But the base model itself doesn't have. It has this format as follows:
+                    # "net.blocks.block24.blocks[0].block.attn.to_k[1].weight"
+                    # Here we remove the 'base_model.' prefix from the keys to ensure strict loading of base model.
+                    base_state_dict = {k.replace('base_model.', ''): v for k, v in base_state_dict.items()}
+                    # Add debug prints to compare keys
+                    base_model.load_state_dict(base_state_dict, strict=True)
                 except Exception:
-                    log.critical("load model in non-strict mode")
                     log.critical(non_strict_load_model(base_model, base_state_dict), rank0_only=False)
             log.info("Done loading the base model checkpoint.")
+
+            weight = base_model.net.blocks.block24.blocks[0].block.attn.to_k[1].weight
+            log.info(f"\n\n\n===============After loading, base model weight min: {weight.min()}, weight max: {weight.max()}, weight mean: {weight.mean()}", rank0_only=True)
+            log.info("Expected value: weight min: 0.0703125, weight max: 1.4921875, weight mean: 0.8828582763671875", rank0_only=True)
+            return base_model
 
     return CtrlNetModel
 
@@ -716,4 +736,15 @@ class VideoDiffusionModelWithCtrl(ExtendVideoDiffusionModel):
 @video_ctrlnet_decorator
 @ctrlnet_decorator
 class VideoDiffusionFSDPModelWithCtrl(ExtendVideoDiffusionModel):
+    pass
+
+@video_ctrlnet_decorator
+@ctrlnet_decorator
+class ShortVideoDiffusionModelWithCtrl(VideoDiffusionModel):
+    pass
+
+@diffusion_fsdp_class_decorator
+@video_ctrlnet_decorator
+@ctrlnet_decorator
+class ShortVideoDiffusionFSDPModelWithCtrl(VideoDiffusionModel):
     pass
