@@ -357,6 +357,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         video_path: str,
         negative_prompt_embedding: Optional[torch.Tensor] = None,
         control_inputs: dict = None,
+        input_video_tensor: torch.Tensor | None = None,
     ) -> np.ndarray:
         """Generate world representation with automatic model offloading.
 
@@ -377,7 +378,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         if self.offload_network:
             self._load_network()
 
-        sample, intermediates = self._run_model(prompt_embedding, negative_prompt_embedding, video_path, control_inputs)
+        sample, intermediates = self._run_model(prompt_embedding, negative_prompt_embedding, video_path, control_inputs, input_video_tensor)
 
         if self.offload_network:
             self._offload_network()
@@ -393,6 +394,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         negative_prompt_embedding: torch.Tensor | None = None,
         video_path="",
         control_inputs: dict = None,
+        input_video_tensor: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Generate video frames using the diffusion model.
 
@@ -426,6 +428,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             self.blur_strength,
             self.canny_threshold,
             self.cutoff_frame,
+            input_video_tensor=input_video_tensor,
         )
 
         hint_key = data_batch["hint_key"]
@@ -539,8 +542,14 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 video.append(frames[:, :, self.num_input_frames :])
                 for i in range(self.num_steps):
                     intermediate_videos[i].append(intermediate_frames[i][:, :, self.num_input_frames :])
+            # Initialize prev_frames with zeros and copy the last `num_input_frames` into it.
             prev_frames = torch.zeros_like(frames)
-            prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
+            # Guard against the corner-case where no context frames are requested (num_input_frames == 0).
+            # When num_input_frames is 0 the slice on the left-hand side would have length 0, but
+            # the slice on the right ("-0" == 0) would cover the full tensor, triggering a
+            # size-mismatch RuntimeError.  We therefore skip the copy in that situation.
+            if self.num_input_frames > 0:
+                prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
 
         video = torch.cat(video, dim=2)[:, :, :T]
         video = video[0].permute(1, 2, 3, 0).numpy()
@@ -558,6 +567,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         negative_prompt: Optional[str] = None,
         control_inputs: dict = None,
         save_folder: str = "outputs/",
+        input_video_tensor: torch.Tensor | None = None,
     ) -> tuple[np.ndarray, str] | None:
         """Generate video from text prompt and control video.
 
@@ -573,6 +583,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             negative_prompt: Optional text to guide what not to generate
             control_inputs: Control inputs for guided generation
             save_folder: Folder to save intermediate files
+            input_video_tensor: Optional input video tensor for generation
 
         Returns:
             tuple: (
@@ -616,6 +627,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             negative_prompt_embedding=negative_prompt_embedding,
             video_path=video_path,
             control_inputs=control_inputs,
+            input_video_tensor=input_video_tensor,
         )
         log.info("Finish generation")
 
