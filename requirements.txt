@@ -50,7 +50,7 @@ retinaface_py==0.0.2
 rtmlib==0.0.13
 sam2==1.1.0
 termcolor==3.1.0
-torch==2.7.0
-torchvision==0.22.0
+torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu128
 tqdm==4.67.1
 transformers==4.49.0
