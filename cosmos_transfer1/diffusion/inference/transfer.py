@@ -28,7 +28,7 @@ import torch
 from cosmos_transfer1.checkpoints import (
     BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
     BASE_7B_CHECKPOINT_PATH,
-    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH,
+    EDGE2WORLD_CONTROLNET_7B_DISTILLED_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.inference.inference_utils import load_controlnet_specs, validate_controlnet_specs
 from cosmos_transfer1.diffusion.inference.preprocessors import Preprocessors
@@ -218,7 +218,7 @@ def demo(cfg, control_inputs):
 
     if cfg.use_distilled:
         assert not cfg.is_av_sample
-        checkpoint = EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH
+        checkpoint = EDGE2WORLD_CONTROLNET_7B_DISTILLED_CHECKPOINT_PATH
         pipeline = DistilledControl2WorldGenerationPipeline(
             checkpoint_dir=cfg.checkpoint_dir,
             checkpoint_name=checkpoint,
