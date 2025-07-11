@@ -126,6 +126,7 @@ def ctrlnet_decorator(base_class: Type[T]) -> Type[T]:
                     log.info("Loading from an EMA only model")
                     base_state_dict = state_dict
                 try:
+                    base_state_dict = {k.replace('base_model.', ''): v for k, v in base_state_dict.items()}
                     base_model.load_state_dict(base_state_dict, strict=False)
                 except Exception:
                     log.critical("load model in non-strict mode")
