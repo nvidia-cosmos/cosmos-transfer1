@@ -42,6 +42,7 @@ checkpoints/
 │   │   ├── base_model.pt
 │   │   ├── vis_control.pt
 │   │   ├── edge_control.pt
+│   │   ├── edge_control_distilled.pt
 │   │   ├── seg_control.pt
 │   │   ├── depth_control.pt
 │   │   ├── 4kupscaler_control.pt
