@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import importlib
 import json
 import os
@@ -422,6 +423,11 @@ def get_video_batch_for_multiview_model(
 
 
 def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs, num_views, num_video_frames):
+    """Prepare control inputs for multiview models.
+
+    TODO: add *cutoff_frame* support identical to single-view `get_ctrl_batch` so AV-style
+    past/future masking works in multiview pipelines.
+    """
     # Initialize control input dictionary
     control_input_dict = {k: v for k, v in data_batch.items()}
     control_weights = []
@@ -499,6 +505,7 @@ def get_batched_ctrl_batch(
     control_inputs_list,  # List[dict], length B
     blur_strength,
     canny_threshold,
+    cutoff_frame=-1,
 ):
     """
     Create a fully batched data_batch for video generation, including all control and video inputs.
@@ -511,6 +518,9 @@ def get_batched_ctrl_batch(
         input_video_paths: List of input video paths, length B.
         control_inputs_list: List of control input dicts, length B.
         blur_strength, canny_threshold: ControlNet augmentation parameters.
+        cutoff_frame (int): If > -1, separates past / future frames in the input video —frames up to
+            this index remain unchanged; later frames are zero-masked in the latent and the guided-sampling
+            fields are populated so the model only inpaints the “future” portion.
 
     Returns:
         data_batch: Dict with all fields batched along dim 0 (batch dimension).
@@ -545,6 +555,7 @@ def get_batched_ctrl_batch(
             control_inputs_list[b],
             blur_strength,
             canny_threshold,
+            cutoff_frame,
         )
         single_batches.append(processed)
 
@@ -573,15 +584,24 @@ def get_batched_ctrl_batch(
 
 
 def get_ctrl_batch(
-    model, data_batch, num_video_frames, input_video_path, control_inputs, blur_strength, canny_threshold
+    model, data_batch, num_video_frames, input_video_path, control_inputs, blur_strength, canny_threshold, cutoff_frame
 ):
     """Prepare complete input batch for video generation including latent dimensions.
 
     Args:
         model: Diffusion model instance
+        data_batch (dict): Partially-filled batch (text embeddings etc.)
+        num_video_frames (int): Number of frames to generate
+        input_video_path (str): Optional RGB video to guide generation
+        control_inputs (dict): ControlNet specification dictionary
+        blur_strength (str): Preset for bilateral-blur augmentor
+        canny_threshold (str): Preset for Canny-edge augmentor
+        cutoff_frame (int): If > ‑1, only frames up to this index are preserved; frames
+            after the cutoff are zero-masked in the latent and corresponding
+            guided-mask tensors are added so the model inpaints the “future”.
 
     Returns:
-        - data_batch (dict): Complete model input batch
+        data_batch (dict): Complete model input batch with control hints, weights, etc.
     """
     state_shape = model.state_shape
 
@@ -600,6 +620,27 @@ def get_ctrl_batch(
         _, num_total_frames, H, W = input_frames.shape
         control_input_dict["video"] = input_frames.numpy()  # CTHW
         data_batch["input_video"] = input_frames.bfloat16()[None] / 255 * 2 - 1  # BCTHW
+
+        if cutoff_frame != -1:
+            # Logic for calculating the latent cutoff frame
+            # 121 frames --> 16 latent frames
+            # 1st frame --> 1st latent frame
+            # next 120 frames --> 15 latent frames ( 8 video frames --> 1 latent frame)
+            latent_cutoff_frame = 1 + ((cutoff_frame - 1) // 8) if cutoff_frame > 1 else 1
+            log.info(
+                f"Using latent cutoff frame {latent_cutoff_frame} corresponding to the cutoff frame {cutoff_frame} in the input video"
+            )
+
+            latent_sample = model.encode(data_batch["input_video"].cuda()).contiguous()
+            data_batch["input_video"][:, :, :latent_cutoff_frame, :, :] = 0
+
+            data_batch["guided_image"] = latent_sample
+            guided_mask = torch.zeros_like(latent_sample)
+
+            # Guide_mask is 1 for the first latent_cutoff_frame and 0 for the rest
+            guided_mask[:, :, :latent_cutoff_frame] = 1
+            data_batch["guided_mask"] = guided_mask
+
     else:
         data_batch["input_video"] = None
     target_w, target_h = W, H
@@ -744,7 +785,7 @@ def generate_world_from_control(
         ).contiguous()
     num_of_latent_condition = compute_num_latent_frames(model, num_input_frames)
 
-    sample = model.generate_samples_from_batch(
+    sample, intermediates = model.generate_samples_from_batch(
         data_batch,
         guidance=guidance,
         state_shape=[c, t, h, w],
@@ -762,7 +803,7 @@ def generate_world_from_control(
         patch_w=w,
         use_batch_processing=use_batch_processing,
     )
-    return sample
+    return sample, intermediates
 
 
 def read_video_or_image_into_frames_BCTHW(

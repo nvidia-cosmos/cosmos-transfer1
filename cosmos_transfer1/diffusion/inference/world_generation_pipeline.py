@@ -151,6 +151,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         regional_prompts: List[str] = None,
         region_definitions: Union[List[List[float]], torch.Tensor] = None,
         waymo_example: bool = False,
+        cutoff_frame: int = -1,
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -178,6 +179,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             offload_prompt_upsampler: Whether to offload prompt upsampler after use
             process_group: Process group for distributed training
             waymo_example: Whether to use the waymo example post-training checkpoint
+            cutoff_frame: If > -1, separates past and future frames for AV models as explained
+                in get_ctrl_batch; propagated to sampling helpers.
         """
         self.num_input_frames = num_input_frames
         self.control_inputs = control_inputs
@@ -201,6 +204,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         self.seed = seed
         self.regional_prompts = regional_prompts
         self.region_definitions = region_definitions
+        self.cutoff_frame = cutoff_frame
 
         super().__init__(
             checkpoint_dir=checkpoint_dir,
@@ -441,7 +445,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         if negative_prompt_embeddings is not None:
             negative_prompt_embeddings = torch.cat(negative_prompt_embeddings)
 
-        samples = self._run_model(
+        samples, intermediates = self._run_model(
             prompt_embeddings=prompt_embeddings,
             negative_prompt_embeddings=negative_prompt_embeddings,
             video_paths=video_paths,
@@ -454,7 +458,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         if self.offload_tokenizer:
             self._offload_tokenizer()
 
-        return samples
+        return samples, intermediates
 
     def _run_model(
         self,
@@ -510,6 +514,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             control_inputs_list=control_inputs_list,  # [B]
             blur_strength=self.blur_strength,
             canny_threshold=self.canny_threshold,
+            cutoff_frame=self.cutoff_frame,
         )
 
         if regional_contexts is not None:
@@ -524,6 +529,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         control_weight = data_batch.get("control_weight", None)
         num_new_generated_frames = self.num_video_frames - self.num_input_frames
         B, C, T, H, W = control_input.shape
+
         if (T - self.num_input_frames) % num_new_generated_frames != 0:  # pad duplicate frames at the end
             pad_t = num_new_generated_frames - ((T - self.num_input_frames) % num_new_generated_frames)
             pad_frames = control_input[:, :, -1:].repeat(1, 1, pad_t, 1, 1)
@@ -546,6 +552,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         video = []
         prev_frames = None
+        intermediate_videos = [[] for _ in range(self.num_steps)]
+
         for i_clip in tqdm(range(N_clip)):
             # data_batch_i = {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in data_batch.items()}
             data_batch_i = {k: v for k, v in data_batch.items()}
@@ -604,7 +612,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
             # Generate video frames for this clip (batched)
             log.info("Starting diffusion sampling")
-            latents = generate_world_from_control(
+            latents, intermediates = generate_world_from_control(
                 model=self.model,
                 state_shape=state_shape,
                 is_negative_prompt=True,
@@ -622,20 +630,34 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             log.info("Starting VAE decode")
             frames = self._run_tokenizer_decoding(
                 latents, use_batch=False if is_upscale_case else True
-            )  # [B, T, H, W, C] or similar
+            )
             log.info("Completed VAE decode")
+            frames = torch.from_numpy(frames).permute(3, 0, 1, 2)[None]
+            intermediate_frames = []
+            for intermeduate in intermediates:
+                temp = self._run_tokenizer_decoding(intermeduate)
+                temp = torch.from_numpy(temp).permute(3, 0, 1, 2)[None]
+                intermediate_frames.append(temp)
 
             if i_clip == 0:
                 video.append(frames)
+                for i in range(self.num_steps):
+                    intermediate_videos[i].append(intermediate_frames[i])
             else:
                 video.append(frames[:, :, self.num_input_frames :])
-
+                for i in range(self.num_steps):
+                    intermediate_videos[i].append(intermediate_frames[i][:, :, self.num_input_frames :])
             prev_frames = torch.zeros_like(frames)
             prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
 
         video = torch.cat(video, dim=2)[:, :, :T]
         video = video.permute(0, 2, 3, 4, 1).numpy()
-        return video
+
+        for i in range(self.num_steps):
+            intermediate_videos[i] = torch.cat(intermediate_videos[i], dim=2)[:, :, :T]
+            intermediate_videos[i] = intermediate_videos[i].permute(0, 2, 3, 4, 1).numpy()
+
+        return video, intermediate_videos
 
     def generate(
         self,
@@ -744,10 +766,9 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         # Generate videos in batches
         log.info("Run generation")
-
         all_neg_embeddings = [emb[1] for emb in all_prompt_embeddings]
         all_prompt_embeddings = [emb[0] for emb in all_prompt_embeddings]
-        videos = self._run_model_with_offload(
+        videos, intermediate_videos = self._run_model_with_offload(
             prompt_embeddings=all_prompt_embeddings,
             negative_prompt_embeddings=all_neg_embeddings,
             video_paths=safe_video_paths,
@@ -766,7 +787,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         if not all_videos:
             log.critical("All generated videos failed safety checks")
             return None
-        return all_videos, all_final_prompts
+        return all_videos, intermediate_videos, all_final_prompts
 
 
 class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGenerationPipeline):
@@ -842,7 +863,9 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         if self.offload_tokenizer:
             self._offload_tokenizer()
 
-        return sample
+        # TODO: return *intermediate_videos* just like the single-view pipeline so that callers
+        # can optionally save the diffusion trajectory for multiview as well.
+        return sample, []
 
     def _run_model(
         self,
@@ -926,6 +949,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         data_batch = get_ctrl_batch_mv(
             self.height, self.width, data_batch, total_T, control_inputs, self.model.n_views, self.num_video_frames
         )  # multicontrol inputs are concatenated channel wise, [-1,1] range
+        # TODO: pass cutoff_frame and implement same masking logic as single-view get_ctrl_batch
 
         hint_key = data_batch["hint_key"]
         input_video = None
@@ -1215,8 +1239,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         # Generate video
         log.info("Run generation")
-
-        video = self._run_model_with_offload(
+        video, intermediate_videos = self._run_model_with_offload(
             prompt_embedding,
             view_condition_video,
             initial_condition_video,
@@ -1231,8 +1254,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         log.info("Pass guardrail on generated video")
 
-        return video, mv_prompts
-
+        return video, intermediate_videos, mv_prompts
 
 class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationPipeline):
     """Pipeline for distilled ControlNet video2video inference."""
@@ -1309,6 +1331,7 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
             control_inputs_list=control_inputs_list,  # [B]
             blur_strength=self.blur_strength,
             canny_threshold=self.canny_threshold,
+            cutoff_frame=self.cutoff_frame,
         )
 
         log.info("Completed data augmentation")
@@ -1425,3 +1448,4 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
         video = torch.cat(video, dim=2)[:, :, :T]
         video = video.permute(0, 2, 3, 4, 1).numpy()
         return video
+

@@ -441,7 +441,7 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
         self.load_base_model(base_model)
         log.info("Done creating base model")
 
-        log.info("Start creating ctrlnet model")
+        log.info("Start creating ctrlnet model T2V")
         net = lazy_instantiate(self.config.net_ctrl)
         conditioner = base_model.conditioner
         logvar = base_model.logvar
@@ -642,17 +642,16 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
             self.model.net.hint_encoders = self.hint_encoders
 
         def x0_fn(noise_x: torch.Tensor, sigma: torch.Tensor) -> torch.Tensor:
-            cond_x0 = self.denoise(
-                noise_x,
-                sigma,
-                condition,
-            ).x0
-            uncond_x0 = self.denoise(
-                noise_x,
-                sigma,
-                uncondition,
-            ).x0
-            return cond_x0 + guidance * (cond_x0 - uncond_x0)
+            cond_x0 = self.denoise(noise_x, sigma, condition).x0
+            uncond_x0 = self.denoise(noise_x, sigma, uncondition).x0
+            raw_x0 = cond_x0 + guidance * (cond_x0 - uncond_x0)
+            if "guided_image" in data_batch:
+                # replacement trick that enables inpainting with base model
+                assert "guided_mask" in data_batch, "guided_mask should be in data_batch if guided_image is present"
+                guide_image = data_batch["guided_image"]
+                guide_mask = data_batch["guided_mask"]
+                raw_x0 = guide_mask * guide_image + (1 - guide_mask) * raw_x0
+            return raw_x0
 
         return x0_fn
 
