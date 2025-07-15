@@ -420,6 +420,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         video_paths: list[str],
         negative_prompt_embeddings: Optional[list[torch.Tensor]] = None,
         control_inputs_list: list[dict] = None,
+        input_video_tensor: torch.Tensor = None,
     ) -> list[np.ndarray]:
         """Generate world representation with automatic model offloading.
 
@@ -431,6 +432,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             video_paths: List of paths to input videos
             negative_prompt_embeddings: Optional list of embeddings for negative prompt guidance
             control_inputs_list: List of control input dictionaries
+            input_video_tensor: Optional tensor of input video frames,
+                used when the caller already has the frames
 
         Returns:
             list[np.ndarray]: List of generated world representations as numpy arrays
@@ -450,6 +453,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             negative_prompt_embeddings=negative_prompt_embeddings,
             video_paths=video_paths,
             control_inputs_list=control_inputs_list,
+            input_video_tensor=input_video_tensor,
         )
 
         if self.offload_network:
@@ -466,6 +470,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         video_paths: list[str],  # [B]
         negative_prompt_embeddings: Optional[torch.Tensor] = None,  # [B, ...] or None
         control_inputs_list: list[dict] = None,  # [B] list of dicts
+        input_video_tensor: torch.Tensor = None,
     ) -> np.ndarray:
         """
         Batched world generation with model offloading.
@@ -515,6 +520,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             blur_strength=self.blur_strength,
             canny_threshold=self.canny_threshold,
             cutoff_frame=self.cutoff_frame,
+            input_video_tensor=input_video_tensor,
         )
 
         if regional_contexts is not None:
@@ -648,7 +654,12 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 for i in range(self.num_steps):
                     intermediate_videos[i].append(intermediate_frames[i][:, :, self.num_input_frames :])
             prev_frames = torch.zeros_like(frames)
-            prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
+            # Guard against the corner-case where no context frames are requested (num_input_frames == 0).
+            # When num_input_frames is 0 the slice on the left-hand side would have length 0, but
+            # the slice on the right ("-0" == 0) would cover the full tensor, triggering a
+            # size-mismatch RuntimeError.  We therefore skip the copy in that situation.
+            if self.num_input_frames > 0:
+                prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
 
         video = torch.cat(video, dim=2)[:, :, :T]
         video = video.permute(0, 2, 3, 4, 1).numpy()
@@ -667,6 +678,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         control_inputs: dict | list[dict] = None,
         save_folder: str = "outputs/",
         batch_size: int = 1,
+        input_video_tensor: torch.Tensor | None = None,
     ) -> tuple[np.ndarray, str | list[str]] | None:
         """Generate video from text prompt and control video.
 
@@ -683,6 +695,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             control_inputs: Control inputs for guided generation
             save_folder: Folder to save intermediate files
             batch_size: Number of videos to process simultaneously
+            input_video_tensor: Optional tensor of input video frames,
+                used when the caller already has the frames
 
         Returns:
             tuple: (
@@ -773,6 +787,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             negative_prompt_embeddings=all_neg_embeddings,
             video_paths=safe_video_paths,
             control_inputs_list=safe_control_inputs,
+            input_video_tensor=input_video_tensor,
         )
         log.info("Finish generation")
 
@@ -846,6 +861,9 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         Returns:
             np.ndarray: Generated world representation as numpy array
+        
+        TODO: Add `input_video_tensor` parameter and propagate through the multiview
+            generation path to enable in-memory RGB context support.
         """
         if self.offload_tokenizer:
             self._load_tokenizer()
@@ -1239,6 +1257,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
 
         # Generate video
         log.info("Run generation")
+        # TODO: pass `input_video_tensor` once multiview pipeline supports it
         video, intermediate_videos = self._run_model_with_offload(
             prompt_embedding,
             view_condition_video,
@@ -1306,6 +1325,9 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
         """
         Batched world generation with model offloading.
         Each batch element corresponds to a (prompt, video, control_inputs) triple.
+
+        TODO: Add `input_video_tensor` parameter and handling logic, and forward it
+        down to `get_batched_ctrl_batch` to match the single-view pipeline.
         """
         B = len(video_paths)
         print(f"video paths: {video_paths}")
@@ -1319,6 +1341,7 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
         log.info(f"Regional prompts not supported when using distilled model, dropping: {self.regional_prompts}")
 
         # Get video batch and state shape
+        # TODO: forward `input_video_tensor` when distilled pipeline is updated to accept it
         data_batch, state_shape = get_batched_ctrl_batch(
             model=self.model,
             prompt_embeddings=prompt_embeddings,  # [B, ...]
@@ -1443,7 +1466,12 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
                 video.append(frames[:, :, self.num_input_frames :])
 
             prev_frames = torch.zeros_like(frames)
-            prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
+            # Guard against the corner-case where no context frames are requested (num_input_frames == 0).
+            # When num_input_frames is 0 the slice on the left-hand side would have length 0, but
+            # the slice on the right ("-0" == 0) would cover the full tensor, triggering a
+            # size-mismatch RuntimeError.  We therefore skip the copy in that situation.
+            if self.num_input_frames > 0:
+                prev_frames[:, :, : self.num_input_frames] = frames[:, :, -self.num_input_frames :]
 
         video = torch.cat(video, dim=2)[:, :, :T]
         video = video.permute(0, 2, 3, 4, 1).numpy()
