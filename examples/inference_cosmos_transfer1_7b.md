@@ -42,6 +42,7 @@ checkpoints/
 │   │   ├── base_model.pt
 │   │   ├── vis_control.pt
 │   │   ├── edge_control.pt
+│   │   ├── edge_control_distilled.pt
 │   │   ├── seg_control.pt
 │   │   ├── depth_control.pt
 │   │   ├── 4kupscaler_control.pt
@@ -116,6 +117,21 @@ PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 co
     --num_gpus $NUM_GPU
 ```
 
+A lightweight, distilled variant of the edge controlnet can be enabled through the `--use_distilled` flag. This model allows for single-step inference, reducing the compute resources used:
+```bash
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:=0}"
+export CHECKPOINT_DIR="${CHECKPOINT_DIR:=./checkpoints}"
+export NUM_GPU="${NUM_GPU:=1}"
+PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 cosmos_transfer1/diffusion/inference/transfer.py \
+    --checkpoint_dir $CHECKPOINT_DIR \
+    --video_save_folder outputs/example1_single_control_edge_distilled \
+    --controlnet_specs assets/inference_cosmos_transfer1_single_control_edge.json \
+    --offload_text_encoder_model \
+    --offload_guardrail_models \
+    --num_gpus $NUM_GPU \
+    --use_distilled
+```
+
 You can also choose to run the inference on multiple GPUs as follows:
 
 ```bash
@@ -131,8 +147,7 @@ PYTHONPATH=$(pwd) torchrun --nproc_per_node=$NUM_GPU --nnodes=1 --node_rank=0 co
     --num_gpus $NUM_GPU
 ```
 
-This launches `transfer.py` and configures the controlnets for inference according to `assets/inference_cosmos_transfer1_single_control_edge.json`:
-
+This launches `transfer.py` and configures the controlnets for inference according to `assets/inference_cosmos_transfer1_single_control_edge.json`. For the distilled edge model, a `control_weight` of `1.0` is recommended:
 ```json
 {
     "prompt": "The video is set in a modern, well-lit office environment with a sleek, minimalist design. ...",
