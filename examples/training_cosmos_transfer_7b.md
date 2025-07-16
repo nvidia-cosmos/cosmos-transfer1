@@ -50,6 +50,7 @@ checkpoints/
 │   │   ├── base_model.pt
 │   │   ├── vis_control.pt
 │   │   ├── edge_control.pt
+│   │   ├── edge_control_distilled.pt
 │   │   ├── seg_control.pt
 │   │   ├── depth_control.pt
 │   │   ├── keypoint_control.pt

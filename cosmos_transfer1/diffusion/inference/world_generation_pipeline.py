@@ -30,7 +30,7 @@ from cosmos_transfer1.checkpoints import (
     COSMOS_TOKENIZER_CHECKPOINT,
     DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH,
+    EDGE2WORLD_CONTROLNET_7B_DISTILLED_CHECKPOINT_PATH,
     HDMAP2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
@@ -96,7 +96,7 @@ MODEL_NAME_DICT = {
     SV2MV_t2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_lidar_block3",
     SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_t2w_57frames_control_input_hdmap_waymo_block3",
     SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: "CTRL_7Bv1pt3_sv2mv_v2w_57frames_control_input_hdmap_waymo_block3",
-    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH: "dev_v2w_ctrl_7bv1pt3_VisControlCanny_video_only_dmd2_fsdp",
+    EDGE2WORLD_CONTROLNET_7B_DISTILLED_CHECKPOINT_PATH: "dev_v2w_ctrl_7bv1pt3_VisControlCanny_video_only_dmd2_fsdp",
 }
 MODEL_CLASS_DICT = {
     BASE_7B_CHECKPOINT_PATH: VideoDiffusionModelWithCtrl,
@@ -117,7 +117,7 @@ MODEL_CLASS_DICT = {
     SV2MV_v2w_LIDAR2WORLD_CONTROLNET_7B_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
     SV2MV_t2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
     SV2MV_v2w_HDMAP2WORLD_CONTROLNET_7B_WAYMO_CHECKPOINT_PATH: MultiVideoDiffusionModelWithCtrl,
-    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH: VideoDistillModelWithCtrl,
+    EDGE2WORLD_CONTROLNET_7B_DISTILLED_CHECKPOINT_PATH: VideoDistillModelWithCtrl,
 }
 
 from collections import defaultdict
@@ -1389,12 +1389,8 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
         initial_condition_input = None
 
         prev_frames = None
-        if input_video is not None:
-            prev_frames = torch.zeros_like(input_video).cuda()
-            prev_frames[:, :, : self.num_input_frames] = (input_video[:, :, : self.num_input_frames] + 1) * 255.0 / 2
         log.info(f"N_clip: {N_clip}")
         for i_clip in tqdm(range(N_clip)):
-            log.info(f"input_video shape: {input_video.shape}")
             # data_batch_i = {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in data_batch.items()}
             data_batch_i = {k: v for k, v in data_batch.items()}
             start_frame = num_new_generated_frames * i_clip
@@ -1432,12 +1428,15 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
                 t, h, w = latent_hint.shape[-3:]
                 data_batch_i["control_weight"] = resize_control_weight_map(control_weight_t, (t, h // 2, w // 2))
 
-            num_input_frames = self.num_input_frames
-            prev_frames_patched = split_video_into_patches(
-                prev_frames, control_input.shape[-2], control_input.shape[-1]
-            )
-            input_frames = prev_frames_patched.bfloat16() / 255.0 * 2 - 1
-            condition_latent = self.model.encode(input_frames).contiguous()
+            if i_clip == 0:
+                num_input_frames = 0
+                latent_tmp = latent_hint if latent_hint.ndim == 5 else latent_hint[:, 0]
+                condition_latent = torch.zeros_like(latent_tmp)
+            else:
+                num_input_frames = self.num_input_frames
+                prev_frames = split_video_into_patches(prev_frames, control_input.shape[-2], control_input.shape[-1])
+                input_frames = prev_frames.bfloat16().cuda() / 255.0 * 2 - 1
+                condition_latent = self.model.encode(input_frames).contiguous()
 
             # Generate video frames for this clip (batched)
             log.info("Starting diffusion sampling")

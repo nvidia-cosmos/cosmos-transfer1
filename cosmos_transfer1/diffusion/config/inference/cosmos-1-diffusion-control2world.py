@@ -17,7 +17,7 @@ from hydra.core.config_store import ConfigStore
 
 from cosmos_transfer1.checkpoints import (
     BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
-    EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH,
+    EDGE2WORLD_CONTROLNET_7B_DISTILLED_CHECKPOINT_PATH,
     BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
     BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH,
 )
@@ -349,7 +349,7 @@ def make_ctrlnet_config_7b_distilled(
             ),
             model=dict(
                 base_load_from=dict(
-                    load_path=f"checkpoints/{EDGE2WORLD_CONTROLNET_DISTILLED_CHECKPOINT_PATH}",
+                    load_path=f"checkpoints/{EDGE2WORLD_CONTROLNET_7B_DISTILLED_CHECKPOINT_PATH}",
                 ),
                 hint_mask=hint_mask,
                 hint_dropout_rate=0.0,
