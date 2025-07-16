@@ -102,6 +102,13 @@ class RollingWindowGenerator:
         self.disable_guardrail = disable_guardrail
         self.context_frames: List[np.ndarray] = []  # H×W×C uint8
 
+        # Track the absolute index of the *next* frame to be generated. This
+        # allows us to align the temporal window of online control inputs with
+        # the rolling RGB context, ensuring that we always supply the correct
+        # (and fresh) HD-Map/LiDAR frames to the model instead of repeatedly
+        # sending the first N frames.
+        self.next_frame_idx: int = 0
+
         if self.online and self.full_control_videos is None:
             raise ValueError("`full_control_videos` must be provided for online mode.")
 
@@ -135,10 +142,20 @@ class RollingWindowGenerator:
             if len(self.context_frames) > self.max_context:
                 self.context_frames = self.context_frames[-self.max_context :]
 
+            # After warm-up we have already produced `warmup_frames` frames, so
+            # the next frame to be generated has index `warmup_frames`.
+            self.next_frame_idx = self.warmup_frames
+
     def _generate_video_chunk(
         self, control_inputs: dict, input_video_tensor: torch.Tensor | None
     ) -> np.ndarray | None:
         """Helper to run model and guardrail. Returns a TCHW ndarray or None."""
+        # Use a fresh random seed for every chunk to mitigate error
+        # accumulation when rolling the generation window.  The diffusion
+        # pipeline reads the seed from ``self.pipeline.seed`` each time it
+        # starts a new sampling run
+        self.pipeline.seed = int(np.random.randint(0, 2**31 - 1))
+
         video, _ = self.pipeline._run_model_with_offload(
             prompt_embedding=getattr(self.pipeline, "_cached_prompt_emb"),
             negative_prompt_embedding=getattr(self.pipeline, "_cached_neg_prompt_emb"),
@@ -153,16 +170,39 @@ class RollingWindowGenerator:
         return video
 
     def _get_sliced_control_inputs(self, num_frames: int) -> dict:
-        """Return a fresh control_inputs dict with control tensors sliced to `num_frames`."""
+        """Return a fresh control_inputs dict with control tensors sliced to
+        `num_frames`, **starting** at the correct temporal offset so that the
+        control inputs remain aligned with the rolling RGB context.
+
+        In online mode we keep at most `max_context` RGB frames in the buffer.
+        Once the buffer is full, the oldest frame is dropped each step. We must
+        mirror this behaviour for the control streams by discarding the same
+        number of earliest frames; otherwise the model would repeatedly see
+        identical control inputs, leading to frozen outputs with gradually
+        accumulating noise.
+        """
+
         if not self.online or self.full_control_videos is None:
             raise RuntimeError("_get_sliced_control_inputs called in non-online mode")
+
+        ctx_len = len(self.context_frames)
+        # The first frame in `context_frames` corresponds to absolute index
+        #   self.next_frame_idx - ctx_len
+        start_idx = max(0, self.next_frame_idx - ctx_len)
+        end_idx = start_idx + num_frames  # exclusive
 
         sliced_inputs: dict = {}
         for key, cfg in self.control_inputs.items():
             new_cfg = cfg.copy()
             if key in self.full_control_videos:
                 full_video = self.full_control_videos[key]
-                new_cfg["input_control"] = full_video[:num_frames].copy()
+                # Guard against requesting a slice longer than the control clip
+                if end_idx > full_video.shape[0]:
+                    raise ValueError(
+                        f"Requested control slice [{start_idx}:{end_idx}] for '{key}' "
+                        f"but video has only {full_video.shape[0]} frames."
+                    )
+                new_cfg["input_control"] = full_video[start_idx:end_idx].copy()
             sliced_inputs[key] = new_cfg
         return sliced_inputs
 
@@ -178,7 +218,9 @@ class RollingWindowGenerator:
         ctx_len = len(self.context_frames)
         ctx_tensor = self._build_context_tensor() if ctx_len > 0 else None
 
-        # Get control inputs for this step
+        # Get control inputs for this step. In online mode we align the slice
+        # with the current position in the video; in offline mode we keep the
+        # original inputs untouched.
         if self.online:
             step_control_inputs = self._get_sliced_control_inputs(ctx_len + 1)
         else:
@@ -203,6 +245,10 @@ class RollingWindowGenerator:
         self.context_frames.append(new_frame)
         if len(self.context_frames) > self.max_context:
             self.context_frames = self.context_frames[-self.max_context :]
+
+        # Advance the global frame pointer so that the next call will fetch the
+        # correct control slice.
+        self.next_frame_idx += 1
 
         return new_frame
 
@@ -274,6 +320,18 @@ def main() -> None:
                 control_inputs[k]["input_control"] = arr
         full_control_videos = None  # Not needed anymore for offline mode
 
+    # ------------------------------------------------------------
+    # Sanity-check: Ensure control videos are long enough.
+    # ------------------------------------------------------------
+    if args.online and full_control_videos:
+        min_frames_available = min(arr.shape[0] for arr in full_control_videos.values())
+        if min_frames_available < args.total_frames:
+            raise ValueError(
+                f"Control video(s) shorter than requested total_frames: "
+                f"requested={args.total_frames}, available={min_frames_available}. "
+                "Please lower --total_frames or provide longer input clips."
+            )
+
     # Store prompt in the instance for convenience (rolling inference never
     # modifies the prompt once cached, so we keep the simple behaviour).
     setattr(pipeline, "guidance_prompt", args.prompt)
@@ -313,15 +371,34 @@ def main() -> None:
     if len(generated_frames) > 0:
         log.info(f"Pre-filled {len(generated_frames)} warm-up frames into the output video.")
 
-    # Generate the remaining frames
-    for _ in range(args.total_frames - len(generated_frames)):
-        frame = generator.step()
-        generated_frames.append(frame)
+    # ------------------------------------------------------------
+    # Generate the remaining frames.  If anything goes wrong mid-run, save
+    # whatever we have generated so far instead of losing the work.
+    # ------------------------------------------------------------
 
-    # Save result
-    video_out = np.stack(generated_frames, axis=0)  # T H W C
-    save_video(video=video_out, fps=pipeline.fps, H=video_out.shape[1], W=video_out.shape[2], video_save_quality=5, video_save_path=args.output)
-    log.info(f"Saved rolling video to {args.output}")
+    try:
+        for _ in range(args.total_frames - len(generated_frames)):
+            frame = generator.step()
+            generated_frames.append(frame)
+    except Exception as exc:  # pylint: disable=broad-except
+        log.warning(
+            f"Generation stopped early after {len(generated_frames)} frames due to: {exc}"
+        )
+
+    # Save result if any frames were produced
+    if generated_frames:
+        video_out = np.stack(generated_frames, axis=0)  # T H W C
+        save_video(
+            video=video_out,
+            fps=30, # pipeline.fps is fixed to 24, but with AV it actually produces 30fps
+            H=video_out.shape[1],
+            W=video_out.shape[2],
+            video_save_quality=5,
+            video_save_path=args.output,
+        )
+        log.info(f"Saved rolling video ({video_out.shape[0]} frames) to {args.output}")
+    else:
+        log.error("No frames generated; nothing to save.")
 
 
 if __name__ == "__main__":
