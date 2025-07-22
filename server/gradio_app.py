@@ -14,8 +14,6 @@
 # limitations under the License.
 
 import os
-from datetime import datetime
-from typing import Optional
 
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferPipeline
@@ -23,8 +21,13 @@ from model_server import ModelServer
 import gradio as gr
 
 
-output_dir = os.getenv("OUTPUT_DIR", "/mnt/pvc/gradio_outdir")
-model_server = ModelServer(num_workers=int(os.environ.get("NUM_GPU", 1)))
+class cfg:
+    checkpoint_dir = os.getenv("CHECKPOINT_DIR", "/mnt/pvc/cosmos-transfer1")
+    output_dir = os.getenv("OUTPUT_DIR", "/mnt/pvc/gradio_outdir")
+    num_gpus = int(os.environ.get("NUM_GPU", 1))
+
+
+model = None
 
 
 # Event handler
@@ -49,18 +52,16 @@ def infer_wrapper(
     blur_strength,
     canny_threshold,
 ):
-    # Convert individual checkboxes to control_types list
-    control_types = []
-    if vis_enable:
-        control_types.append("Visual")
-    if edge_enable:
-        control_types.append("Edge")
-    if depth_enable:
-        control_types.append("Depth")
-    if seg_enable:
-        control_types.append("Segmentation")
-    if keypoint_enable:
-        control_types.append("Keypoint")
+    if not vis_enable:
+        vis_weight = 0
+    if not edge_enable:
+        edge_weight = 0
+    if not depth_enable:
+        depth_weight = 0
+    if not seg_enable:
+        seg_weight = 0
+    if not keypoint_enable:
+        keypoint_weight = 0
 
     try:
         _, args_dict = TransferPipeline.validate_params(
@@ -82,13 +83,13 @@ def infer_wrapper(
     except ValueError as e:
         return None, f"Error validating parameters: {e}"
 
-    model_server.send_request(args_dict)
+    model.infer(args_dict)
 
     # Check if output was generated
-    output_path = os.path.join(output_dir, "output.mp4")
+    output_path = os.path.join(cfg.output_dir, "output.mp4")
     if os.path.exists(output_path):
         # Read the generated prompt
-        prompt_path = os.path.join(output_dir, "output.txt")
+        prompt_path = os.path.join(cfg.output_dir, "output.txt")
         final_prompt = prompt
         if os.path.exists(prompt_path):
             with open(prompt_path, "r", encoding="utf-8") as f:
@@ -96,10 +97,10 @@ def infer_wrapper(
 
         return (
             output_path,
-            f"Video generated successfully!\nOutput saved to: {output_dir}\nFinal prompt: {final_prompt}",
+            f"Video generated successfully!\nOutput saved to: {cfg.output_dir}\nFinal prompt: {final_prompt}",
         )
     else:
-        return None, f"Generation failed - no output video was created\nCheck folder: {output_dir}"
+        return None, f"Generation failed - no output video was created\nCheck folder: {cfg.output_dir}"
 
 
 def create_gradio_interface():
@@ -107,7 +108,7 @@ def create_gradio_interface():
     with gr.Blocks(title="Cosmos-Transfer1 Video Generation", theme=gr.themes.Soft()) as interface:
         gr.Markdown("# Cosmos-Transfer1: World Generation with Adaptive Multimodal Control")
         gr.Markdown("Upload a video and configure controls to generate a new video with the Cosmos-Transfer1 model.")
-        gr.Markdown(f"**Output Directory**: {output_dir}")
+        gr.Markdown(f"**Output Directory**: {cfg.output_dir}")
 
         with gr.Row():
             with gr.Column(scale=1):
@@ -240,24 +241,24 @@ def create_gradio_interface():
         """
         )
 
-        gr.Markdown("## File Storage:")
-        gr.Markdown(
-            f"""
-        - **Input videos**: Temporarily stored in Gradio's cache, then copied to output folder
-        - **Generated videos**: Saved to `{output_dir}/generation_YYYYMMDD_HHMMSS/`
-        - **Output structure**: Each generation gets its own timestamped folder with input copy, output video, and prompt
-        """
-        )
-
     return interface
 
 
 if __name__ == "__main__":
+
     # Check if checkpoints exist
-    if not os.path.exists("checkpoints"):
-        print("Error: checkpoints directory not found. Please download the model checkpoints first.")
-        print("Run: python scripts/download_checkpoints.py --output_dir checkpoints/")
+    if not os.path.exists(cfg.checkpoint_dir):
+        print(f"Error: checkpoints directory {cfg.checkpoint_dir} not found.")
         exit(1)
+
+    if cfg.num_gpus == 1:
+        model = TransferPipeline(
+            output_dir=cfg.output_dir,
+            num_gpus=cfg.num_gpus,
+            checkpoint_dir=cfg.checkpoint_dir,
+        )
+    else:
+        model = ModelServer(num_workers=cfg.num_gpus)
 
     interface = create_gradio_interface()
 

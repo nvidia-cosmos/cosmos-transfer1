@@ -12,10 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
-Worker sandbox for distributed processing.
-Contains the worker processes that run in each distributed node.
-"""
 
 import os
 import sys
@@ -38,12 +34,6 @@ logger.add(
     level="INFO",
 )
 
-"""
-this function is running in processes started by torchrun.
-# TODO: dynamically load model pipeline based on MODEL_MODULE and MODEL_CLASS
-# TODO: pass through env var for CHECKPOINT_DIR, so far we use default
-"""
-
 
 class Config:
     output_dir = os.getenv("OUTPUT_DIR", "/mnt/pvc/gradio_outdir")
@@ -51,11 +41,14 @@ class Config:
     model_class = os.getenv("MODEL_CLASS")
 
 
+"""
+enty point for the worker process. The worker process will wait for an inference request with inference parameters from the model server.
+Upon completion of the request by the underlying model pipeline, the worker will signal to the server the completion by sending a status message.
+"""
+
+
 def worker_main():
-    """
-    Worker function that runs in each distributed process.
-    Has a control loop to wait for input from the model server.
-    """
+
     rank = int(os.environ.get("LOCAL_RANK", 0))
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     log.info(f"Worker init {rank+1}/{world_size}")
@@ -68,10 +61,10 @@ def worker_main():
         pipeline = None
         if Config.model_module and Config.model_class:
             # Dynamically import the model module and class
-            # module = __import__(model_module, fromlist=[model_class])
-            # model_class = getattr(module, model_class)
+            module = __import__(Config.model_module, fromlist=[Config.model_class])
+            model_class = getattr(module, Config.model_class)
             log.info(f"initializing model {Config.model_class} from module {Config.model_module}")
-            pipeline = TransferPipeline(num_gpus=world_size, output_dir=Config.output_dir)
+            pipeline = model_class(num_gpus=world_size, output_dir=Config.output_dir)
             gc.collect()
             torch.cuda.empty_cache()
         else:
@@ -88,13 +81,10 @@ def worker_main():
 
                 log.info(f"Worker {rank} running {command=} with parameters: {params}")
 
-                # Process different commands
+                # Process commands
                 if command == "inference":
 
-                    # read input parameters from command
                     if pipeline:
-                        # Create model parameters from params
-                        params, _ = TransferPipeline.validate_params(**params)
                         pipeline.infer(params)
                     else:
                         log.error("run inference: Pipeline is not initialized")
@@ -121,7 +111,6 @@ def worker_main():
         worker_cmd.cleanup()
         worker_status.cleanup()
 
-        # Cleanup distributed
         if dist.is_initialized():
             dist.destroy_process_group()
 

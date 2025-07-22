@@ -43,10 +43,6 @@ The pipeline is configured for to NOT offload the models in favor of speed.
 For now we assume a fixed configuration of the controlnets for the lifetime of the pipeline.
 This makes the config.json file for the controlnets a init parameter of the pipeline.
 
-TODO can we load all controlnets at once? otherwise need to configure control nets
-
-TODO batch support
-
 TODO regional prompt support
 
 TODO av support
@@ -103,6 +99,9 @@ class TransferPipeline:
         seg_weight=0,
         keypoint_weight=0,
     ):
+        """
+        Create the controlnet specification defines which control netwworks are active.
+        Note that controlnets are active even if the weights are set to 0."""
         control_inputs = {}
 
         if vis_weight > 0:
@@ -179,14 +178,33 @@ class TransferPipeline:
 
         log.info(f"control_inputs: {json.dumps(self.control_inputs, indent=4)}")
 
-    def infer(self, params):
+    def infer(self, args: dict):
+        return self.generate(**args)
+
+    def generate(
+        self,
+        input_video="assets/example1_input_video.mp4",
+        prompt="The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution.",
+        negative_prompt="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
+        vis_weight=0.5,
+        edge_weight=0.5,
+        depth_weight=0.5,
+        seg_weight=0.5,
+        keypoint_weight=0.5,
+        guidance=5,
+        num_steps=35,
+        seed=1,
+        sigma_max=70.0,
+        blur_strength="medium",
+        canny_threshold="medium",
+    ):
 
         self.set_control_weights(
-            vis_weight=params.vis_weight,
-            edge_weight=params.edge_weight,
-            depth_weight=params.depth_weight,
-            seg_weight=params.seg_weight,
-            keypoint_weight=params.keypoint_weight,
+            vis_weight=vis_weight,
+            edge_weight=edge_weight,
+            depth_weight=depth_weight,
+            seg_weight=seg_weight,
+            keypoint_weight=keypoint_weight,
         )
 
         # original code is creating deepcopy. are values touched?
@@ -196,12 +214,11 @@ class TransferPipeline:
 
         log.info("Running preprocessor")
         self.preprocessors(
-            params.input_video,
-            params.prompt,
+            input_video,
+            prompt,
             current_control_inputs,
             self.output_dir,
         )
-        force_gc("After running preprocessor")
 
         # TODO: add support for regional prompts and region definitions
         if hasattr(self.pipeline, "regional_prompts"):
@@ -210,22 +227,21 @@ class TransferPipeline:
             self.pipeline.region_definitions = []
 
         # WAR these inference parameters are for unknown reasons not part of the generate function
-        self.pipeline.guidance = params.guidance
-        self.pipeline.num_steps = params.num_steps
-        self.pipeline.seed = params.seed
-        self.pipeline.sigma_max = params.sigma_max
-        self.pipeline.blur_strength = params.blur_strength
-        self.pipeline.canny_threshold = params.canny_threshold
+        self.pipeline.guidance = guidance
+        self.pipeline.num_steps = num_steps
+        self.pipeline.seed = seed
+        self.pipeline.sigma_max = sigma_max
+        self.pipeline.blur_strength = blur_strength
+        self.pipeline.canny_threshold = canny_threshold
 
         batch_outputs = self.pipeline.generate(
-            prompt=[params.prompt],
-            video_path=[params.input_video],
-            negative_prompt=params.negative_prompt,
+            prompt=[prompt],
+            video_path=[input_video],
+            negative_prompt=negative_prompt,
             control_inputs=[current_control_inputs],
             save_folder=self.output_dir,
             batch_size=1,
         )
-        force_gc("After generating batch outputs")
 
         if self.device_rank == 0:
             videos, final_prompts = batch_outputs
@@ -268,19 +284,27 @@ class TransferPipeline:
         blur_strength="medium",
         canny_threshold="medium",
     ):
+        """
+        advanced parameter check
+        """
         args = argparse.Namespace()
 
         if sigma_max < 80 and not input_video:
             raise ValueError("Must have 'input_video' specified if sigma_max < 80")
 
-        # TODO: edge, canny need input_video
-        # TODO depth, seg, keypoint need either input_video OR input_control
-        # for hint_key, config in controlnet_specs.items():
+        if edge_weight > 0 and not input_video:
+            raise ValueError("Edge controlnet must have 'input_video' specified if no 'input_control' video specified.")
 
-        #     if not input_video and "input_control" not in config:
-        #         raise ValueError(
-        #             f"{hint_key} controlnet must have 'input_control' video specified if no 'input_video' specified."
-        #         )
+        if seg_weight > 0 and not input_video:
+            raise ValueError(
+                "Segment controlnet must have 'input_video' specified if no 'input_control' video specified."
+            )
+
+        # TODO depth, seg, keypoint need either input_video OR input_control
+        # if keypoint_weight > 0 and not input_video and not hasattr(args, "input_control"):
+        #     raise ValueError(
+        #         "Keypoint controlnet must have 'input_video' specified if no 'input_control' video specified."
+        #     )
 
         # Video and prompt settings
         args.input_video = input_video

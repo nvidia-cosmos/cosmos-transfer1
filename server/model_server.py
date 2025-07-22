@@ -100,7 +100,7 @@ class ModelServer:
         log.info("All workers shut down")
         self.process = None
 
-    def send_request(self, args: dict):
+    def infer(self, args: dict):
 
         try:
             self.worker_command.broadcast("inference", args)
