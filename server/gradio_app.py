@@ -14,20 +14,36 @@
 # limitations under the License.
 
 import os
+import torch
+import gc
 
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferPipeline
-from model_server import ModelServer
+from server.model_server import ModelServer
+from server.deploy_config import Config
 import gradio as gr
 
 
-class cfg:
-    checkpoint_dir = os.getenv("CHECKPOINT_DIR", "/mnt/pvc/cosmos-transfer1")
-    output_dir = os.getenv("OUTPUT_DIR", "/mnt/pvc/gradio_outdir")
-    num_gpus = int(os.environ.get("NUM_GPU", 1))
-
-
 model = None
+
+
+def create_pipeline():
+    log.info(f"Initializing model using factory function {Config.factory_module}.{Config.factory_function}")
+
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
+
+    pipeline = TransferPipeline(
+        num_gpus=world_size,
+        output_dir=Config.output_dir,
+        load_vis=Config.load_vis,
+        load_edge=Config.load_edge,
+        load_depth=Config.load_depth,
+        load_seg=Config.load_seg,
+        load_keypoint=Config.load_keypoint,
+    )
+    gc.collect()
+    torch.cuda.empty_cache()
+    return pipeline
 
 
 # Event handler
@@ -86,10 +102,10 @@ def infer_wrapper(
     model.infer(args_dict)
 
     # Check if output was generated
-    output_path = os.path.join(cfg.output_dir, "output.mp4")
+    output_path = os.path.join(Config.output_dir, "output.mp4")
     if os.path.exists(output_path):
         # Read the generated prompt
-        prompt_path = os.path.join(cfg.output_dir, "output.txt")
+        prompt_path = os.path.join(Config.output_dir, "output.txt")
         final_prompt = prompt
         if os.path.exists(prompt_path):
             with open(prompt_path, "r", encoding="utf-8") as f:
@@ -97,10 +113,10 @@ def infer_wrapper(
 
         return (
             output_path,
-            f"Video generated successfully!\nOutput saved to: {cfg.output_dir}\nFinal prompt: {final_prompt}",
+            f"Video generated successfully!\nOutput saved to: {Config.output_dir}\nFinal prompt: {final_prompt}",
         )
     else:
-        return None, f"Generation failed - no output video was created\nCheck folder: {cfg.output_dir}"
+        return None, f"Generation failed - no output video was created\nCheck folder: {Config.output_dir}"
 
 
 def create_gradio_interface():
@@ -108,7 +124,7 @@ def create_gradio_interface():
     with gr.Blocks(title="Cosmos-Transfer1 Video Generation", theme=gr.themes.Soft()) as interface:
         gr.Markdown("# Cosmos-Transfer1: World Generation with Adaptive Multimodal Control")
         gr.Markdown("Upload a video and configure controls to generate a new video with the Cosmos-Transfer1 model.")
-        gr.Markdown(f"**Output Directory**: {cfg.output_dir}")
+        gr.Markdown(f"**Output Directory**: {Config.output_dir}")
 
         with gr.Row():
             with gr.Column(scale=1):
@@ -137,25 +153,25 @@ def create_gradio_interface():
 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        vis_enable = gr.Checkbox(label="Visual", value=False)
+                        vis_enable = gr.Checkbox(label="Visual", value=Config.load_vis > 0)
                     with gr.Column(scale=3):
                         vis_weight = gr.Slider(0, 1, value=0.5, step=0.1, label="Visual Weight", interactive=False)
 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        edge_enable = gr.Checkbox(label="Edge", value=True)
+                        edge_enable = gr.Checkbox(label="Edge", value=Config.load_edge > 0)
                     with gr.Column(scale=3):
                         edge_weight = gr.Slider(0, 1, value=1.0, step=0.1, label="Edge Weight", interactive=True)
 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        depth_enable = gr.Checkbox(label="Depth", value=False)
+                        depth_enable = gr.Checkbox(label="Depth", value=Config.load_depth > 0)
                     with gr.Column(scale=3):
                         depth_weight = gr.Slider(0, 1, value=0.5, step=0.1, label="Depth Weight", interactive=False)
 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        seg_enable = gr.Checkbox(label="Segmentation", value=False)
+                        seg_enable = gr.Checkbox(label="Segmentation", value=Config.load_seg > 0)
                     with gr.Column(scale=3):
                         seg_weight = gr.Slider(
                             0, 1, value=0.5, step=0.1, label="Segmentation Weight", interactive=False
@@ -163,11 +179,19 @@ def create_gradio_interface():
 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        keypoint_enable = gr.Checkbox(label="Keypoint", value=False)
+                        keypoint_enable = gr.Checkbox(label="Keypoint", value=Config.load_keypoint > 0)
                     with gr.Column(scale=3):
                         keypoint_weight = gr.Slider(
                             0, 1, value=0.5, step=0.1, label="Keypoint Weight", interactive=False
                         )
+
+                # WAR don't allow to change the hardcoded control net config
+                # we can't dynmically enable/disalbe control nets so far
+                vis_enable.interactive = Config.load_vis > 0
+                edge_enable.interactive = Config.load_edge > 0
+                depth_enable.interactive = Config.load_depth > 0
+                seg_enable.interactive = Config.load_seg > 0
+                keypoint_enable.interactive = Config.load_keypoint > 0
 
                 # Add interactivity to enable/disable sliders based on checkboxes
                 vis_enable.change(fn=lambda x: gr.update(interactive=x), inputs=vis_enable, outputs=vis_weight)
@@ -247,18 +271,14 @@ def create_gradio_interface():
 if __name__ == "__main__":
 
     # Check if checkpoints exist
-    if not os.path.exists(cfg.checkpoint_dir):
-        print(f"Error: checkpoints directory {cfg.checkpoint_dir} not found.")
+    if not os.path.exists(Config.checkpoint_dir):
+        print(f"Error: checkpoints directory {Config.checkpoint_dir} not found.")
         exit(1)
 
-    if cfg.num_gpus == 1:
-        model = TransferPipeline(
-            output_dir=cfg.output_dir,
-            num_gpus=cfg.num_gpus,
-            checkpoint_dir=cfg.checkpoint_dir,
-        )
+    if Config.num_gpus == 1:
+        model = create_pipeline()
     else:
-        model = ModelServer(num_workers=cfg.num_gpus)
+        model = ModelServer(num_workers=Config.num_gpus)
 
     interface = create_gradio_interface()
 

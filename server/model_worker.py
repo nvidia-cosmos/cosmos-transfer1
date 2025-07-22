@@ -19,12 +19,11 @@ import time
 import traceback
 import torch.distributed as dist
 from loguru import logger as log
-from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferPipeline
 from server.command_ipc import WorkerCommand, WorkerStatus
+from server.deploy_config import Config
 import sys
 from loguru import logger
-import gc
-import torch
+
 
 # Configure loguru with custom color for this worker process
 logger.remove()  # Remove default handler
@@ -35,14 +34,15 @@ logger.add(
 )
 
 
-class Config:
-    output_dir = os.getenv("OUTPUT_DIR", "/mnt/pvc/gradio_outdir")
-    model_module = os.getenv("MODEL_MODULE")
-    model_class = os.getenv("MODEL_CLASS")
+def create_pipeline():
+    module = __import__(Config.factory_module, fromlist=[Config.factory_function])
+    factory_function = getattr(module, Config.factory_function)
+    log.info(f"initializing model using {Config.factory_module}.{Config.factory_function}")
+    return factory_function()
 
 
 """
-enty point for the worker process. The worker process will wait for an inference request with inference parameters from the model server.
+Entry point for the worker process. The worker process will wait for an inference request with inference parameters from the model server.
 Upon completion of the request by the underlying model pipeline, the worker will signal to the server the completion by sending a status message.
 """
 
@@ -60,13 +60,7 @@ def worker_main():
 
         pipeline = None
         if Config.model_module and Config.model_class:
-            # Dynamically import the model module and class
-            module = __import__(Config.model_module, fromlist=[Config.model_class])
-            model_class = getattr(module, Config.model_class)
-            log.info(f"initializing model {Config.model_class} from module {Config.model_module}")
-            pipeline = model_class(num_gpus=world_size, output_dir=Config.output_dir)
-            gc.collect()
-            torch.cuda.empty_cache()
+            pipeline = create_pipeline()
         else:
             log.error("initializing model: MODEL_MODULE and MODEL_CLASS environment variables are not set.")
             time.sleep(10)

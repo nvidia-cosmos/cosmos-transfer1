@@ -52,7 +52,15 @@ TODO av support
 
 class TransferPipeline:
     def __init__(
-        self, num_gpus: int = 1, checkpoint_dir: str = "/mnt/pvc/cosmos-transfer1", output_dir: str = "outputs/"
+        self,
+        num_gpus: int = 1,
+        checkpoint_dir: str = "/mnt/pvc/cosmos-transfer1",
+        output_dir: str = "outputs/",
+        load_vis: int = 1,
+        load_edge: int = 0,
+        load_depth: int = 0,
+        load_seg: int = 0,
+        load_keypoint: int = 0,
     ):
 
         self.pipeline = None
@@ -71,8 +79,16 @@ class TransferPipeline:
             self.process_group = parallel_state.get_context_parallel_group()
             self.device_rank = distributed.get_rank(self.process_group)
 
-        self.control_inputs = self.create_controlnet_spec(checkpoint_dir=checkpoint_dir)
+        self.control_inputs = self.create_controlnet_spec(
+            checkpoint_dir=checkpoint_dir,
+            vis_weight=load_vis,
+            edge_weight=load_edge,
+            depth_weight=load_depth,
+            seg_weight=load_seg,
+            keypoint_weight=load_keypoint,
+        )
 
+        self.checkpoint_dir = checkpoint_dir
         self.output_dir = output_dir
         self.video_save_name = "output"
 
@@ -82,18 +98,19 @@ class TransferPipeline:
             control_inputs=self.control_inputs,
             process_group=self.process_group,
             offload_network=False,
-            offload_text_encoder_model=True,
+            offload_text_encoder_model=False,
             offload_guardrail_models=False,
             offload_prompt_upsampler=False,
             upsample_prompt=False,
             fps=24,
             num_input_frames=24,
+            disable_guardrail=True,
         )
 
     def create_controlnet_spec(
         self,
-        checkpoint_dir: str = "/mnt/pvc/cosmos-transfer1",
-        vis_weight=0,
+        checkpoint_dir: str,
+        vis_weight=1,
         edge_weight=1,
         depth_weight=0,
         seg_weight=0,
@@ -137,6 +154,8 @@ class TransferPipeline:
         log.info(f"control_inputs: {json.dumps(control_inputs, indent=4)}")
 
         return control_inputs
+
+    """set the control weight only on existing control inputs. This avoids reloading of the control networks"""
 
     def set_control_weights(
         self,
@@ -184,8 +203,8 @@ class TransferPipeline:
     def generate(
         self,
         input_video="assets/example1_input_video.mp4",
-        prompt="The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution.",
-        negative_prompt="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
+        prompt="",
+        negative_prompt="",
         vis_weight=0.5,
         edge_weight=0.5,
         depth_weight=0.5,
@@ -198,6 +217,15 @@ class TransferPipeline:
         blur_strength="medium",
         canny_threshold="medium",
     ):
+
+        # self.control_inputs = self.create_controlnet_spec(
+        #     checkpoint_dir=self.checkpoint_dir,
+        #     vis_weight=vis_weight,
+        #     edge_weight=edge_weight,
+        #     depth_weight=depth_weight,
+        #     seg_weight=seg_weight,
+        #     keypoint_weight=keypoint_weight,
+        # )
 
         self.set_control_weights(
             vis_weight=vis_weight,
@@ -242,8 +270,9 @@ class TransferPipeline:
             save_folder=self.output_dir,
             batch_size=1,
         )
-
-        if self.device_rank == 0:
+        if batch_outputs is None:
+            log.critical("Guardrail blocked generation for entire batch.")
+        elif self.device_rank == 0:
             videos, final_prompts = batch_outputs
             for i, (video, prompt) in enumerate(zip(videos, final_prompts)):
 
@@ -272,11 +301,11 @@ class TransferPipeline:
         input_video="assets/example1_input_video.mp4",
         prompt="The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution.",
         negative_prompt="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
-        vis_weight=0.5,
-        edge_weight=0.5,
-        depth_weight=0.5,
-        seg_weight=0.5,
-        keypoint_weight=0.5,
+        vis_weight=1.0,
+        edge_weight=1.0,
+        depth_weight=0,
+        seg_weight=0,
+        keypoint_weight=0,
         guidance=5,
         num_steps=35,
         seed=1,
@@ -295,9 +324,9 @@ class TransferPipeline:
         if edge_weight > 0 and not input_video:
             raise ValueError("Edge controlnet must have 'input_video' specified if no 'input_control' video specified.")
 
-        if seg_weight > 0 and not input_video:
+        if vis_weight > 0 and not input_video:
             raise ValueError(
-                "Segment controlnet must have 'input_video' specified if no 'input_control' video specified."
+                "Visual controlnet must have 'input_video' specified if no 'input_control' video specified."
             )
 
         # TODO depth, seg, keypoint need either input_video OR input_control
@@ -343,8 +372,10 @@ class TransferPipeline:
 
 if __name__ == "__main__":
     pipeline = TransferPipeline(num_gpus=int(os.environ.get("NUM_GPU", 1)))
-    model_params, _ = TransferPipeline.validate_params()
+    _, model_params = TransferPipeline.validate_params()
     pipeline.infer(model_params)
 
     log.info("Inference complete****************************************")
+    # model_params["vis_weight"] = 0.0  # Example of changing a parameter
+    # model_params["depth_weight"] = 1.0  # Example of changing a parameter
     pipeline.infer(model_params)
