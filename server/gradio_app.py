@@ -35,11 +35,6 @@ def create_pipeline():
     pipeline = TransferPipeline(
         num_gpus=world_size,
         output_dir=Config.output_dir,
-        load_vis=Config.load_vis,
-        load_edge=Config.load_edge,
-        load_depth=Config.load_depth,
-        load_seg=Config.load_seg,
-        load_keypoint=Config.load_keypoint,
     )
     gc.collect()
     torch.cuda.empty_cache()
@@ -51,15 +46,10 @@ def infer_wrapper(
     input_video,
     prompt,
     negative_prompt,
-    vis_enable,
     vis_weight,
-    edge_enable,
     edge_weight,
-    depth_enable,
     depth_weight,
-    seg_enable,
     seg_weight,
-    keypoint_enable,
     keypoint_weight,
     guidance_scale,
     num_steps,
@@ -68,17 +58,6 @@ def infer_wrapper(
     blur_strength,
     canny_threshold,
 ):
-    if not vis_enable:
-        vis_weight = 0
-    if not edge_enable:
-        edge_weight = 0
-    if not depth_enable:
-        depth_weight = 0
-    if not seg_enable:
-        seg_weight = 0
-    if not keypoint_enable:
-        keypoint_weight = 0
-
     try:
         _, args_dict = TransferPipeline.validate_params(
             input_video,
@@ -152,55 +131,28 @@ def create_gradio_interface():
                 gr.Markdown("### Control Types")
 
                 with gr.Row():
-                    with gr.Column(scale=1):
-                        vis_enable = gr.Checkbox(label="Visual", value=Config.load_vis > 0)
                     with gr.Column(scale=3):
                         vis_weight = gr.Slider(0, 1, value=0.5, step=0.1, label="Visual Weight", interactive=False)
 
                 with gr.Row():
-                    with gr.Column(scale=1):
-                        edge_enable = gr.Checkbox(label="Edge", value=Config.load_edge > 0)
                     with gr.Column(scale=3):
-                        edge_weight = gr.Slider(0, 1, value=1.0, step=0.1, label="Edge Weight", interactive=True)
+                        edge_weight = gr.Slider(0, 1, value=0.0, step=0.1, label="Edge Weight", interactive=True)
 
                 with gr.Row():
-                    with gr.Column(scale=1):
-                        depth_enable = gr.Checkbox(label="Depth", value=Config.load_depth > 0)
                     with gr.Column(scale=3):
-                        depth_weight = gr.Slider(0, 1, value=0.5, step=0.1, label="Depth Weight", interactive=False)
+                        depth_weight = gr.Slider(0, 1, value=0.0, step=0.1, label="Depth Weight", interactive=False)
 
                 with gr.Row():
-                    with gr.Column(scale=1):
-                        seg_enable = gr.Checkbox(label="Segmentation", value=Config.load_seg > 0)
                     with gr.Column(scale=3):
                         seg_weight = gr.Slider(
-                            0, 1, value=0.5, step=0.1, label="Segmentation Weight", interactive=False
+                            0, 1, value=0.0, step=0.1, label="Segmentation Weight", interactive=False
                         )
 
                 with gr.Row():
-                    with gr.Column(scale=1):
-                        keypoint_enable = gr.Checkbox(label="Keypoint", value=Config.load_keypoint > 0)
                     with gr.Column(scale=3):
                         keypoint_weight = gr.Slider(
-                            0, 1, value=0.5, step=0.1, label="Keypoint Weight", interactive=False
+                            0, 1, value=0.0, step=0.1, label="Keypoint Weight", interactive=False
                         )
-
-                # WAR don't allow to change the hardcoded control net config
-                # we can't dynmically enable/disalbe control nets so far
-                vis_enable.interactive = Config.load_vis > 0
-                edge_enable.interactive = Config.load_edge > 0
-                depth_enable.interactive = Config.load_depth > 0
-                seg_enable.interactive = Config.load_seg > 0
-                keypoint_enable.interactive = Config.load_keypoint > 0
-
-                # Add interactivity to enable/disable sliders based on checkboxes
-                vis_enable.change(fn=lambda x: gr.update(interactive=x), inputs=vis_enable, outputs=vis_weight)
-                edge_enable.change(fn=lambda x: gr.update(interactive=x), inputs=edge_enable, outputs=edge_weight)
-                depth_enable.change(fn=lambda x: gr.update(interactive=x), inputs=depth_enable, outputs=depth_weight)
-                seg_enable.change(fn=lambda x: gr.update(interactive=x), inputs=seg_enable, outputs=seg_weight)
-                keypoint_enable.change(
-                    fn=lambda x: gr.update(interactive=x), inputs=keypoint_enable, outputs=keypoint_weight
-                )
 
                 # Advanced settings
                 with gr.Accordion("Advanced Settings", open=False):
@@ -221,12 +173,11 @@ def create_gradio_interface():
                         label="Canny Threshold",
                     )
 
-                generate_btn = gr.Button("Generate Video", variant="primary", size="lg")
-
             with gr.Column(scale=1):
                 # Output
                 output_video = gr.Video(label="Generated Video", height=400)
                 status_text = gr.Textbox(label="Status", lines=5, interactive=False)
+                generate_btn = gr.Button("Generate Video", variant="primary", size="lg")
 
         generate_btn.click(
             fn=infer_wrapper,
@@ -234,15 +185,10 @@ def create_gradio_interface():
                 input_video,
                 prompt,
                 negative_prompt,
-                vis_enable,
                 vis_weight,
-                edge_enable,
                 edge_weight,
-                depth_enable,
                 depth_weight,
-                seg_enable,
                 seg_weight,
-                keypoint_enable,
                 keypoint_weight,
                 guidance_scale,
                 num_steps,

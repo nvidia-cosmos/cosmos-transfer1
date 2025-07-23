@@ -56,15 +56,10 @@ class TransferPipeline:
         num_gpus: int = 1,
         checkpoint_dir: str = "/mnt/pvc/cosmos-transfer1",
         output_dir: str = "outputs/",
-        load_vis: int = 1,
-        load_edge: int = 0,
-        load_depth: int = 0,
-        load_seg: int = 0,
-        load_keypoint: int = 0,
     ):
 
-        self.pipeline = None
-        self.preprocessors = None
+        # self.pipeline = None
+        # self.preprocessors = None
         self.device_rank = 0
         self.process_group = None
 
@@ -79,13 +74,9 @@ class TransferPipeline:
             self.process_group = parallel_state.get_context_parallel_group()
             self.device_rank = distributed.get_rank(self.process_group)
 
-        self.control_inputs = self.create_controlnet_spec(
+        self.control_inputs = {}
+        self.update_controlnet_spec(
             checkpoint_dir=checkpoint_dir,
-            vis_weight=load_vis,
-            edge_weight=load_edge,
-            depth_weight=load_depth,
-            seg_weight=load_seg,
-            keypoint_weight=load_keypoint,
         )
 
         self.checkpoint_dir = checkpoint_dir
@@ -107,11 +98,11 @@ class TransferPipeline:
             disable_guardrail=True,
         )
 
-    def create_controlnet_spec(
+    def update_controlnet_spec(
         self,
         checkpoint_dir: str,
         vis_weight=1,
-        edge_weight=1,
+        edge_weight=0,
         depth_weight=0,
         seg_weight=0,
         keypoint_weight=0,
@@ -119,83 +110,67 @@ class TransferPipeline:
         """
         Create the controlnet specification defines which control netwworks are active.
         Note that controlnets are active even if the weights are set to 0."""
-        control_inputs = {}
+
+        config_changed = False
 
         if vis_weight > 0:
-            control_inputs["vis"] = {
+            if "vis" not in self.control_inputs:
+                config_changed = True
+            self.control_inputs["vis"] = {
                 "ckpt_path": os.path.join(checkpoint_dir, VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
                 "control_weight": vis_weight,
             }
-
-        if edge_weight > 0:
-            control_inputs["edge"] = {
-                "ckpt_path": os.path.join(checkpoint_dir, EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
-                "control_weight": edge_weight,
-            }
-
-        if depth_weight > 0:
-            control_inputs["depth"] = {
-                "ckpt_path": os.path.join(checkpoint_dir, DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
-                "control_weight": depth_weight,
-            }
-
-        if seg_weight > 0:
-            control_inputs["seg"] = {
-                "ckpt_path": os.path.join(checkpoint_dir, SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
-                "control_weight": seg_weight,
-            }
-
-        if keypoint_weight > 0:
-            control_inputs["keypoint"] = {
-                "ckpt_path": os.path.join(checkpoint_dir, KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
-                "control_weight": keypoint_weight,
-            }
-
-        log.info(f"control_inputs: {json.dumps(control_inputs, indent=4)}")
-
-        return control_inputs
-
-    """set the control weight only on existing control inputs. This avoids reloading of the control networks"""
-
-    def set_control_weights(
-        self,
-        vis_weight=0,
-        edge_weight=1,
-        depth_weight=0,
-        seg_weight=0,
-        keypoint_weight=0,
-    ):
-        if vis_weight > 0:
-            if "vis" not in self.control_inputs:
-                log.warning("Visual control network is not configured is this network. Ignoring vis_weight.")
-            else:
-                self.control_inputs["vis"]["control_weight"] = vis_weight
+        elif "vis" in self.control_inputs:
+            del self.control_inputs["vis"]
+            config_changed = True
 
         if edge_weight > 0:
             if "edge" not in self.control_inputs:
-                log.warning("Edge control network is not configured is this network. Ignoring edge_weight.")
-            else:
-                self.control_inputs["edge"]["control_weight"] = edge_weight
+                config_changed = True
+            self.control_inputs["edge"] = {
+                "ckpt_path": os.path.join(checkpoint_dir, EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
+                "control_weight": edge_weight,
+            }
+        elif "edge" in self.control_inputs:
+            del self.control_inputs["edge"]
+            config_changed = True
 
         if depth_weight > 0:
             if "depth" not in self.control_inputs:
-                log.warning("Depth control network is not configured is this network. Ignoring depth_weight.")
-            else:
-                self.control_inputs["depth"]["control_weight"] = depth_weight
+                config_changed = True
+            self.control_inputs["depth"] = {
+                "ckpt_path": os.path.join(checkpoint_dir, DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
+                "control_weight": depth_weight,
+            }
+        elif "depth" in self.control_inputs:
+            del self.control_inputs["depth"]
+            config_changed = True
 
         if seg_weight > 0:
             if "seg" not in self.control_inputs:
-                log.warning("Segment control network is not configured is this network. Ignoring seg_weight.")
-            else:
-                self.control_inputs["seg"]["control_weight"] = seg_weight
+                config_changed = True
+            self.control_inputs["seg"] = {
+                "ckpt_path": os.path.join(checkpoint_dir, SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
+                "control_weight": seg_weight,
+            }
+        elif "seg" in self.control_inputs:
+            del self.control_inputs["seg"]
+            config_changed = True
 
         if keypoint_weight > 0:
             if "keypoint" not in self.control_inputs:
-                log.warning("Keypoint control network is not configured is this network. Ignoring keypoint_weight.")
-            else:
-                self.control_inputs["keypoint"]["control_weight"] = keypoint_weight
+                config_changed = True
+            self.control_inputs["keypoint"] = {
+                "ckpt_path": os.path.join(checkpoint_dir, KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
+                "control_weight": keypoint_weight,
+            }
+        elif "keypoint" in self.control_inputs:
+            del self.control_inputs["keypoint"]
+            config_changed = True
 
-        log.info(f"control_inputs: {json.dumps(self.control_inputs, indent=4)}")
+        log.info(f"{config_changed=}, control_inputs: {json.dumps(self.control_inputs, indent=4)}")
+
+        return config_changed
 
     def infer(self, args: dict):
         return self.generate(**args)
@@ -218,22 +193,17 @@ class TransferPipeline:
         canny_threshold="medium",
     ):
 
-        # self.control_inputs = self.create_controlnet_spec(
-        #     checkpoint_dir=self.checkpoint_dir,
-        #     vis_weight=vis_weight,
-        #     edge_weight=edge_weight,
-        #     depth_weight=depth_weight,
-        #     seg_weight=seg_weight,
-        #     keypoint_weight=keypoint_weight,
-        # )
-
-        self.set_control_weights(
+        config_changed = self.update_controlnet_spec(
+            checkpoint_dir=self.checkpoint_dir,
             vis_weight=vis_weight,
             edge_weight=edge_weight,
             depth_weight=depth_weight,
             seg_weight=seg_weight,
             keypoint_weight=keypoint_weight,
         )
+
+        if config_changed:
+            self.pipeline.reload_model(self.control_inputs)
 
         # original code is creating deepcopy. are values touched?
         # TODO add control weights as inference parameter
@@ -261,6 +231,8 @@ class TransferPipeline:
         self.pipeline.sigma_max = sigma_max
         self.pipeline.blur_strength = blur_strength
         self.pipeline.canny_threshold = canny_threshold
+
+        # self.pipeline.control_inputs = current_control_inputs
 
         batch_outputs = self.pipeline.generate(
             prompt=[prompt],
@@ -376,6 +348,6 @@ if __name__ == "__main__":
     pipeline.infer(model_params)
 
     log.info("Inference complete****************************************")
-    # model_params["vis_weight"] = 0.0  # Example of changing a parameter
-    # model_params["depth_weight"] = 1.0  # Example of changing a parameter
+    model_params["vis_weight"] = 0.0  # Example of changing a parameter
+    model_params["depth_weight"] = 1.0  # Example of changing a parameter
     pipeline.infer(model_params)

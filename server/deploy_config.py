@@ -22,11 +22,3 @@ class Config:
     num_gpus = int(os.environ.get("NUM_GPU", 1))
     factory_module = os.getenv("FACTORY_MODULE", "server.gradio_app")
     factory_function = os.getenv("FACTORY_FUNCTION", "create_pipeline")
-
-    # WAR hardcoded control net config
-    # we can't dynamically enable/disable control nets so far
-    load_vis = 1
-    load_edge = 0
-    load_depth = 0
-    load_seg = 0
-    load_keypoint = 0

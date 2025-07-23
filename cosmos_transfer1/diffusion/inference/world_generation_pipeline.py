@@ -412,6 +412,10 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         video = (video * 255).to(torch.uint8).cpu()
         return video
 
+    def reload_model(self, control_inputs: Optional[dict]):
+        self._offload_network()
+        self._load_network()
+
     def _run_model_with_offload(
         self,
         prompt_embeddings: list[torch.Tensor],
