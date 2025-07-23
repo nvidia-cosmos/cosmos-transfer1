@@ -20,8 +20,6 @@ class Config:
     checkpoint_dir = os.getenv("CHECKPOINT_DIR", "/mnt/pvc/cosmos-transfer1")
     output_dir = os.getenv("OUTPUT_DIR", "/mnt/pvc/gradio_outdir")
     num_gpus = int(os.environ.get("NUM_GPU", 1))
-    model_module = os.getenv("MODEL_MODULE")
-    model_class = os.getenv("MODEL_CLASS")
     factory_module = os.getenv("FACTORY_MODULE", "server.gradio_app")
     factory_function = os.getenv("FACTORY_FUNCTION", "create_pipeline")
 

@@ -59,10 +59,10 @@ def worker_main():
     try:
 
         pipeline = None
-        if Config.model_module and Config.model_class:
+        if Config.factory_module and Config.factory_function:
             pipeline = create_pipeline()
         else:
-            log.error("initializing model: MODEL_MODULE and MODEL_CLASS environment variables are not set.")
+            log.error("initializing model: FACTORY_MODULE and FACTORY_FUNCTION environment variables are not set.")
             time.sleep(10)
 
         worker_status.signal_status(rank, "success", "Worker initialized successfully")
