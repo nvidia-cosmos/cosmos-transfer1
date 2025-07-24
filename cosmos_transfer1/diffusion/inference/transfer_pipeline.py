@@ -21,13 +21,9 @@ import os
 
 
 from cosmos_transfer1.checkpoints import (
-    VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
-    KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH,
     BASE_7B_CHECKPOINT_PATH,
 )
+from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
 from cosmos_transfer1.diffusion.inference.preprocessors import Preprocessors
 from cosmos_transfer1.diffusion.inference.world_generation_pipeline import DiffusionControl2WorldGenerationPipeline
 from cosmos_transfer1.utils import log
@@ -49,6 +45,10 @@ TODO av support
 
 """
 
+valid_hint_keys = {"vis", "seg", "edge", "depth", "keypoint", "upscale", "hdmap", "lidar"}
+default_prompt = "The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution."
+default_negative_prompt = "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all."
+
 
 class TransferPipeline:
     def __init__(
@@ -57,9 +57,6 @@ class TransferPipeline:
         checkpoint_dir: str = "/mnt/pvc/cosmos-transfer1",
         output_dir: str = "outputs/",
     ):
-
-        # self.pipeline = None
-        # self.preprocessors = None
         self.device_rank = 0
         self.process_group = None
 
@@ -74,10 +71,12 @@ class TransferPipeline:
             self.process_group = parallel_state.get_context_parallel_group()
             self.device_rank = distributed.get_rank(self.process_group)
 
-        self.control_inputs = {}
-        self.update_controlnet_spec(
-            checkpoint_dir=checkpoint_dir,
-        )
+        self.control_inputs = {
+            "vis": {
+                "ckpt_path": os.path.join(checkpoint_dir, default_model_names["vis"]),
+                "control_weight": 0.5,
+            },
+        }
 
         self.checkpoint_dir = checkpoint_dir
         self.output_dir = output_dir
@@ -101,11 +100,7 @@ class TransferPipeline:
     def update_controlnet_spec(
         self,
         checkpoint_dir: str,
-        vis_weight=1,
-        edge_weight=0,
-        depth_weight=0,
-        seg_weight=0,
-        keypoint_weight=0,
+        controlnet_specs: dict,
     ):
         """
         Create the controlnet specification defines which control netwworks are active.
@@ -113,60 +108,18 @@ class TransferPipeline:
 
         config_changed = False
 
-        if vis_weight > 0:
-            if "vis" not in self.control_inputs:
-                config_changed = True
-            self.control_inputs["vis"] = {
-                "ckpt_path": os.path.join(checkpoint_dir, VIS2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
-                "control_weight": vis_weight,
-            }
-        elif "vis" in self.control_inputs:
-            del self.control_inputs["vis"]
-            config_changed = True
+        for hint_key in valid_hint_keys:
+            if hint_key in controlnet_specs:
+                if hint_key not in self.control_inputs:
+                    config_changed = True
 
-        if edge_weight > 0:
-            if "edge" not in self.control_inputs:
+                # overwrite old parameters
+                self.control_inputs[hint_key] = copy.deepcopy(controlnet_specs[hint_key])
+                self.control_inputs[hint_key]["ckpt_path"] = os.path.join(checkpoint_dir, default_model_names[hint_key])
+            elif hint_key in self.control_inputs:
+                # remove old parameters
+                del self.control_inputs[hint_key]
                 config_changed = True
-            self.control_inputs["edge"] = {
-                "ckpt_path": os.path.join(checkpoint_dir, EDGE2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
-                "control_weight": edge_weight,
-            }
-        elif "edge" in self.control_inputs:
-            del self.control_inputs["edge"]
-            config_changed = True
-
-        if depth_weight > 0:
-            if "depth" not in self.control_inputs:
-                config_changed = True
-            self.control_inputs["depth"] = {
-                "ckpt_path": os.path.join(checkpoint_dir, DEPTH2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
-                "control_weight": depth_weight,
-            }
-        elif "depth" in self.control_inputs:
-            del self.control_inputs["depth"]
-            config_changed = True
-
-        if seg_weight > 0:
-            if "seg" not in self.control_inputs:
-                config_changed = True
-            self.control_inputs["seg"] = {
-                "ckpt_path": os.path.join(checkpoint_dir, SEG2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
-                "control_weight": seg_weight,
-            }
-        elif "seg" in self.control_inputs:
-            del self.control_inputs["seg"]
-            config_changed = True
-
-        if keypoint_weight > 0:
-            if "keypoint" not in self.control_inputs:
-                config_changed = True
-            self.control_inputs["keypoint"] = {
-                "ckpt_path": os.path.join(checkpoint_dir, KEYPOINT2WORLD_CONTROLNET_7B_CHECKPOINT_PATH),
-                "control_weight": keypoint_weight,
-            }
-        elif "keypoint" in self.control_inputs:
-            del self.control_inputs["keypoint"]
-            config_changed = True
 
         log.info(f"{config_changed=}, control_inputs: {json.dumps(self.control_inputs, indent=4)}")
 
@@ -177,13 +130,10 @@ class TransferPipeline:
 
     def generate(
         self,
-        input_video="assets/example1_input_video.mp4",
+        controlnet_specs,
+        input_video=None,
         prompt="",
         negative_prompt="",
-        vis_weight=0.5,
-        edge_weight=0.5,
-        depth_weight=0.5,
-        seg_weight=0.5,
         keypoint_weight=0.5,
         guidance=5,
         num_steps=35,
@@ -195,11 +145,7 @@ class TransferPipeline:
 
         config_changed = self.update_controlnet_spec(
             checkpoint_dir=self.checkpoint_dir,
-            vis_weight=vis_weight,
-            edge_weight=edge_weight,
-            depth_weight=depth_weight,
-            seg_weight=seg_weight,
-            keypoint_weight=keypoint_weight,
+            controlnet_specs=controlnet_specs,
         )
 
         if config_changed:
@@ -270,14 +216,10 @@ class TransferPipeline:
 
     @staticmethod
     def validate_params(
-        input_video="assets/example1_input_video.mp4",
-        prompt="The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution.",
-        negative_prompt="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
-        vis_weight=1.0,
-        edge_weight=1.0,
-        depth_weight=0,
-        seg_weight=0,
-        keypoint_weight=0,
+        controlnet_specs,
+        input_video=None,
+        prompt=default_prompt,
+        negative_prompt=default_negative_prompt,
         guidance=5,
         num_steps=35,
         seed=1,
@@ -293,44 +235,70 @@ class TransferPipeline:
         if sigma_max < 80 and not input_video:
             raise ValueError("Must have 'input_video' specified if sigma_max < 80")
 
-        if edge_weight > 0 and not input_video:
-            raise ValueError("Edge controlnet must have 'input_video' specified if no 'input_control' video specified.")
-
-        if vis_weight > 0 and not input_video:
-            raise ValueError(
-                "Visual controlnet must have 'input_video' specified if no 'input_control' video specified."
-            )
-
-        # TODO depth, seg, keypoint need either input_video OR input_control
-        # if keypoint_weight > 0 and not input_video and not hasattr(args, "input_control"):
-        #     raise ValueError(
-        #         "Keypoint controlnet must have 'input_video' specified if no 'input_control' video specified."
-        #     )
-
         # Video and prompt settings
-        args.input_video = input_video
-        args.prompt = prompt
-        args.negative_prompt = negative_prompt
-
-        # Control weights
-        args.vis_weight = vis_weight
-        args.edge_weight = edge_weight
-        args.depth_weight = depth_weight
-        args.seg_weight = seg_weight
-        args.keypoint_weight = keypoint_weight
+        args_dict = {}
+        if input_video:
+            args_dict["input_video"] = input_video
+        if prompt:
+            args_dict["prompt"] = prompt
+        if negative_prompt:
+            args_dict["negative_prompt"] = negative_prompt
 
         # Generation parameters
-        args.guidance = guidance
-        args.num_steps = num_steps
-        args.seed = seed
-        args.sigma_max = sigma_max
-        args.blur_strength = blur_strength
-        args.canny_threshold = canny_threshold
+        args_dict["guidance"] = guidance
+        args_dict["num_steps"] = num_steps
+        args_dict["seed"] = seed
+        args_dict["sigma_max"] = sigma_max
+        args_dict["blur_strength"] = blur_strength
+        args_dict["canny_threshold"] = canny_threshold
 
-        args_dict = {key: value for key, value in vars(args).items()}
+        controlnet_specs_clean = {}
+
+        for hint_key, val in controlnet_specs.items():
+            if hint_key in valid_hint_keys:
+                controlnet_specs_clean[hint_key] = val
+            else:
+                if type(val) == dict:
+                    raise ValueError(f"Invalid hint_key: {hint_key}. Must be one of {valid_hint_keys}")
+                else:
+                    log.warning(
+                        f"parameter '{hint_key}' in controlnet_spec will be ignored. parameter already set by UI."
+                    )
+                    # args_dict[hint_key] = val
+
+        for hint_key, config in controlnet_specs_clean.items():
+            if "control_weight" not in config:
+                log.warning(f"No control weight specified for {hint_key}. Setting to 0.5.")
+                config["control_weight"] = "0.5"
+            else:
+                # Check if control weight is a path or a scalar
+                weight = config["control_weight"]
+                if not isinstance(weight, str) or not weight.endswith(".pt"):
+                    try:
+                        # Try converting to float
+                        scalar_value = float(weight)
+                        if scalar_value < 0:
+                            raise ValueError(f"Control weight for {hint_key} must be non-negative.")
+                    except ValueError:
+                        raise ValueError(
+                            f"Control weight for {hint_key} must be a valid non-negative float or a path to a .pt file."
+                        )
+
+        args_dict["controlnet_specs"] = controlnet_specs_clean
         log.info(f"Model parameters: {json.dumps(args_dict, indent=4)}")
 
-        return args, args_dict
+        # TODO
+        # if edge_weight > 0 and not input_video:
+        #     raise ValueError("Edge controlnet must have 'input_video' specified if no 'input_control' video specified.")
+
+        # if seg_weight > 0 and not input_video:
+        #     raise ValueError(
+        #         "Segment controlnet must have 'input_video' specified if no 'input_control' video specified."
+        #     )
+        # Regardless whether "control_weight_prompt" is provided (i.e. whether we automatically
+        # generate spatiotemporal control weight binary masks), control_weight is needed to.
+
+        return args_dict
 
     def cleanup(self, cfg):
         """Clean up resources"""
@@ -342,12 +310,24 @@ class TransferPipeline:
             dist.destroy_process_group()
 
 
+def get_spec(spec_file):
+    with open(spec_file, "r") as f:
+        controlnet_specs = json.load(f)
+    return controlnet_specs
+
+
 if __name__ == "__main__":
     pipeline = TransferPipeline(num_gpus=int(os.environ.get("NUM_GPU", 1)))
-    _, model_params = TransferPipeline.validate_params()
+    model_params = TransferPipeline.validate_params(
+        input_video="assets/example1_input_video.mp4",
+        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_edge.json"),
+    )
     pipeline.infer(model_params)
 
     log.info("Inference complete****************************************")
-    model_params["vis_weight"] = 0.0  # Example of changing a parameter
-    model_params["depth_weight"] = 1.0  # Example of changing a parameter
+
+    model_params = TransferPipeline.validate_params(
+        input_video="assets/example1_input_video.mp4",
+        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_multi_control.json"),
+    )
     pipeline.infer(model_params)
