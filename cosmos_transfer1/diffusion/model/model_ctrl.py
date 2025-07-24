@@ -25,7 +25,7 @@ from cosmos_transfer1.diffusion.inference.inference_utils import merge_patches_i
 from cosmos_transfer1.diffusion.model.model_t2w import DiffusionT2WModel, broadcast_condition
 from cosmos_transfer1.diffusion.model.model_v2w import DiffusionV2WModel, DistillV2WModel
 from cosmos_transfer1.diffusion.module.parallel import broadcast, cat_outputs_cp, split_inputs_cp
-from cosmos_transfer1.diffusion.networks.distill_controlnet_wrapper import DistillControlNet
+from cosmos_transfer1.distillation.networks.distill_controlnet_wrapper import DistillControlNet
 from cosmos_transfer1.utils import log, misc
 from cosmos_transfer1.utils.lazy_config import instantiate as lazy_instantiate
 

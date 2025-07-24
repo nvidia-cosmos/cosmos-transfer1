@@ -87,6 +87,45 @@ def cat_outputs_cp(x: Tensor, seq_dim: int, cp_group: ProcessGroup) -> Tensor:
     return torch.cat(gathered_tensors, dim=seq_dim)
 
 
+def cat_outputs_cp_with_grad(x: Tensor, seq_dim: int, cp_group: ProcessGroup) -> Tensor:
+    """
+    Concatenate outputs from different ranks in the context parallelism group.
+
+    This function gathers tensors from all ranks in the checkpoint parallelism group
+    and concatenates them along the specified sequence dimension.
+
+    It retains computational graph locally for each rank by replacing the portion of the tensor with original output.
+
+    Args:
+        x: Input tensor to be concatenated.
+        seq_dim: The dimension along which to concatenate the tensors (sequence dimension).
+        cp_group: The process group for checkpoint parallelism.
+
+    Returns:
+        A tensor that is the concatenation of tensors from all ranks in the cp_group.
+
+    Raises:
+        RuntimeError: If the gather operation fails.
+    """
+    # Get the world size (number of processes in the group)
+    cp_size = cp_group.size()
+    assert cp_size > 0, "cp_size should be greater than 0"
+
+    # Create a list to store tensors from all ranks
+    gathered_tensors = [torch.zeros_like(x) for _ in range(cp_size)]
+
+    # Gather tensors from all ranks
+    try:
+        all_gather(gathered_tensors, x, group=cp_group)
+    except RuntimeError as e:
+        raise RuntimeError(f"Failed to gather tensors: {e}")
+
+    rank = cp_group.rank()
+    gathered_tensors[rank] = x
+    # Concatenate the gathered tensors along the specified dimension
+    return torch.cat(gathered_tensors, dim=seq_dim)
+
+
 def broadcast(item: torch.Tensor | str | None, to_tp: bool = True, to_cp: bool = True) -> torch.Tensor | str | None:
     """
     Broadcast the item from the minimum rank in the specified group(s).
