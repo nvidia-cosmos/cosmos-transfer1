@@ -38,7 +38,6 @@ from torch.distributed.checkpoint.state_dict import (
 from torch.distributed.checkpoint.stateful import Stateful
 
 from cosmos_transfer1.checkpointer.base import AbstractCheckpointer
-from imaginaire.checkpointer.s3_filesystem import S3StorageReader, S3StorageWriter
 from cosmos_transfer1.utils.config import JobConfig
 from cosmos_transfer1.utils.ddp_config import make_freezable
 from cosmos_transfer1.utils import callback, distributed, log, misc
@@ -248,8 +247,6 @@ class DistillFSDPCheckpointer(AbstractCheckpointer):
             if self.load_path:
                 # 2. Load the module weights specified by config_checkpoint.path.
                 checkpoint_path = self.load_path
-                if self.load_s3_backend_key:
-                    checkpoint_path = f"s3://{self.config_checkpoint.load_from_object_store.bucket}/{checkpoint_path}"
                 if self.load_training_state:
                     resume_keys.extend(self.KEYS_TO_SAVE)
                 elif self.config_checkpoint.load_student_only_for_debug:
@@ -332,7 +329,6 @@ class DistillFSDPCheckpointer(AbstractCheckpointer):
                     _state_dict = easy_io.load(
                         cur_key_ckpt_full_path,
                         fast_backend=False,
-                        backend_key=self.load_s3_backend_key,
                     )
                     for k, v in _state_dict.items():
                         scheduler_dict[k].load_state_dict(v)
@@ -341,7 +337,6 @@ class DistillFSDPCheckpointer(AbstractCheckpointer):
                     _state_dict = easy_io.load(
                         cur_key_ckpt_full_path,
                         fast_backend=False,
-                        backend_key=self.load_s3_backend_key,
                     )
                     log.critical(_state_dict.keys(), rank0_only=False)
                     grad_scaler.load_state_dict(_state_dict["grad_scaler"])
@@ -391,20 +386,10 @@ class DistillFSDPCheckpointer(AbstractCheckpointer):
             sync_func()
             self.staging = False
 
-    def get_storage_writer(self, checkpoint_path: str) -> Union[S3StorageWriter, FileSystemWriter]:
-        if self.config_checkpoint.save_to_object_store.enabled:
-            return S3StorageWriter(
-                credential_path=self.config_checkpoint.save_to_object_store.credentials,
-                path=checkpoint_path,
-            )
+    def get_storage_writer(self, checkpoint_path: str) -> Union[FileSystemWriter]:
         return FileSystemWriter(path=checkpoint_path)
 
-    def get_storage_reader(self, checkpoint_path: str) -> Union[S3StorageReader, FileSystemReader]:
-        if self.config_checkpoint.load_from_object_store.enabled:
-            return S3StorageReader(
-                credential_path=self.config_checkpoint.load_from_object_store.credentials,
-                path=checkpoint_path,
-            )
+    def get_storage_reader(self, checkpoint_path: str) -> Union[FileSystemReader]:
         return FileSystemReader(checkpoint_path)
 
     def save_state_dict_worker(self, to_save_dict: Dict[str, Any], checkpoint_file: str) -> None:
@@ -421,7 +406,6 @@ class DistillFSDPCheckpointer(AbstractCheckpointer):
                     easy_io.dump(
                         v,
                         full_checkpoint_path,
-                        backend_key=self.load_s3_backend_key,
                     )
         self._write_latest_checkpoint_file(checkpoint_file)
         log.critical(f"Saved checkpoint to {os.path.join(self.save_dirname, checkpoint_file)}", rank0_only=True)
