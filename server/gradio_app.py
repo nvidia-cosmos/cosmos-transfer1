@@ -16,15 +16,25 @@
 import os
 import torch
 import gc
-
+import json
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferPipeline
+
+# from cosmos_transfer1.diffusion.inference.dummy_pipeline import TransferPipeline as DummyTransferPipeline
 from server.model_server import ModelServer
 from server.deploy_config import Config
 import gradio as gr
 
 
 model = None
+
+
+def create_dummy_pipeline():
+    log.info("Creating dummy pipeline for testing")
+    # return DummyTransferPipeline(
+    #     num_gpus=1,
+    #     output_dir=Config.output_dir,
+    # )
 
 
 def create_pipeline():
@@ -41,39 +51,46 @@ def create_pipeline():
     return pipeline
 
 
+def get_spec(spec_file):
+    with open(spec_file, "r") as f:
+        controlnet_specs = json.load(f)
+    return controlnet_specs
+
+
 # Event handler
 def infer_wrapper(
     input_video,
     prompt,
     negative_prompt,
-    vis_weight,
-    edge_weight,
-    depth_weight,
-    seg_weight,
-    keypoint_weight,
     guidance_scale,
     num_steps,
     seed,
     sigma_max,
     blur_strength,
     canny_threshold,
+    json_data,
 ):
     try:
-        _, args_dict = TransferPipeline.validate_params(
-            input_video,
-            prompt,
-            negative_prompt,
-            vis_weight,
-            edge_weight,
-            depth_weight,
-            seg_weight,
-            keypoint_weight,
-            guidance_scale,
-            num_steps,
-            seed,
-            sigma_max,
-            blur_strength,
-            canny_threshold,
+        # Use uploaded JSON data if available, otherwise fall back to default
+        if json_data and isinstance(json_data, dict) and json_data:
+            controlnet_specs = json_data
+            log.info("Using uploaded JSON configuration for inference")
+        else:
+            # Fallback to default JSON file
+            controlnet_specs = get_spec("assets/inference_cosmos_transfer1_single_control_edge.json")
+            log.info("Using default JSON configuration for inference")
+
+        args_dict = TransferPipeline.validate_params(
+            controlnet_specs=controlnet_specs,
+            input_video=input_video,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            guidance=guidance_scale,
+            num_steps=num_steps,
+            seed=seed,
+            sigma_max=sigma_max,
+            blur_strength=blur_strength,
+            canny_threshold=canny_threshold,
         )
     except ValueError as e:
         return None, f"Error validating parameters: {e}"
@@ -115,6 +132,50 @@ def create_gradio_interface():
                     interactive=True,
                 )
 
+                json_file = gr.File(label="Select JSON File", file_types=[".json"], type="filepath")
+
+                json_content = gr.Textbox(label="JSON Content", lines=10, interactive=False, visible=True)
+
+                json_status = gr.Textbox(
+                    label="JSON Status", value="No JSON file loaded - using default config", interactive=False, lines=1
+                )
+
+                # State to store the parsed JSON data
+                json_data_state = gr.State(value={})
+
+                def load_json_file(file_path):
+                    if file_path is None:
+                        return "", {}, "No JSON file loaded - using default config", False
+                    try:
+                        with open(file_path, "r") as f:
+                            content = f.read()
+
+                        # Parse and format JSON for better readability
+                        import json
+
+                        json_data = json.loads(content)
+                        formatted_content = json.dumps(json_data, indent=2, ensure_ascii=False)
+
+                        # Extract filename for status
+                        import os
+
+                        filename = os.path.basename(file_path)
+                        status_msg = f"✅ JSON loaded successfully: {filename} - Config will be used for inference"
+
+                        return formatted_content, json_data, status_msg
+                    except json.JSONDecodeError as e:
+                        error_msg = f"❌ Invalid JSON format - {str(e)}"
+                        return error_msg, {}, error_msg
+                    except Exception as e:
+                        error_msg = f"❌ Error loading file - {str(e)}"
+                        return error_msg, {}, error_msg
+
+                json_file.change(
+                    fn=load_json_file,
+                    inputs=[json_file],
+                    outputs=[json_content, json_data_state, json_status],
+                )
+
                 prompt = gr.Textbox(
                     label="Prompt",
                     value="The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution.",
@@ -126,33 +187,6 @@ def create_gradio_interface():
                     value="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
                     lines=3,
                 )
-
-                # Control selection
-                gr.Markdown("### Control Types")
-
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        vis_weight = gr.Slider(0, 1, value=0.5, step=0.1, label="Visual Weight", interactive=False)
-
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        edge_weight = gr.Slider(0, 1, value=0.0, step=0.1, label="Edge Weight", interactive=True)
-
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        depth_weight = gr.Slider(0, 1, value=0.0, step=0.1, label="Depth Weight", interactive=False)
-
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        seg_weight = gr.Slider(
-                            0, 1, value=0.0, step=0.1, label="Segmentation Weight", interactive=False
-                        )
-
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        keypoint_weight = gr.Slider(
-                            0, 1, value=0.0, step=0.1, label="Keypoint Weight", interactive=False
-                        )
 
                 # Advanced settings
                 with gr.Accordion("Advanced Settings", open=False):
@@ -185,17 +219,13 @@ def create_gradio_interface():
                 input_video,
                 prompt,
                 negative_prompt,
-                vis_weight,
-                edge_weight,
-                depth_weight,
-                seg_weight,
-                keypoint_weight,
                 guidance_scale,
                 num_steps,
                 seed,
                 sigma_max,
                 blur_strength,
                 canny_threshold,
+                json_data_state,
             ],
             outputs=[output_video, status_text],
         )
@@ -221,7 +251,9 @@ if __name__ == "__main__":
         print(f"Error: checkpoints directory {Config.checkpoint_dir} not found.")
         exit(1)
 
-    if Config.num_gpus == 1:
+    if Config.num_gpus == 0:
+        model = create_dummy_pipeline()
+    elif Config.num_gpus == 1:
         model = create_pipeline()
     else:
         model = ModelServer(num_workers=Config.num_gpus)
