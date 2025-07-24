@@ -42,9 +42,13 @@ def get_mock_distill_dataset(
     return CombinedDictDataset(
         **{
             "video": LambdaDataset(video_fn),
+            # Noise tensor is used for KD training only
             "noise": LambdaDataset(partial(torch.randn, size=(16, num_video_frames // 17 * 3, h // 16, w // 16))),
             "t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
             "t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
+            # Negative prompt is used for DMD2 training only if using CFG with negative prompt
+            "neg_t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
+            "neg_t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
             "fps": LambdaDataset(lambda: 24.0),
             "image_size": LambdaDataset(partial(torch.tensor, [h, w, h, w], dtype=torch.float32)),
             "num_frames": LambdaDataset(lambda: num_video_frames),
@@ -89,9 +93,13 @@ def get_mock_distill_ctrlnet_dataset(
         **{
             "video": LambdaDataset(video_fn),
             hint_key: LambdaDataset(hint_fn),
+            # Noise tensor is used for KD training only
             "noise": LambdaDataset(partial(torch.randn, size=(16, (num_video_frames - 1) // 8 + 1, h // 8, w // 8))),
             "t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
             "t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
+            # Negative prompt is used for DMD2 training only if using CFG with negative prompt
+            "neg_t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
+            "neg_t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
             "fps": LambdaDataset(lambda: 24.0),
             "image_size": LambdaDataset(partial(torch.tensor, [h, w, h, w], dtype=torch.float32)),
             "num_frames": LambdaDataset(lambda: num_video_frames),

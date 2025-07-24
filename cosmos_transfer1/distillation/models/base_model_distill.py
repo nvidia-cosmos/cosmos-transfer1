@@ -19,16 +19,13 @@ from typing import Any, Dict, List, Set, Tuple
 
 import numpy as np
 import torch
-from einops import repeat
 from megatron.core import parallel_state
 
 from cosmos_transfer1.utils.lazy_config import LazyDict
 from cosmos_transfer1.utils.lazy_config import instantiate as lazy_instantiate
-from cosmos_transfer1.utils import log, misc
-from cosmos_transfer1.utils.easy_io import easy_io
+from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.conditioner import BaseVideoCondition, DataType
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
-from cosmos_transfer1.diffusion.datasets.data_sources.item_datasets_for_validation import get_itemdataset_option
 from cosmos_transfer1.diffusion.training.models.model import DiffusionModel, _broadcast, broadcast_condition
 from cosmos_transfer1.diffusion.networks.general_dit import GeneralDIT
 from cosmos_transfer1.distillation.networks.distill_controlnet_wrapper import DistillControlNet
@@ -181,24 +178,6 @@ class BaseDistillationMixin(DiffusionModel, ABC):
         epsilon = _broadcast(epsilon, to_tp=True, to_cp=is_video_batch)
         return sigma_B, epsilon
 
-    def _add_negative_prompt(self, data_batch, x0):
-        if getattr(self.config, "use_negative_prompt", False):
-            assert self.negative_prompt_data is not None
-            batch_size = x0.shape[0]
-            data_batch["neg_t5_text_embeddings"] = misc.to(
-                repeat(
-                    self.negative_prompt_data["t5_text_embeddings"],
-                    "... -> b ...",
-                    b=batch_size,
-                ),
-                **self.tensor_kwargs,
-            )
-            assert (
-                data_batch["neg_t5_text_embeddings"].shape == data_batch["t5_text_embeddings"].shape
-            ), f"{data_batch['neg_t5_text_embeddings'].shape} != {data_batch['t5_text_embeddings'].shape}"
-            data_batch["neg_t5_text_mask"] = data_batch["t5_text_mask"]
-        return data_batch
-
     def training_step(
         self,
         data_batch: Dict[str, torch.Tensor],
@@ -230,7 +209,6 @@ class BaseDistillationMixin(DiffusionModel, ABC):
         # Get the input data to noise and denoise~(image, video) and the corresponding conditioner.
         x0_from_data_batch, x0, _ = self.get_data_and_condition(data_batch)
         if getattr(self.config, "use_negative_prompt", False):
-            data_batch = self._add_negative_prompt(data_batch, x0)
             if "neg_t5_text_embeddings" in data_batch:
                 data_batch["is_negative_prompt"] = True
             else:
@@ -496,21 +474,6 @@ class BaseDistillationMixin(DiffusionModel, ABC):
             if sequence_parallel:
                 if hasattr(self, "teacher"):
                     self.teacher.enable_sequence_parallel()
-
-        if getattr(self.config, "use_negative_prompt", False):
-            log.info("Using negative prompt for DMD2 CFG score...")
-            if self.config.is_ctrl_net:
-                neg_prompt_version = "negative_prompt_cg2real_v1_s3"
-                log.info(f"Loading negative prompt from {neg_prompt_version}")
-                self.negative_prompt_data = easy_io.load(
-                    get_itemdataset_option(neg_prompt_version, text_embedding_type="t5_xxl").path
-                )
-            else:
-                neg_prompt_version = "negative_prompt_v0_s3"
-                log.info(f"Loading negative prompt from {neg_prompt_version}")
-                self.negative_prompt_data = easy_io.load(
-                    get_itemdataset_option(neg_prompt_version, text_embedding_type="t5_xxl").path
-                )
 
     def generate_samples_from_batch(
         self,
