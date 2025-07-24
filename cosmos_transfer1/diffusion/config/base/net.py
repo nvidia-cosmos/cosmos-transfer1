@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
+
 from cosmos_transfer1.diffusion.networks.general_dit import GeneralDIT
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
@@ -38,3 +40,10 @@ FADITV2Config: LazyDict = L(GeneralDIT)(
     use_adaln_lora=True,
     adaln_lora_dim=256,
 )
+
+DebugDITConfig: LazyDict = copy.deepcopy(FADITV2Config)
+DebugDITConfig.patch_spatial = 2
+DebugDITConfig.patch_temporal = 1
+DebugDITConfig.model_channels = 128 * 2
+DebugDITConfig.num_blocks = 4
+DebugDITConfig.num_heads = 2

@@ -20,8 +20,11 @@ from cosmos_transfer1.diffusion.config.base.conditioner import (
     VideoConditionerFpsSizePaddingConfig,
     VideoExtendConditionerConfig,
 )
-from cosmos_transfer1.diffusion.config.base.net import FADITV2Config
-from cosmos_transfer1.diffusion.config.base.tokenizer import get_cosmos_diffusion_tokenizer_comp8x8x8
+from cosmos_transfer1.diffusion.config.base.net import FADITV2Config, DebugDITConfig
+from cosmos_transfer1.diffusion.config.base.tokenizer import (
+    get_cosmos_diffusion_tokenizer_comp8x8x8,
+    DebugTokenizerConfig,
+)
 
 
 def register_net(cs):
@@ -30,6 +33,12 @@ def register_net(cs):
         package="model.net",
         name="faditv2_7b",
         node=FADITV2Config,
+    )
+    cs.store(
+        group="net",
+        package="model.net",
+        name="tiny_fa",
+        node=DebugDITConfig,
     )
 
 
@@ -61,6 +70,7 @@ def register_tokenizer(cs):
         name="cosmos_diffusion_tokenizer_res720_comp8x8x8_t121_ver092624",
         node=get_cosmos_diffusion_tokenizer_comp8x8x8(resolution="720", chunk_duration=121),
     )
+    cs.store(group="tokenizer", package="model.tokenizer", name="debug_tokenizer", node=DebugTokenizerConfig)
 
 
 def register_configs():

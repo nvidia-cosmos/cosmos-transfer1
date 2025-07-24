@@ -26,18 +26,17 @@ from cosmos_transfer1.distillation.config.base.discriminator import (
     CONV3D_POOL_TINY_FA_Config,
 )
 from cosmos_transfer1.distillation.config.base.fsdp import FULL_FSDP_CONFIG, HYBRID_FSDP_CONFIG
-from projects.cosmos.nano.v1.config.debug import (
+from cosmos_transfer1.distillation.config.base.mock_data import (
+    MOCK_DISTILL_DATA_LOADER,
+    MOCK_DISTILL_CTRLNET_DATA_LOADER,
+)
+from cosmos_transfer1.distillation.config.base.debug import (
     DEBUG_LOCAL_CP_EXP,
     DEBUG_LOCAL_CP_FSDP_EXP,
     DEBUG_LOCAL_DDP_EXP,
     DEBUG_LOCAL_FSDP_EXP,
-    DEBUG_LOCAL_KD_TPSP_CP_EXP,
-    DEBUG_LOCAL_TINY_DDP_EXP,
-    DEBUG_LOCAL_TP_EXP,
-    DEBUG_LOCAL_TPSP_CP_EXP,
-    DEBUG_V2W_LOCAL_CP_FSDP_EXP,
-    DEBUG_V2W_LOCAL_TINY_DDP_EXP,
-    DEBUG_V2W_LOCAL_TPSP_CP_EXP,
+    DEBUG_CTRLNET_LOCAL_DDP_EXP,
+    DEBUG_CTRLNET_LOCAL_CP_FSDP_EXP,
 )
 from cosmos_transfer1.diffusion.config.training.optim import FusedAdamWConfig, LambdaLinearSchedulerConfig
 
@@ -48,13 +47,6 @@ def register_fsdp(cs):
 
 
 def register_experiment(cs):
-    # base model
-    cs.store(
-        group="experiment",
-        package="_global_",
-        name="debug_local_tiny_ddp",
-        node=DEBUG_LOCAL_TINY_DDP_EXP,
-    )
     cs.store(
         group="experiment",
         package="_global_",
@@ -82,45 +74,29 @@ def register_experiment(cs):
     cs.store(
         group="experiment",
         package="_global_",
-        name="debug_local_tp",
-        node=DEBUG_LOCAL_TP_EXP,
+        name="debug_ctrlnet_local_ddp",
+        node=DEBUG_CTRLNET_LOCAL_DDP_EXP,
     )
     cs.store(
         group="experiment",
         package="_global_",
-        name="debug_local_tpsp_cp",
-        node=DEBUG_LOCAL_TPSP_CP_EXP,
-    )
-    # v2w model
-    cs.store(
-        group="experiment",
-        package="_global_",
-        name="debug_v2w_local_tiny_ddp",
-        node=DEBUG_V2W_LOCAL_TINY_DDP_EXP,
-    )
-    cs.store(
-        group="experiment",
-        package="_global_",
-        name="debug_v2w_local_cp_fsdp",
-        node=DEBUG_V2W_LOCAL_CP_FSDP_EXP,
-    )
-    cs.store(
-        group="experiment",
-        package="_global_",
-        name="debug_v2w_local_tpsp_cp",
-        node=DEBUG_V2W_LOCAL_TPSP_CP_EXP,
-    )
-    # kd model
-    cs.store(
-        group="experiment",
-        package="_global_",
-        name="debug_local_kd_tpsp_cp",
-        node=DEBUG_LOCAL_KD_TPSP_CP_EXP,
+        name="debug_ctrlnet_local_cp_fsdp",
+        node=DEBUG_CTRLNET_LOCAL_CP_FSDP_EXP,
     )
 
 
 def register_callbacks(cs):
     cs.store(group="callbacks", package="trainer.callbacks", name="basic", node=BASIC_CALLBACKS)
+
+
+def register_mock_data(cs):
+    cs.store(group="data_train", package="dataloader_train", name="mock_distill", node=MOCK_DISTILL_DATA_LOADER)
+    cs.store(
+        group="data_train",
+        package="dataloader_train",
+        name="mock_ctrl_distill",
+        node=MOCK_DISTILL_CTRLNET_DATA_LOADER,
+    )
 
 
 def register_discriminator(cs):
@@ -190,6 +166,7 @@ def register_configs():
     register_optimizers(cs)
     register_schedulers(cs)
     register_experiment(cs)
+    register_mock_data(cs)
 
     register_data_ctrlnet(cs)
     register_experiment_ctrlnet(cs)

@@ -19,8 +19,10 @@ from cosmos_transfer1.diffusion.module.pretrained_vae import (
     JITVAE,
     JointImageVideoSharedJITTokenizer,
     VideoJITTokenizer,
+    DummyJointImageVideoTokenizer,
 )
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
+from cosmos_transfer1.utils.lazy_config import LazyDict
 
 TOKENIZER_OPTIONS = {}
 
@@ -31,6 +33,9 @@ def tokenizer_register(key):
         return func
 
     return decorator
+
+
+DebugTokenizerConfig: LazyDict = L(DummyJointImageVideoTokenizer)(name="dummy_joint_image_video")
 
 
 @tokenizer_register("cosmos_diffusion_tokenizer_comp8x8x8")

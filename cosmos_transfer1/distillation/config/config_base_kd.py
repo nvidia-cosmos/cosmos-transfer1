@@ -44,7 +44,7 @@ class Config(config.Config):
             {"net": None},
             {"conditioner": "add_fps_image_size_padding_mask"},
             {"fsdp": None},
-            {"tokenizer": "vae1"},
+            {"tokenizer": None},
             {"checkpoint": "local"},
             {"ckpt_klass": "fsdp"},
             # the list is with order, we need global experiment to be the last one

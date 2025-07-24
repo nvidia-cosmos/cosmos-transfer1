@@ -51,7 +51,7 @@ class Config(config.Config):
             {"discriminator": "conv3d_pool_faditv2"},
             {"conditioner": "ctrlnet_add_fps_image_size_padding_mask"},
             {"fsdp": None},
-            {"tokenizer": "vae1"},
+            {"tokenizer": None},
             {"checkpoint": "local"},
             {"ckpt_klass": "fsdp"},
             # the list is with order, we need global experiment to be the last one
