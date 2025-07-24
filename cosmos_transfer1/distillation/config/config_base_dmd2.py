@@ -1,31 +1,32 @@
-# -----------------------------------------------------------------------------
-# Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
-# This codebase constitutes NVIDIA proprietary technology and is strictly
-# confidential. Any unauthorized reproduction, distribution, or disclosure
-# of this code, in whole or in part, outside NVIDIA is strictly prohibited
-# without prior written consent.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-# For inquiries regarding the use of this code in other NVIDIA proprietary
-# projects, please contact the Deep Imagination Research Team at
-# dir@exchange.nvidia.com.
-# -----------------------------------------------------------------------------
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from typing import Any, List
 
 import attrs
 
-from imaginaire import config
-from imaginaire.lazy_config import PLACEHOLDER
-from imaginaire.lazy_config import LazyCall as L
-from imaginaire.lazy_config import LazyDict
-from imaginaire.utils.config_helper import import_all_modules_from_package
-from projects.cosmos.nano.v1.checkpointers.distill_fsdp_checkpointer import DistillCheckpointConfig
-from projects.cosmos.nano.v1.config.base.model import DMD2ModelConfig
-from projects.cosmos.nano.v1.config.registry import register_configs
-from projects.cosmos.nano.v1.models.model_dmd2 import DMD2WorldDistillationModel
-from projects.cosmos.nano.v1.trainer.distillation_trainer import Trainer
+from cosmos_transfer1.utils import config
+from cosmos_transfer1.utils.lazy_config import PLACEHOLDER
+from cosmos_transfer1.utils.lazy_config import LazyCall as L
+from cosmos_transfer1.utils.lazy_config import LazyDict
+from cosmos_transfer1.utils.config_helper import import_all_modules_from_package
+from cosmos_transfer1.distillation.checkpointer.distill_fsdp_checkpointer import DistillCheckpointConfig
+from cosmos_transfer1.distillation.config.base.model import DMD2ModelConfig
+from cosmos_transfer1.distillation.config.registry import register_configs
+from cosmos_transfer1.distillation.models.model_dmd2 import DMD2DistillT2WModel
+from cosmos_transfer1.distillation.trainer.distillation_trainer import Trainer
 
 
 @attrs.define(slots=False)
@@ -35,8 +36,8 @@ class Config(config.Config):
     defaults: List[Any] = attrs.field(
         factory=lambda: [
             "_self_",
-            {"data_train": "mock_video"},
-            {"data_val": "mock"},
+            {"data_train": None},
+            {"data_val": None},
             {"optimizer": "fusedadamw"},
             {"discriminator_optimizer": "fusedadamw"},
             {"fake_score_optimizer": "fusedadamw"},
@@ -48,14 +49,14 @@ class Config(config.Config):
             {"discriminator": "conv3d_pool_faditv2"},
             {"conditioner": "add_fps_image_size_padding_mask"},
             {"fsdp": None},
-            {"vae": "vae1"},
-            {"checkpoint": "s3"},
+            {"tokenizer": "vae1"},
+            {"checkpoint": "local"},
             {"ckpt_klass": "fsdp"},
             # the list is with order, we need global experiment to be the last one
             {"experiment": None},
         ]
     )
-    model_obj: LazyDict = L(DMD2WorldDistillationModel)(
+    model_obj: LazyDict = L(DMD2DistillT2WModel)(
         config=PLACEHOLDER,
     )
 
@@ -72,12 +73,11 @@ def make_config():
     )
 
     # Specifying values through instances of attrs
-    c.job.project = "cosmos_nano_v1"
+    c.job.project = "cosmos_transfer1_distill"
     c.job.group = "debug"
     c.job.name = "delete_${now:%Y-%m-%d}_${now:%H-%M-%S}"
 
     c.trainer.type = Trainer
-    c.trainer.straggler_detection.enabled = False
     c.trainer.max_iter = 400_000
     c.trainer.logging_iter = 10
     c.trainer.validation_iter = 100
@@ -91,5 +91,5 @@ def make_config():
 
     # experiment config are defined in the experiment folder
     # call import_all_modules_from_package to register them
-    import_all_modules_from_package("projects.cosmos.nano.v1.config.experiment", reload=True)
+    import_all_modules_from_package("cosmos_transfer1.distillation.config.experiment", reload=True)
     return c
