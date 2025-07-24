@@ -38,7 +38,7 @@ from cosmos_transfer1.diffusion.training.utils.optim_instantiate import get_base
 
 
 class BaseDistillationMixin(DiffusionModel, ABC):
-    """Base Video Distillation Model."""
+    """Base distillation mixin class."""
 
     def build_model(self) -> torch.nn.ModuleDict:
         """Expand model building to initialise Teacher module and disable gradients on it."""
@@ -235,7 +235,7 @@ class BaseDistillationMixin(DiffusionModel, ABC):
                 data_batch["is_negative_prompt"] = True
             else:
                 raise ValueError("config.use_negative_prompt=True but couldn't find neg_t5_text_embeddings in data")
-        condition, uncondition = self._get_uncondition(x0, data_batch)
+        condition, uncondition = self._get_condition_uncondition(x0, data_batch)
 
         # Sample perturbation noise levels and N(0, 1) noises
         sigma, epsilon = self.draw_training_sigma_and_epsilon(x0.size(), condition)
@@ -255,10 +255,9 @@ class BaseDistillationMixin(DiffusionModel, ABC):
 
         return output_batch, loss
 
-    def _get_uncondition(self, gt_latent: torch.Tensor, data_batch: dict[str, torch.Tensor]) -> Any:
+    def _get_condition_uncondition(self, gt_latent: torch.Tensor, data_batch: dict[str, torch.Tensor]) -> Any:
         """
         Get the condition and uncondition from data_batch
-        TODO: rename the function later, as it's not just returning uncondition
 
         Args:
             gt_latent: gt_latent or None

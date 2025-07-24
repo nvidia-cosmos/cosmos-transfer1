@@ -43,7 +43,7 @@ from cosmos_transfer1.diffusion.training.utils.optim_instantiate import get_base
 # class of relevance in this codebase, instead of accompanying implementation classes, creates a clean and extensible
 # diamond pattern with consistent MRO (method retrieval order) while allowing IDEs to resolve super signatures.
 class DMD2ModelMixin(DiffusionModel, ABC):
-    """DMD2 Mixin class for video distillation."""
+    """DMD2 mixin class for diffusion step distillation."""
 
     def build_model(self) -> torch.nn.ModuleDict:
         """Expand model building to initialise fake_score and discriminator modules"""
@@ -170,9 +170,7 @@ class DMD2ModelMixin(DiffusionModel, ABC):
                     # Turn on CP
                     cp_group = parallel_state.get_context_parallel_group()
                     if not self.config.ladd:
-                        self.fake_score.enable_context_parallel(
-                            cp_group
-                        )  # TODO (weili): enable context_parallel for discriminator?
+                        self.fake_score.enable_context_parallel(cp_group)
 
         data_batch["context_parallel_setup"] = True
         return data_batch, x0, condition, uncondition, epsilon
@@ -412,7 +410,7 @@ class DMD2ModelMixin(DiffusionModel, ABC):
             sequence_parallel = getattr(parallel_state, "sequence_parallel", False)
             if sequence_parallel:
                 if not self.config.ladd:
-                    self.fake_score.enable_sequence_parallel()  # TODO (weili): enable sequence_parallel for discriminator?
+                    self.fake_score.enable_sequence_parallel()
 
 
 class DMD2DistillT2WModel(DMD2ModelMixin, BaseDistillationModel):

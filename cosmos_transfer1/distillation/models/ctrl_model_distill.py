@@ -30,9 +30,9 @@ from cosmos_transfer1.distillation.models.v2w_model_distill import V2WDistillati
 
 
 class CtrlDistillationMixin(V2WDistillationMixin, ABC):
-    """ControlNet LVG Video Distillation Model (distilling Video2World ControlNet diffusion models)."""
+    """ControlNet distillation mixin class."""
 
-    def _get_uncondition(
+    def _get_condition_uncondition(
         self,
         gt_latent: torch.Tensor,
         data_batch: dict[str, torch.Tensor],
@@ -40,7 +40,6 @@ class CtrlDistillationMixin(V2WDistillationMixin, ABC):
     ) -> Any:
         """
         Get the condition (without drop rate) and uncondition from data_batch
-        TODO: rename the function later, as it's not just returning uncondition
 
         Args:
             gt_latent: gt_latent
@@ -144,7 +143,7 @@ class CtrlDistillationMixin(V2WDistillationMixin, ABC):
             num_condition_t = 0
             condition_video_augment_sigma_in_inference = 1000
 
-        condition, uncondition = self._get_uncondition(condition_latent, data_batch, num_condition_t)
+        condition, uncondition = self._get_condition_uncondition(condition_latent, data_batch, num_condition_t)
         _, _, condition, uncondition, _ = self.setup_context_parallel(
             data_batch, dummy_tensor, condition, uncondition, dummy_tensor
         )

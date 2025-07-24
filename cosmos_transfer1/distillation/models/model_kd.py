@@ -29,7 +29,7 @@ from cosmos_transfer1.distillation.models.v2w_model_distill import V2WDistillati
 
 
 class KDModelMixin(DiffusionModel, ABC):
-    """Knowledge Distillation Model for video distillation. (warm up stage for DMD2)"""
+    """Knowledge distillation mixin class for diffusion step distillation."""
 
     def build_model(self) -> torch.nn.ModuleDict:
         """Expand model building process to delete an eventual Teacher module"""

@@ -28,7 +28,7 @@ from cosmos_transfer1.diffusion.functional.batch_ops import batch_mul
 
 
 class V2WDistillationMixin(BaseDistillationMixin, ABC):
-    """Extend Video Distillation Model (distilling Video2World diffusion models)."""
+    """Video2World distillation mixin class."""
 
     def denoise_net(
         self,
