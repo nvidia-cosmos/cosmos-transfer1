@@ -320,6 +320,12 @@ if __name__ == "__main__":
     pipeline = TransferPipeline(num_gpus=int(os.environ.get("NUM_GPU", 1)))
     model_params = TransferPipeline.validate_params(
         input_video="assets/example1_input_video.mp4",
+        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_depth.json"),
+    )
+    pipeline.infer(model_params)
+
+    model_params = TransferPipeline.validate_params(
+        input_video="assets/example1_input_video.mp4",
         controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_edge.json"),
     )
     pipeline.infer(model_params)

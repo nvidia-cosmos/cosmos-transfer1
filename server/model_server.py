@@ -18,6 +18,7 @@ Workers have control loops to wait for input from the main function.
 Worker processes are now handled by worker_sandbox.py.
 """
 
+import json
 import os
 import subprocess
 import time
@@ -132,6 +133,12 @@ class ModelServer:
         self.worker_status.cleanup()
 
 
+def get_spec(spec_file):
+    with open(spec_file, "r") as f:
+        controlnet_specs = json.load(f)
+    return controlnet_specs
+
+
 if __name__ == "__main__":
 
     def signal_handler(sig, frame):
@@ -144,9 +151,24 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, signal_handler)
 
     num_gpus = int(os.environ.get("NUM_GPU", 1))
-    with ModelServer(num_workers=num_gpus) as server:
+    with ModelServer(num_workers=num_gpus) as pipeline:
 
-        args, args_dict = TransferPipeline.validate_params()
+        model_params = TransferPipeline.validate_params(
+            input_video="assets/example1_input_video.mp4",
+            controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_depth.json"),
+        )
+        pipeline.infer(model_params)
 
-        server.send_request(args_dict)
-        server.send_request(args_dict)
+        model_params = TransferPipeline.validate_params(
+            input_video="assets/example1_input_video.mp4",
+            controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_edge.json"),
+        )
+        pipeline.infer(model_params)
+
+        log.info("Inference complete****************************************")
+
+        model_params = TransferPipeline.validate_params(
+            input_video="assets/example1_input_video.mp4",
+            controlnet_specs=get_spec("assets/inference_cosmos_transfer1_multi_control.json"),
+        )
+        pipeline.infer(model_params)
