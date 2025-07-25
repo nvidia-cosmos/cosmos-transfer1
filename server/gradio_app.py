@@ -15,6 +15,7 @@
 
 import os
 import json
+from datetime import datetime
 from cosmos_transfer1.utils import log
 
 from server.deploy_config import Config
@@ -30,6 +31,9 @@ validator = None
 def infer_wrapper(
     request_text,
 ):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_folder = os.path.join(Config.output_dir, f"generation_{timestamp}")
+    os.makedirs(output_folder, exist_ok=True)
     try:
         # Parse the request as JSON
         try:
@@ -40,17 +44,18 @@ def infer_wrapper(
         log.info(f"Model parameters: {json.dumps(request_data, indent=4)}")
 
         args_dict = validator.parse_and_validate(request_data)
+        args_dict["output_dir"] = output_folder
+
+        pipeline.infer(args_dict)
 
     except ValueError as e:
-        return None, f"Error validating parameters: {e}"
-
-    pipeline.infer(args_dict)
+        return None, f"Error: {e}"
 
     # Check if output was generated
-    output_path = os.path.join(Config.output_dir, "output.mp4")
+    output_path = os.path.join(output_folder, "output.mp4")
     if os.path.exists(output_path):
         # Read the generated prompt
-        prompt_path = os.path.join(Config.output_dir, "output.txt")
+        prompt_path = os.path.join(output_folder, "output.txt")
         final_prompt = args_dict["prompt"]
         if os.path.exists(prompt_path):
             with open(prompt_path, "r", encoding="utf-8") as f:
@@ -58,10 +63,10 @@ def infer_wrapper(
 
         return (
             output_path,
-            f"Video generated successfully!\nOutput saved to: {Config.output_dir}\nFinal prompt: {final_prompt}",
+            f"Video generated successfully!\nOutput saved to: {output_folder}\nFinal prompt: {final_prompt}",
         )
     else:
-        return None, f"Generation failed - no output video was created\nCheck folder: {Config.output_dir}"
+        return None, f"Generation failed - no output video was created\nCheck folder: {output_folder}"
 
 
 def create_gradio_interface():

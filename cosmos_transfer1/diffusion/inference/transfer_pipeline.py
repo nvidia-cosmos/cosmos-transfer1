@@ -120,6 +120,7 @@ class TransferValidator:
         sigma_max=70.0,
         blur_strength="medium",
         canny_threshold="medium",
+        output_dir: str = "outputs/",
     ):
         """
         advanced parameter check
@@ -145,7 +146,7 @@ class TransferValidator:
         args_dict["sigma_max"] = sigma_max
         args_dict["blur_strength"] = blur_strength
         args_dict["canny_threshold"] = canny_threshold
-
+        args_dict["output_dir"] = output_dir
         self.validate_control_spec(controlnet_specs)
         args_dict["controlnet_specs"] = controlnet_specs
         log.info(f"Model parameters: {json.dumps(args_dict, indent=4)}")
@@ -189,7 +190,6 @@ class TransferPipeline:
         num_gpus: int = 1,
         checkpoint_dir: str = "/mnt/pvc/cosmos-transfer1",
         checkpoint_name=BASE_7B_CHECKPOINT_PATH,
-        output_dir: str = "outputs/",
         hint_keys=hint_keys,
     ):
         self.device_rank = 0
@@ -217,7 +217,6 @@ class TransferPipeline:
         }
 
         self.checkpoint_dir = checkpoint_dir
-        self.output_dir = output_dir
         self.video_save_name = "output"
 
         self.pipeline = DiffusionControl2WorldGenerationPipeline(
@@ -278,6 +277,7 @@ class TransferPipeline:
         sigma_max=70.0,
         blur_strength="medium",
         canny_threshold="medium",
+        output_dir: str = "outputs/",
     ):
 
         config_changed = self.update_controlnet_spec(
@@ -298,7 +298,7 @@ class TransferPipeline:
             input_video,
             prompt,
             current_control_inputs,
-            self.output_dir,
+            output_dir,
         )
 
         # TODO: add support for regional prompts and region definitions
@@ -322,7 +322,7 @@ class TransferPipeline:
             video_path=[input_video],
             negative_prompt=negative_prompt,
             control_inputs=[current_control_inputs],
-            save_folder=self.output_dir,
+            save_folder=output_dir,
             batch_size=1,
         )
         if batch_outputs is None:
@@ -331,8 +331,8 @@ class TransferPipeline:
             videos, final_prompts = batch_outputs
             for i, (video, prompt) in enumerate(zip(videos, final_prompts)):
 
-                video_save_path = os.path.join(self.output_dir, f"{self.video_save_name}.mp4")
-                prompt_save_path = os.path.join(self.output_dir, f"{self.video_save_name}.txt")
+                video_save_path = os.path.join(output_dir, f"{self.video_save_name}.mp4")
+                prompt_save_path = os.path.join(output_dir, f"{self.video_save_name}.txt")
                 os.makedirs(os.path.dirname(video_save_path), exist_ok=True)
 
                 save_video(
@@ -375,7 +375,6 @@ def create_transfer_pipeline(cfg, create_model=True):
         pipeline = TransferPipeline(
             num_gpus=int(os.environ.get("WORLD_SIZE", 1)),
             checkpoint_dir=cfg.checkpoint_dir,
-            output_dir=cfg.output_dir,
         )
         gc.collect()
         torch.cuda.empty_cache()
@@ -394,7 +393,6 @@ def create_transfer_pipeline_AV(cfg, create_model=True):
             checkpoint_dir=cfg.checkpoint_dir,
             checkpoint_name=BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
             hint_keys=hint_keys_av,
-            output_dir=cfg.output_dir,
         )
         gc.collect()
         torch.cuda.empty_cache()
