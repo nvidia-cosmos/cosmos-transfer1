@@ -14,42 +14,15 @@
 # limitations under the License.
 
 import os
-import torch
-import gc
 import json
 from cosmos_transfer1.utils import log
-from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferPipeline
-
-# from cosmos_transfer1.diffusion.inference.dummy_pipeline import TransferPipeline as DummyTransferPipeline
-from server.model_server import ModelServer
+from server.model_factory import create_pipeline
 from server.deploy_config import Config
 import gradio as gr
 
 
 model = None
-
-
-def create_dummy_pipeline():
-    log.info("Creating dummy pipeline for testing")
-    # return DummyTransferPipeline(
-    #     num_gpus=1,
-    #     output_dir=Config.output_dir,
-    # )
-
-
-def create_pipeline():
-    log.info(f"Initializing model using factory function {Config.factory_module}.{Config.factory_function}")
-
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
-
-    pipeline = TransferPipeline(
-        num_gpus=world_size,
-        checkpoint_dir=Config.checkpoint_dir,
-        output_dir=Config.output_dir,
-    )
-    gc.collect()
-    torch.cuda.empty_cache()
-    return pipeline
+validator = None
 
 
 def get_spec(spec_file):
@@ -76,12 +49,8 @@ def infer_wrapper(
         if json_data and isinstance(json_data, dict) and json_data:
             controlnet_specs = json_data
             log.info("Using uploaded JSON configuration for inference")
-        else:
-            # Fallback to default JSON file
-            controlnet_specs = get_spec("assets/inference_cosmos_transfer1_single_control_edge.json")
-            log.info("Using default JSON configuration for inference")
 
-        args_dict = TransferPipeline.validate_params(
+        args_dict = validator.prune_and_validate(
             controlnet_specs=controlnet_specs,
             input_video=input_video,
             prompt=prompt,
@@ -252,13 +221,7 @@ if __name__ == "__main__":
         print(f"Error: checkpoints directory {Config.checkpoint_dir} not found.")
         exit(1)
 
-    if Config.num_gpus == 0:
-        model = create_dummy_pipeline()
-    elif Config.num_gpus == 1:
-        model = create_pipeline()
-    else:
-        model = ModelServer(num_workers=Config.num_gpus)
-
+    pipeline, validator = create_pipeline(Config)
     interface = create_gradio_interface()
 
     interface.launch(

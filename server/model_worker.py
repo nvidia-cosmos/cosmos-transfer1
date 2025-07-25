@@ -24,6 +24,8 @@ from server.deploy_config import Config
 import sys
 from loguru import logger
 
+from server.model_factory import create_worker_pipeline
+
 
 # Configure loguru with custom color for this worker process
 logger.remove()  # Remove default handler
@@ -32,13 +34,6 @@ logger.add(
     format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <white>{level}</white> | <green>{name}</green>:<yellow>{function}</yellow>:<yellow>{line}</yellow> - <white>{message}</white>",
     level="INFO",
 )
-
-
-def create_pipeline():
-    module = __import__(Config.factory_module, fromlist=[Config.factory_function])
-    factory_function = getattr(module, Config.factory_function)
-    log.info(f"initializing model using {Config.factory_module}.{Config.factory_function}")
-    return factory_function()
 
 
 """
@@ -60,7 +55,7 @@ def worker_main():
 
         pipeline = None
         if Config.factory_module and Config.factory_function:
-            pipeline = create_pipeline()
+            pipeline, _ = create_worker_pipeline(Config)
         else:
             log.error("initializing model: FACTORY_MODULE and FACTORY_FUNCTION environment variables are not set.")
             time.sleep(10)

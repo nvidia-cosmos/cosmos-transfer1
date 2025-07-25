@@ -21,5 +21,5 @@ class Config:
     output_dir = os.getenv("OUTPUT_DIR", "/mnt/pvc/gradio_output")
     uploads_dir = os.getenv("UPLOADS_DIR", "/mnt/pvc/gradio/uploads")
     num_gpus = int(os.environ.get("NUM_GPU", 1))
-    factory_module = os.getenv("FACTORY_MODULE", "server.gradio_app")
-    factory_function = os.getenv("FACTORY_FUNCTION", "create_pipeline")
+    factory_module = os.getenv("FACTORY_MODULE", "cosmos_transfer1.diffusion.inference.transfer_pipeline")
+    factory_function = os.getenv("FACTORY_FUNCTION", "create_transfer_pipeline")

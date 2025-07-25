@@ -14,12 +14,10 @@
 # limitations under the License.
 
 
-import argparse
-import json
 import os
 
+from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferValidator
 from cosmos_transfer1.utils import log
-import copy
 from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
 
 
@@ -58,10 +56,6 @@ class TransferPipeline:
         blur_strength="medium",
         canny_threshold="medium",
     ):
-        self.update_controlnet_spec(
-            checkpoint_dir="/mnt/pvc/cosmos-transfer1",
-            controlnet_specs=controlnet_specs,
-        )
 
         prompt_save_path = os.path.join(self.output_dir, f"{self.video_save_name}.txt")
 
@@ -71,55 +65,7 @@ class TransferPipeline:
 
         log.info(f"Saved prompt to {prompt_save_path}")
 
-    valid_hint_keys = {"vis", "seg", "edge", "depth", "keypoint", "upscale", "hdmap", "lidar"}
 
-    def update_controlnet_spec(
-        self,
-        checkpoint_dir: str,
-        controlnet_specs: dict = {},
-    ):
-        """
-        Create the controlnet specification defines which control netwworks are active.
-        Note that controlnets are active even if the weights are set to 0."""
-
-        config_changed = False
-
-        for hint_key in self.valid_hint_keys:
-            if hint_key in controlnet_specs:
-                if hint_key not in self.control_inputs:
-                    config_changed = True
-
-                # overwrite old parameters
-                self.control_inputs[hint_key] = copy.deepcopy(controlnet_specs[hint_key])
-                self.control_inputs[hint_key]["ckpt_path"] = os.path.join(checkpoint_dir, default_model_names[hint_key])
-            elif hint_key in self.control_inputs:
-                # remove old parameters
-                del self.control_inputs[hint_key]
-                config_changed = True
-
-        log.info(f"{config_changed=}, control_inputs: {json.dumps(self.control_inputs, indent=4)}")
-
-        return config_changed
-
-
-def get_spec(spec_file):
-    with open(spec_file, "r") as f:
-        controlnet_specs = json.load(f)
-    return controlnet_specs
-
-
-if __name__ == "__main__":
-    controlnet_specs = get_spec("assets/inference_cosmos_transfer1_uniform_weights_auto.json")
-
-    pipeline = TransferPipeline(num_gpus=int(os.environ.get("NUM_GPU", 1)))
-    model_params = TransferPipeline.validate_params(
-        input_video="assets/example1_input_video.mp4",
-        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_edge.json"),
-    )
-    pipeline.infer(model_params)
-
-    model_params = TransferPipeline.validate_params(
-        input_video="assets/example1_input_video.mp4",
-        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_multi_control.json"),
-    )
-    pipeline.infer(model_params)
+def create_dummy_pipeline(cfg):
+    log.info("Creating dummy pipeline for testing")
+    return TransferPipeline(num_gpus=1, output_dir=cfg.output_dir), TransferValidator()

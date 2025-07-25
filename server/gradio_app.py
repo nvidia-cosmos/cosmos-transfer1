@@ -14,40 +14,17 @@
 # limitations under the License.
 
 import os
-import torch
-import gc
 import json
 from cosmos_transfer1.utils import log
-from cosmos_transfer1.diffusion.inference import transfer_pipeline
 
-from cosmos_transfer1.diffusion.inference import dummy_pipeline
-from server.model_server import ModelServer
 from server.deploy_config import Config
 import gradio as gr
 from server import gradio_file_server
+from server.model_factory import create_pipeline
 
 
-model = None
-
-
-def create_dummy_pipeline():
-    log.info("Creating dummy pipeline for testing")
-    return dummy_pipeline.TransferPipeline(num_gpus=1, output_dir=Config.output_dir)
-
-
-def create_pipeline():
-    log.info(f"Initializing model using factory function {Config.factory_module}.{Config.factory_function}")
-
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
-
-    pipeline = transfer_pipeline.TransferPipeline(
-        num_gpus=world_size,
-        checkpoint_dir=Config.checkpoint_dir,
-        output_dir=Config.output_dir,
-    )
-    gc.collect()
-    torch.cuda.empty_cache()
-    return pipeline
+pipeline = None
+validator = None
 
 
 def infer_wrapper(
@@ -62,25 +39,12 @@ def infer_wrapper(
 
         log.info(f"Model parameters: {json.dumps(request_data, indent=4)}")
 
-        args_dict = {}
-        controlnet_specs = {}
-        # we want to use the default values of the validate function, so don't overwrite with some other defaults
-        for key in request_data:
-            if key in transfer_pipeline.valid_hint_keys:
-                controlnet_specs[key] = request_data[key]
-            else:
-                args_dict[key] = request_data[key]
+        args_dict = validator.parse_and_validate(request_data)
 
-        log.info(f"Using provided controlnet_specs from request: {controlnet_specs}")
-
-        args_dict = transfer_pipeline.TransferPipeline.validate_params(
-            controlnet_specs=controlnet_specs,
-            **args_dict,
-        )
     except ValueError as e:
         return None, f"Error validating parameters: {e}"
 
-    model.infer(args_dict)
+    pipeline.infer(args_dict)
 
     # Check if output was generated
     output_path = os.path.join(Config.output_dir, "output.mp4")
@@ -197,13 +161,7 @@ if __name__ == "__main__":
         print(f"Error: checkpoints directory {Config.checkpoint_dir} not found.")
         exit(1)
 
-    if Config.num_gpus == 0:
-        model = create_dummy_pipeline()
-    elif Config.num_gpus == 1:
-        model = create_pipeline()
-    else:
-        model = ModelServer(num_workers=Config.num_gpus)
-
+    pipeline, validator = create_pipeline(Config)
     interface = create_gradio_interface()
 
     interface.launch(

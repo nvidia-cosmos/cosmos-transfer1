@@ -18,9 +18,11 @@ import argparse
 import copy
 import json
 import os
-
+import torch
+import gc
 
 from cosmos_transfer1.checkpoints import (
+    BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
     BASE_7B_CHECKPOINT_PATH,
 )
 from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
@@ -41,14 +43,144 @@ This makes the config.json file for the controlnets a init parameter of the pipe
 
 TODO regional prompt support
 
-TODO av support
-
 """
 
 # todo "keypoint" is causing dependency issue
-valid_hint_keys = {"vis", "seg", "edge", "depth", "upscale", "hdmap", "lidar"}
+hint_keys = {"vis", "seg", "edge", "depth", "upscale"}
+hint_keys_av = {"hdmap", "lidar"}
 default_prompt = "The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution."
 default_negative_prompt = "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all."
+
+"""
+class validates parameters which can be in from of regular variables or in the form of a controlnet_specs dictionary.
+This is complex enough to warrant a separate class:
+Eventually we want to extend this python validators or something schema based.
+Also we want to module test this class separately w/o the complexity of the actual pipeline.
+"""
+
+
+class TransferValidator:
+    def __init__(self, hint_keys=hint_keys):
+        self.valid_keys = hint_keys
+        self.default_prompt = default_prompt
+        self.default_negative_prompt = default_negative_prompt
+
+    def extract_params(self, controlnet_specs):
+        args_dict = {}
+        controlnet_specs_clean = {}
+
+        for key, val in controlnet_specs.items():
+            if key in self.valid_keys:
+                controlnet_specs_clean[key] = val
+            else:
+                if type(val) == dict:
+                    raise ValueError(f"Invalid hint_key: {key}. Must be one of {self.valid_keys}")
+                else:
+                    args_dict[key] = val
+        return args_dict, controlnet_specs_clean
+
+    def validate_control_spec(self, controlnet_specs_clean):
+
+        for key in controlnet_specs_clean:
+            if key not in self.valid_keys:
+                log.warning(f"Invalid hint_key: {key}. Must be one of {self.valid_keys}")
+
+        for key, config in controlnet_specs_clean.items():
+            if "control_weight" not in config:
+                log.warning(f"No control weight specified for {key}. Setting to 0.5.")
+                config["control_weight"] = "0.5"
+            else:
+                # Check if control weight is a path or a scalar
+                weight = config["control_weight"]
+                if not isinstance(weight, str) or not weight.endswith(".pt"):
+                    try:
+                        # Try converting to float
+                        scalar_value = float(weight)
+                        if scalar_value < 0:
+                            raise ValueError(f"Control weight for {key} must be non-negative.")
+                    except ValueError:
+                        raise ValueError(
+                            f"Control weight for {key} must be a valid non-negative float or a path to a .pt file."
+                        )
+
+    """
+    Naming of the parameters is inline with original CLI and thus the parameters allowed in controlnet_specs.
+    This way we can pass a parameter dictionary directly from the json.
+    """
+
+    def validate_params(
+        self,
+        controlnet_specs,
+        input_video_path=None,
+        prompt=default_prompt,
+        negative_prompt=default_negative_prompt,
+        guidance=5,
+        num_steps=35,
+        seed=1,
+        sigma_max=70.0,
+        blur_strength="medium",
+        canny_threshold="medium",
+    ):
+        """
+        advanced parameter check
+        """
+        args = argparse.Namespace()
+
+        if sigma_max < 80 and not input_video_path:
+            raise ValueError("Must have 'input_video' specified if sigma_max < 80")
+
+        # Video and prompt settings
+        args_dict = {}
+        if input_video_path:
+            args_dict["input_video"] = input_video_path
+        if prompt:
+            args_dict["prompt"] = prompt
+        if negative_prompt:
+            args_dict["negative_prompt"] = negative_prompt
+
+        # Generation parameters
+        args_dict["guidance"] = guidance
+        args_dict["num_steps"] = num_steps
+        args_dict["seed"] = seed
+        args_dict["sigma_max"] = sigma_max
+        args_dict["blur_strength"] = blur_strength
+        args_dict["canny_threshold"] = canny_threshold
+
+        self.validate_control_spec(controlnet_specs)
+        args_dict["controlnet_specs"] = controlnet_specs
+        log.info(f"Model parameters: {json.dumps(args_dict, indent=4)}")
+
+        # TODO
+        # if edge_weight > 0 and not input_video:
+        #     raise ValueError("Edge controlnet must have 'input_video' specified if no 'input_control' video specified.")
+
+        # if seg_weight > 0 and not input_video:
+        #     raise ValueError(
+        #         "Segment controlnet must have 'input_video' specified if no 'input_control' video specified."
+        #     )
+        # Regardless whether "control_weight_prompt" is provided (i.e. whether we automatically
+        # generate spatiotemporal control weight binary masks), control_weight is needed to.
+
+        return args_dict
+
+    def parse_and_validate(self, controlnet_specs):
+        args_dict, controlnet_specs_clean = self.extract_params(controlnet_specs)
+        full_dict = self.validate_params(
+            controlnet_specs=controlnet_specs_clean,
+            **args_dict,
+        )
+        return full_dict
+
+    def prune_and_validate(self, controlnet_specs, **kwargs):
+        """
+        Prune the controlnet_specs dictionary to only include valid keys and validate the values.
+        """
+        _, controlnet_specs_clean = self.extract_params(controlnet_specs)
+        full_dict = self.validate_params(
+            controlnet_specs=controlnet_specs_clean,
+            **kwargs,
+        )
+        return full_dict
 
 
 class TransferPipeline:
@@ -56,7 +188,9 @@ class TransferPipeline:
         self,
         num_gpus: int = 1,
         checkpoint_dir: str = "/mnt/pvc/cosmos-transfer1",
+        checkpoint_name=BASE_7B_CHECKPOINT_PATH,
         output_dir: str = "outputs/",
+        hint_keys=hint_keys,
     ):
         self.device_rank = 0
         self.process_group = None
@@ -72,9 +206,12 @@ class TransferPipeline:
             self.process_group = parallel_state.get_context_parallel_group()
             self.device_rank = distributed.get_rank(self.process_group)
 
+        # TODO FIXME: we want to run W/O offloading. therefore we need to give the model at least one control input.
+        self.valid_hint_keys = hint_keys
+        first_key = next(iter(self.valid_hint_keys))
         self.control_inputs = {
-            "vis": {
-                "ckpt_path": os.path.join(checkpoint_dir, default_model_names["vis"]),
+            first_key: {
+                "ckpt_path": os.path.join(checkpoint_dir, default_model_names[first_key]),
                 "control_weight": 0.5,
             },
         }
@@ -85,7 +222,7 @@ class TransferPipeline:
 
         self.pipeline = DiffusionControl2WorldGenerationPipeline(
             checkpoint_dir=checkpoint_dir,
-            checkpoint_name=BASE_7B_CHECKPOINT_PATH,
+            checkpoint_name=checkpoint_name,
             control_inputs=self.control_inputs,
             process_group=self.process_group,
             offload_network=False,
@@ -109,7 +246,7 @@ class TransferPipeline:
 
         config_changed = False
 
-        for hint_key in valid_hint_keys:
+        for hint_key in self.valid_hint_keys:
             if hint_key in controlnet_specs:
                 if hint_key not in self.control_inputs:
                     config_changed = True
@@ -214,92 +351,6 @@ class TransferPipeline:
                 log.info(f"Saved video to {video_save_path}")
                 log.info(f"Saved prompt to {prompt_save_path}")
 
-    @staticmethod
-    def validate_params(
-        controlnet_specs,
-        input_video_path=None,
-        prompt=default_prompt,
-        negative_prompt=default_negative_prompt,
-        guidance=5,
-        num_steps=35,
-        seed=1,
-        sigma_max=70.0,
-        blur_strength="medium",
-        canny_threshold="medium",
-    ):
-        """
-        advanced parameter check
-        """
-        args = argparse.Namespace()
-
-        if sigma_max < 80 and not input_video_path:
-            raise ValueError("Must have 'input_video' specified if sigma_max < 80")
-
-        # Video and prompt settings
-        args_dict = {}
-        if input_video_path:
-            args_dict["input_video"] = input_video_path
-        if prompt:
-            args_dict["prompt"] = prompt
-        if negative_prompt:
-            args_dict["negative_prompt"] = negative_prompt
-
-        # Generation parameters
-        args_dict["guidance"] = guidance
-        args_dict["num_steps"] = num_steps
-        args_dict["seed"] = seed
-        args_dict["sigma_max"] = sigma_max
-        args_dict["blur_strength"] = blur_strength
-        args_dict["canny_threshold"] = canny_threshold
-
-        controlnet_specs_clean = {}
-
-        for hint_key, val in controlnet_specs.items():
-            if hint_key in valid_hint_keys:
-                controlnet_specs_clean[hint_key] = val
-            else:
-                if type(val) == dict:
-                    raise ValueError(f"Invalid hint_key: {hint_key}. Must be one of {valid_hint_keys}")
-                else:
-                    log.warning(
-                        f"parameter '{hint_key}' in controlnet_spec will be ignored. parameter already set by UI."
-                    )
-                    # args_dict[hint_key] = val
-
-        for hint_key, config in controlnet_specs_clean.items():
-            if "control_weight" not in config:
-                log.warning(f"No control weight specified for {hint_key}. Setting to 0.5.")
-                config["control_weight"] = "0.5"
-            else:
-                # Check if control weight is a path or a scalar
-                weight = config["control_weight"]
-                if not isinstance(weight, str) or not weight.endswith(".pt"):
-                    try:
-                        # Try converting to float
-                        scalar_value = float(weight)
-                        if scalar_value < 0:
-                            raise ValueError(f"Control weight for {hint_key} must be non-negative.")
-                    except ValueError:
-                        raise ValueError(
-                            f"Control weight for {hint_key} must be a valid non-negative float or a path to a .pt file."
-                        )
-
-        args_dict["controlnet_specs"] = controlnet_specs_clean
-        log.info(f"Model parameters: {json.dumps(args_dict, indent=4)}")
-
-        # TODO
-        # if edge_weight > 0 and not input_video:
-        #     raise ValueError("Edge controlnet must have 'input_video' specified if no 'input_control' video specified.")
-
-        # if seg_weight > 0 and not input_video:
-        #     raise ValueError(
-        #         "Segment controlnet must have 'input_video' specified if no 'input_control' video specified."
-        #     )
-        # Regardless whether "control_weight_prompt" is provided (i.e. whether we automatically
-        # generate spatiotemporal control weight binary masks), control_weight is needed to.
-
-        return args_dict
-
     def cleanup(self, cfg):
         """Clean up resources"""
         if cfg.num_gpus > 1:
@@ -316,24 +367,80 @@ def get_spec(spec_file):
     return controlnet_specs
 
 
-if __name__ == "__main__":
-    pipeline = TransferPipeline(num_gpus=int(os.environ.get("NUM_GPU", 1)))
-    model_params = TransferPipeline.validate_params(
-        input_video="assets/example1_input_video.mp4",
-        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_depth.json"),
+def create_transfer_pipeline(cfg, create_model=True):
+    log.info(f"Initializing model using factory function {cfg.factory_module}.{cfg.factory_function}")
+
+    pipeline = None
+    if create_model:
+        pipeline = TransferPipeline(
+            num_gpus=int(os.environ.get("WORLD_SIZE", 1)),
+            checkpoint_dir=cfg.checkpoint_dir,
+            output_dir=cfg.output_dir,
+        )
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    validator = TransferValidator(hint_keys=hint_keys)
+    return pipeline, validator
+
+
+def create_transfer_pipeline_AV(cfg, create_model=True):
+    log.info(f"Initializing model using factory function {cfg.factory_module}.{cfg.factory_function}")
+
+    pipeline = None
+    if create_model:
+        pipeline = TransferPipeline(
+            num_gpus=int(os.environ.get("WORLD_SIZE", 1)),
+            checkpoint_dir=cfg.checkpoint_dir,
+            checkpoint_name=BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
+            hint_keys=hint_keys_av,
+            output_dir=cfg.output_dir,
+        )
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    validator = TransferValidator(hint_keys=hint_keys_av)
+    return pipeline, validator
+
+
+def test_AV():
+    pipeline = TransferPipeline(
+        num_gpus=int(os.environ.get("NUM_GPU", 1)),
+        checkpoint_name=BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
+        hint_keys=hint_keys_av,
+    )
+    validator = TransferValidator(hint_keys=hint_keys_av)
+
+    model_params = validator.prune_and_validate(
+        input_video_path="assets/example1_input_video.mp4",
+        controlnet_specs=get_spec("assets/sample_av_hdmap_spec.json"),
     )
     pipeline.infer(model_params)
 
-    model_params = TransferPipeline.validate_params(
-        input_video="assets/example1_input_video.mp4",
+
+def test_base():
+    validator = TransferValidator(hint_keys=hint_keys)
+    model_params = validator.prune_and_validate(
+        input_video_path="assets/example1_input_video.mp4",
+        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_depth.json"),
+    )
+    pipeline = TransferPipeline(num_gpus=int(os.environ.get("NUM_GPU", 1)))
+    pipeline.infer(model_params)
+    model_params = validator.prune_and_validate(
+        input_video_path="assets/example1_input_video.mp4",
         controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_edge.json"),
     )
     pipeline.infer(model_params)
 
     log.info("Inference complete****************************************")
 
-    model_params = TransferPipeline.validate_params(
-        input_video="assets/example1_input_video.mp4",
+    model_params = validator.prune_and_validate(
+        input_video_path="assets/example1_input_video.mp4",
         controlnet_specs=get_spec("assets/inference_cosmos_transfer1_multi_control.json"),
     )
     pipeline.infer(model_params)
+
+
+if __name__ == "__main__":
+    test_base()
+    # test_AV()
