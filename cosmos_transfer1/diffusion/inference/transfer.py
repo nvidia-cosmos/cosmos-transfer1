@@ -38,6 +38,7 @@ from cosmos_transfer1.diffusion.inference.world_generation_pipeline import (
     DistilledControl2WorldGenerationPipeline,
 )
 from cosmos_transfer1.utils import log, misc
+from cosmos_transfer1.utils.combined_gif import create_gif
 from cosmos_transfer1.utils.io import read_prompts_from_file, save_video
 
 torch.enable_grad(False)
@@ -155,6 +156,12 @@ def parse_arguments() -> argparse.Namespace:
         help="Offload prompt upsampler model after inference",
     )
     parser.add_argument("--use_distilled", action="store_true", help="Use distilled ControlNet model variant")
+    parser.add_argument(
+        "--cutoff_frame", type=int, default=-1, help="Cutoff frame between the past and future frames for AV model"
+    )
+    parser.add_argument(
+        "--save_intermediates", action="store_true", help="Save intermediate videos from the diffusion steps"
+    )
 
     parser.add_argument(
         "--benchmark",
@@ -243,6 +250,7 @@ def demo(cfg, control_inputs):
             upsample_prompt=cfg.upsample_prompt,
             offload_prompt_upsampler=cfg.offload_prompt_upsampler,
             process_group=process_group,
+            cutoff_frame=cfg.cutoff_frame,
         )
     else:
         checkpoint = BASE_7B_CHECKPOINT_AV_SAMPLE_PATH if cfg.is_av_sample else BASE_7B_CHECKPOINT_PATH
@@ -266,7 +274,8 @@ def demo(cfg, control_inputs):
             upsample_prompt=cfg.upsample_prompt,
             offload_prompt_upsampler=cfg.offload_prompt_upsampler,
             process_group=process_group,
-        )
+            cutoff_frame=cfg.cutoff_frame,
+    )
 
     if cfg.batch_input_path:
         log.info(f"Reading batch inputs from path: {cfg.batch_input_path}")
@@ -367,8 +376,8 @@ def demo(cfg, control_inputs):
             time_avg = time_sum / (num_repeats - 1)
             log.critical(f"The benchmarked generation time for Cosmos-Transfer1 is {time_avg:.1f} seconds.")
 
-        videos, final_prompts = batch_outputs
-        for i, (video, prompt) in enumerate(zip(videos, final_prompts)):
+        videos, intermediate_videos, final_prompts = batch_outputs
+        for i, (video, intermediate_video, prompt) in enumerate(zip(videos, intermediate_videos, final_prompts)):
             if cfg.batch_input_path:
                 video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{batch_start+i}")
                 video_save_path = os.path.join(video_save_subfolder, "output.mp4")
@@ -387,6 +396,27 @@ def demo(cfg, control_inputs):
                     W=video.shape[2],
                     video_save_quality=5,
                     video_save_path=video_save_path,
+                )
+
+                if cfg.save_intermediates:
+                    for i in range(len(intermediate_video)):
+                        intermediate_video_save_folder = os.path.join(cfg.video_save_folder, cfg.video_save_name)
+                        intermediate_video_save_path = os.path.join(intermediate_video_save_folder, f"intermediate_{i}.mp4")
+                        os.makedirs(intermediate_video_save_folder, exist_ok=True)
+                        save_video(
+                            video=intermediate_videos[i],
+                            fps=cfg.fps,
+                            H=intermediate_videos[i].shape[1],
+                            W=intermediate_videos[i].shape[2],
+                            video_save_quality=5,
+                            video_save_path=intermediate_video_save_path,
+                        )
+                # Create GIF of intermediate videos
+                create_gif(
+                    intermediate_video_save_folder,
+                    os.path.join(intermediate_video_save_folder, "diffusion_intermediates.gif"),
+                    (1080, 720),
+                    10,
                 )
 
                 # Save prompt to text file alongside video

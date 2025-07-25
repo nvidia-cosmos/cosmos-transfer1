@@ -599,6 +599,15 @@ class JointImageVideoSharedJITTokenizer(JointImageVideoTokenizer):
         ), f"video_vae should be an instance of VideoJITVAE, got {type(video_vae)}"
 
     def load_weights(self, vae_dir: str):
+        # Load weights for the image VAE (single-frame inputs) as well as the video VAE.
+        # This ensures that attributes such as `latent_mean` and `latent_std` required
+        # by BasePretrainedImageVAE are properly initialized before the VAE is used.
+
+        # Image VAE (handles T == 1 cases)
+        self.image_vae.register_mean_std(vae_dir)
+        self.image_vae.load_decoder(vae_dir)
+        self.image_vae.load_encoder(vae_dir)
+
         self.video_vae.register_mean_std(vae_dir)
 
         self.video_vae.load_decoder(vae_dir)
