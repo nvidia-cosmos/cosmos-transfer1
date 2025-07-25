@@ -32,7 +32,7 @@ model = None
 
 def create_dummy_pipeline():
     log.info("Creating dummy pipeline for testing")
-    return dummy_pipeline.TransferPipeline(num_gpus=1, output_dir=os.path.join(Config.output_dir, "dummy"))
+    return dummy_pipeline.TransferPipeline(num_gpus=1, output_dir=Config.output_dir)
 
 
 def create_pipeline():
@@ -50,13 +50,6 @@ def create_pipeline():
     return pipeline
 
 
-def get_spec(spec_file):
-    with open(spec_file, "r") as f:
-        controlnet_specs = json.load(f)
-    return controlnet_specs
-
-
-# Event handler
 def infer_wrapper(
     request_text,
 ):
@@ -67,36 +60,22 @@ def infer_wrapper(
         except json.JSONDecodeError as e:
             return None, f"Error parsing request JSON: {e}\nPlease ensure your request is valid JSON."
 
-        # Extract parameters from request
-        input_video = request_data.get("input_video")
-        prompt = request_data.get("prompt", "")
-        negative_prompt = request_data.get("negative_prompt", "")
-        guidance_scale = request_data.get("guidance_scale", 7.0)
-        num_steps = request_data.get("num_steps", 35)
-        seed = request_data.get("seed", 1)
-        sigma_max = request_data.get("sigma_max", 70.0)
-        blur_strength = request_data.get("blur_strength", "medium")
-        canny_threshold = request_data.get("canny_threshold", "medium")
-        controlnet_specs = {}
-        for key in transfer_pipeline.valid_hint_keys:
-            controlnet_specs[key] = request_data.get(key, {})
+        log.info(f"Model parameters: {json.dumps(request_data, indent=4)}")
 
-        if not input_video:
-            return None, "Error: 'input_video' is required in the request"
+        args_dict = {}
+        controlnet_specs = {}
+        # we want to use the default values of the validate function, so don't overwrite with some other defaults
+        for key in request_data:
+            if key in transfer_pipeline.valid_hint_keys:
+                controlnet_specs[key] = request_data[key]
+            else:
+                args_dict[key] = request_data[key]
 
         log.info(f"Using provided controlnet_specs from request: {controlnet_specs}")
 
         args_dict = transfer_pipeline.TransferPipeline.validate_params(
             controlnet_specs=controlnet_specs,
-            input_video=input_video,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            guidance=guidance_scale,
-            num_steps=num_steps,
-            seed=seed,
-            sigma_max=sigma_max,
-            blur_strength=blur_strength,
-            canny_threshold=canny_threshold,
+            **args_dict,
         )
     except ValueError as e:
         return None, f"Error validating parameters: {e}"
@@ -108,7 +87,7 @@ def infer_wrapper(
     if os.path.exists(output_path):
         # Read the generated prompt
         prompt_path = os.path.join(Config.output_dir, "output.txt")
-        final_prompt = prompt
+        final_prompt = args_dict["prompt"]
         if os.path.exists(prompt_path):
             with open(prompt_path, "r", encoding="utf-8") as f:
                 final_prompt = f.read().strip()
@@ -140,16 +119,16 @@ def create_gradio_interface():
                     label="Request (JSON)",
                     value=json.dumps(
                         {
-                            "input_video": "/path/to/your/video.mp4",
+                            "input_video_path": "assets/example1_input_video.mp4",
                             "prompt": "The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution.",
                             "negative_prompt": "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
-                            "guidance_scale": 7.0,
+                            "guidance": 7.0,
                             "num_steps": 35,
                             "seed": 1,
                             "sigma_max": 70.0,
                             "blur_strength": "medium",
                             "canny_threshold": "medium",
-                            **{key: {"control_weight": 0.0} for key in sorted(transfer_pipeline.valid_hint_keys)},
+                            "edge": {"control_weight": 1.0},
                         },
                         indent=2,
                     ),
@@ -162,17 +141,7 @@ def create_gradio_interface():
                     gr.Markdown(
                         """
                     ### Required Fields:
-                    - `input_video` (string): Path to the input video file
-                    
-                    ### Optional Fields:
-                    - `prompt` (string): Text prompt describing the desired output
-                    - `negative_prompt` (string): What to avoid in the output
-                    - `guidance_scale` (float): Guidance scale (1-15, default: 7.0)
-                    - `num_steps` (int): Number of inference steps (10-50, default: 35)
-                    - `seed` (int): Random seed (default: 1)
-                    - `sigma_max` (float): Maximum noise level (0-80, default: 70.0)
-                    - `blur_strength` (string): One of ["very_low", "low", "medium", "high", "very_high"] (default: "medium")
-                    - `canny_threshold` (string): One of ["very_low", "low", "medium", "high", "very_high"] (default: "medium")
+                    At least one of the following controlnet specifications must be provided:
                     - `vis` (object): Vis controlnet (default: {"control_weight": 0.0})
                     - `seg` (object): Segmentation controlnet (default: {"control_weight": 0.0})
                     - `edge` (object): Edge controlnet (default: {"control_weight": 0.0})
@@ -181,15 +150,17 @@ def create_gradio_interface():
                     - `upscale` (object): Upscale controlnet (default: {"control_weight": 0.0})
                     - `hdmap` (object): HDMap controlnet (default: {"control_weight": 0.0})
                     - `lidar` (object): Lidar controlnet (default: {"control_weight": 0.0})
-                    
-                    ### Example:
-                    ```json
-                    {
-                        "input_video": "/mnt/pvc/gradio_outdir/upload_20240115_120000/my_video.mp4",
-                        "prompt": "A beautiful landscape video",
-                        "guidance_scale": 8.5,
-                        "num_steps": 40
-                    }
+
+                    ### Optional Fields:
+                    - `input_video_path` (string): Path to the input video file
+                    - `prompt` (string): Text prompt describing the desired output
+                    - `negative_prompt` (string): What to avoid in the output
+                    - `guidance` (float): Guidance scale (1-15, default: 7.0)
+                    - `num_steps` (int): Number of inference steps (10-50, default: 35)
+                    - `seed` (int): Random seed (default: 1)
+                    - `sigma_max` (float): Maximum noise level (0-80, default: 70.0)
+                    - `blur_strength` (string): One of ["very_low", "low", "medium", "high", "very_high"] (default: "medium")
+                    - `canny_threshold` (string): One of ["very_low", "low", "medium", "high", "very_high"] (default: "medium")
                     ```
                     """
                     )

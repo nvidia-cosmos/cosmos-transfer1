@@ -45,7 +45,8 @@ TODO av support
 
 """
 
-valid_hint_keys = {"vis", "seg", "edge", "depth", "keypoint", "upscale", "hdmap", "lidar"}
+# todo "keypoint" is causing dependency issue
+valid_hint_keys = {"vis", "seg", "edge", "depth", "upscale", "hdmap", "lidar"}
 default_prompt = "The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution."
 default_negative_prompt = "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all."
 
@@ -216,7 +217,7 @@ class TransferPipeline:
     @staticmethod
     def validate_params(
         controlnet_specs,
-        input_video=None,
+        input_video_path=None,
         prompt=default_prompt,
         negative_prompt=default_negative_prompt,
         guidance=5,
@@ -231,13 +232,13 @@ class TransferPipeline:
         """
         args = argparse.Namespace()
 
-        if sigma_max < 80 and not input_video:
+        if sigma_max < 80 and not input_video_path:
             raise ValueError("Must have 'input_video' specified if sigma_max < 80")
 
         # Video and prompt settings
         args_dict = {}
-        if input_video:
-            args_dict["input_video"] = input_video
+        if input_video_path:
+            args_dict["input_video"] = input_video_path
         if prompt:
             args_dict["prompt"] = prompt
         if negative_prompt:
