@@ -134,7 +134,6 @@ class TransferPipeline:
         input_video=None,
         prompt="",
         negative_prompt="",
-        keypoint_weight=0.5,
         guidance=5,
         num_steps=35,
         seed=1,

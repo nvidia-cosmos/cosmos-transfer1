@@ -18,12 +18,13 @@ import torch
 import gc
 import json
 from cosmos_transfer1.utils import log
-from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferPipeline
+from cosmos_transfer1.diffusion.inference import transfer_pipeline
 
-# from cosmos_transfer1.diffusion.inference.dummy_pipeline import TransferPipeline as DummyTransferPipeline
+from cosmos_transfer1.diffusion.inference import dummy_pipeline
 from server.model_server import ModelServer
 from server.deploy_config import Config
 import gradio as gr
+from server import gradio_file_server
 
 
 model = None
@@ -31,10 +32,7 @@ model = None
 
 def create_dummy_pipeline():
     log.info("Creating dummy pipeline for testing")
-    # return DummyTransferPipeline(
-    #     num_gpus=1,
-    #     output_dir=Config.output_dir,
-    # )
+    return dummy_pipeline.TransferPipeline(num_gpus=1, output_dir=os.path.join(Config.output_dir, "dummy"))
 
 
 def create_pipeline():
@@ -42,9 +40,8 @@ def create_pipeline():
 
     world_size = int(os.environ.get("WORLD_SIZE", 1))
 
-    pipeline = TransferPipeline(
+    pipeline = transfer_pipeline.TransferPipeline(
         num_gpus=world_size,
-        checkpoint_dir=Config.checkpoint_dir,
         output_dir=Config.output_dir,
     )
     gc.collect()
@@ -60,28 +57,35 @@ def get_spec(spec_file):
 
 # Event handler
 def infer_wrapper(
-    input_video,
-    prompt,
-    negative_prompt,
-    guidance_scale,
-    num_steps,
-    seed,
-    sigma_max,
-    blur_strength,
-    canny_threshold,
-    json_data,
+    request_text,
 ):
     try:
-        # Use uploaded JSON data if available, otherwise fall back to default
-        if json_data and isinstance(json_data, dict) and json_data:
-            controlnet_specs = json_data
-            log.info("Using uploaded JSON configuration for inference")
-        else:
-            # Fallback to default JSON file
-            controlnet_specs = get_spec("assets/inference_cosmos_transfer1_single_control_edge.json")
-            log.info("Using default JSON configuration for inference")
+        # Parse the request as JSON
+        try:
+            request_data = json.loads(request_text)
+        except json.JSONDecodeError as e:
+            return None, f"Error parsing request JSON: {e}\nPlease ensure your request is valid JSON."
 
-        args_dict = TransferPipeline.validate_params(
+        # Extract parameters from request
+        input_video = request_data.get("input_video")
+        prompt = request_data.get("prompt", "")
+        negative_prompt = request_data.get("negative_prompt", "")
+        guidance_scale = request_data.get("guidance_scale", 7.0)
+        num_steps = request_data.get("num_steps", 35)
+        seed = request_data.get("seed", 1)
+        sigma_max = request_data.get("sigma_max", 70.0)
+        blur_strength = request_data.get("blur_strength", "medium")
+        canny_threshold = request_data.get("canny_threshold", "medium")
+        controlnet_specs = {}
+        for key in transfer_pipeline.valid_hint_keys:
+            controlnet_specs[key] = request_data.get(key, {})
+
+        if not input_video:
+            return None, "Error: 'input_video' is required in the request"
+
+        log.info(f"Using provided controlnet_specs from request: {controlnet_specs}")
+
+        args_dict = transfer_pipeline.TransferPipeline.validate_params(
             controlnet_specs=controlnet_specs,
             input_video=input_video,
             prompt=prompt,
@@ -121,91 +125,82 @@ def create_gradio_interface():
     with gr.Blocks(title="Cosmos-Transfer1 Video Generation", theme=gr.themes.Soft()) as interface:
         gr.Markdown("# Cosmos-Transfer1: World Generation with Adaptive Multimodal Control")
         gr.Markdown("Upload a video and configure controls to generate a new video with the Cosmos-Transfer1 model.")
+
+        with gr.Row():
+            gradio_file_server.file_server_components(Config.uploads_dir, open=False)
+
+        gr.Markdown("---")
         gr.Markdown(f"**Output Directory**: {Config.output_dir}")
 
         with gr.Row():
             with gr.Column(scale=1):
-                # Input controls
-                input_video = gr.Video(
-                    label="Input Video",
-                    height=300,
-                    # Configure file upload settings
+                # Single request input field
+                request_input = gr.Textbox(
+                    label="Request (JSON)",
+                    value=json.dumps(
+                        {
+                            "input_video": "/path/to/your/video.mp4",
+                            "prompt": "The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution.",
+                            "negative_prompt": "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
+                            "guidance_scale": 7.0,
+                            "num_steps": 35,
+                            "seed": 1,
+                            "sigma_max": 70.0,
+                            "blur_strength": "medium",
+                            "canny_threshold": "medium",
+                            **{key: {"control_weight": 0.0} for key in sorted(transfer_pipeline.valid_hint_keys)},
+                        },
+                        indent=2,
+                    ),
+                    lines=20,
                     interactive=True,
                 )
 
-                json_file = gr.File(label="Select JSON File", file_types=[".json"], type="filepath")
-
-                json_content = gr.Textbox(label="JSON Content", lines=10, interactive=False, visible=True)
-
-                json_status = gr.Textbox(
-                    label="JSON Status", value="No JSON file loaded - using default config", interactive=False, lines=1
-                )
-
-                # State to store the parsed JSON data
-                json_data_state = gr.State(value={})
-
-                def load_json_file(file_path):
-                    if file_path is None:
-                        return "", {}, "No JSON file loaded - using default config", False
-                    try:
-                        with open(file_path, "r") as f:
-                            content = f.read()
-
-                        # Parse and format JSON for better readability
-                        import json
-
-                        json_data = json.loads(content)
-                        formatted_content = json.dumps(json_data, indent=2, ensure_ascii=False)
-
-                        # Extract filename for status
-                        import os
-
-                        filename = os.path.basename(file_path)
-                        status_msg = f"✅ JSON loaded successfully: {filename} - Config will be used for inference"
-
-                        return formatted_content, json_data, status_msg
-                    except json.JSONDecodeError as e:
-                        error_msg = f"❌ Invalid JSON format - {str(e)}"
-                        return error_msg, {}, error_msg
-                    except Exception as e:
-                        error_msg = f"❌ Error loading file - {str(e)}"
-                        return error_msg, {}, error_msg
-
-                json_file.change(
-                    fn=load_json_file,
-                    inputs=[json_file],
-                    outputs=[json_content, json_data_state, json_status],
-                )
-
-                prompt = gr.Textbox(
-                    label="Prompt",
-                    value="The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution.",
-                    lines=4,
-                )
-
-                negative_prompt = gr.Textbox(
-                    label="Negative Prompt",
-                    value="The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all.",
-                    lines=3,
-                )
-
-                # Advanced settings
-                with gr.Accordion("Advanced Settings", open=False):
-                    guidance_scale = gr.Slider(1, 15, value=7.0, step=0.5, label="Guidance Scale")
-                    num_steps = gr.Slider(10, 50, value=35, step=1, label="Number of Steps")
-                    seed = gr.Number(value=1, label="Seed", precision=0)
-                    sigma_max = gr.Slider(0, 80, value=70.0, step=1, label="Sigma Max")
-
-                    blur_strength = gr.Dropdown(
-                        choices=["very_low", "low", "medium", "high", "very_high"],
-                        value="medium",
-                        label="Blur Strength",
+                # Help section
+                with gr.Accordion("Request Format Help", open=False):
+                    gr.Markdown(
+                        """
+                    ### Required Fields:
+                    - `input_video` (string): Path to the input video file
+                    
+                    ### Optional Fields:
+                    - `prompt` (string): Text prompt describing the desired output
+                    - `negative_prompt` (string): What to avoid in the output
+                    - `guidance_scale` (float): Guidance scale (1-15, default: 7.0)
+                    - `num_steps` (int): Number of inference steps (10-50, default: 35)
+                    - `seed` (int): Random seed (default: 1)
+                    - `sigma_max` (float): Maximum noise level (0-80, default: 70.0)
+                    - `blur_strength` (string): One of ["very_low", "low", "medium", "high", "very_high"] (default: "medium")
+                    - `canny_threshold` (string): One of ["very_low", "low", "medium", "high", "very_high"] (default: "medium")
+                    - `vis` (object): Vis controlnet (default: {"control_weight": 0.0})
+                    - `seg` (object): Segmentation controlnet (default: {"control_weight": 0.0})
+                    - `edge` (object): Edge controlnet (default: {"control_weight": 0.0})
+                    - `depth` (object): Depth controlnet (default: {"control_weight": 0.0})
+                    - `keypoint` (object): Keypoint controlnet (default: {"control_weight": 0.0})
+                    - `upscale` (object): Upscale controlnet (default: {"control_weight": 0.0})
+                    - `hdmap` (object): HDMap controlnet (default: {"control_weight": 0.0})
+                    - `lidar` (object): Lidar controlnet (default: {"control_weight": 0.0})
+                    
+                    ### Example:
+                    ```json
+                    {
+                        "input_video": "/mnt/pvc/gradio_outdir/upload_20240115_120000/my_video.mp4",
+                        "prompt": "A beautiful landscape video",
+                        "guidance_scale": 8.5,
+                        "num_steps": 40
+                    }
+                    ```
+                    """
                     )
-
-                    canny_threshold = gr.Dropdown(
-                        choices=["very_low", "low", "medium", "high", "very_high"],
-                        value="medium",
-                        label="Canny Threshold",
+                with gr.Accordion("Tips", open=False):
+                    gr.Markdown(
+                        """
+                    - **Use the file browser above** to upload your video and copy its path for the `input_video` field
+                    - **Describe a single, captivating scene**: Focus on one scene to prevent unnecessary shot changes
+                    - **Use detailed prompts**: Rich descriptions lead to better quality outputs  
+                    - **Experiment with control weights**: Different combinations can yield different artistic effects
+                    - **Adjust sigma_max**: Lower values preserve more of the input video structure
+                    """
                     )
 
             with gr.Column(scale=1):
@@ -216,30 +211,8 @@ def create_gradio_interface():
 
         generate_btn.click(
             fn=infer_wrapper,
-            inputs=[
-                input_video,
-                prompt,
-                negative_prompt,
-                guidance_scale,
-                num_steps,
-                seed,
-                sigma_max,
-                blur_strength,
-                canny_threshold,
-                json_data_state,
-            ],
+            inputs=[request_input],
             outputs=[output_video, status_text],
-        )
-
-        # Examples section
-        gr.Markdown("## Tips for better results:")
-        gr.Markdown(
-            """
-        - **Describe a single, captivating scene**: Focus on one scene to prevent unnecessary shot changes
-        - **Use detailed prompts**: Rich descriptions lead to better quality outputs  
-        - **Experiment with control weights**: Different combinations can yield different artistic effects
-        - **Adjust sigma_max**: Lower values preserve more of the input video structure
-        """
         )
 
     return interface
@@ -268,5 +241,5 @@ if __name__ == "__main__":
         debug=True,
         # Configure file upload limits
         max_file_size="500MB",  # Adjust as needed
-        allowed_paths=["/mnt/pvc/gradio_outdir"],  # Allow access to output directory
+        allowed_paths=[Config.output_dir, Config.uploads_dir],
     )
