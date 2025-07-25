@@ -42,6 +42,7 @@ def create_pipeline():
 
     pipeline = transfer_pipeline.TransferPipeline(
         num_gpus=world_size,
+        checkpoint_dir=Config.checkpoint_dir,
         output_dir=Config.output_dir,
     )
     gc.collect()
