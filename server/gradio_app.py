@@ -48,7 +48,8 @@ def infer_wrapper(
 
         pipeline.infer(args_dict)
 
-    except ValueError as e:
+    except Exception as e:
+        log.error(f"Error during inference: {e}")
         return None, f"Error: {e}"
 
     # Check if output was generated

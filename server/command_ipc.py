@@ -68,6 +68,15 @@ class WorkerCommand:
             raise e
 
 
+class WorkerException(Exception):
+    def __init__(self, message, status_dict=None):
+        super().__init__(message)
+        self.details = status_dict or {}
+
+    def __str__(self):
+        return f"{super().__str__()}\nstatus of each worker: {json.dumps(self.details, indent=4)}"
+
+
 class WorkerStatus:
 
     def __init__(self, num_workers: int):
@@ -76,7 +85,7 @@ class WorkerStatus:
     def signal_status(self, rank: int, status: str, message: str = "") -> None:
         status_file = f"/tmp/worker_{rank}_status.json"
 
-        log.info(f"worker {rank} status: {status}, message: {message}")
+        log.debug(f"worker {rank} status: {status}, message: {message}")
         with open(status_file, "w") as f:
             json.dump(
                 {"rank": rank, "status": status, "result": message},
@@ -98,7 +107,7 @@ class WorkerStatus:
                 status = json.load(f)
 
             # remove status file so we can do a blocking wait for next status
-            log.info(f"Worker {rank} removing status file {status_file}")
+            log.debug(f"Worker {rank} removing status file {status_file}")
             os.remove(status_file)
 
             assert os.path.exists(status_file) is False, "status file should be removed after processing"
@@ -118,14 +127,13 @@ class WorkerStatus:
             statuses[rank] = self._get_worker_status(rank, timeout)
 
         for rank, worker_status in statuses.items():
-            # return on first error
-            # TODO we need to report the most severe error
-            # in case of timeout we most likely have a hang. then we should restart the worker?
             if worker_status.get("status") != "success":
-                log.error(f"Worker {rank} failed: {worker_status}")
-                return False
+                log.error(f"Worker {rank} failed: {worker_status.get('status', 'unknown')}")
+                raise WorkerException(
+                    f"Worker {rank} failed with status: {worker_status.get('status', 'unknown')}", statuses
+                )
+
         log.info("All workers reported success")
-        return True
 
     def cleanup(self):
         for rank in range(self.num_workers):

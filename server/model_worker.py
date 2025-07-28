@@ -92,7 +92,7 @@ def worker_main():
                 error_trace = traceback.format_exc()
                 log.error(f"Stack trace:\n{error_trace}")
 
-                worker_status.signal_status(rank, "error", str(e))
+                worker_status.signal_status(rank, "error", str(e) + f"\n{error_trace}")
 
     except KeyboardInterrupt:
         log.info(f"Worker {rank} keyboard interrupt, shutting down gracefully...")

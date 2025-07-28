@@ -22,23 +22,9 @@ from cosmos_transfer1.diffusion.inference.inference_utils import default_model_n
 
 
 class TransferPipeline:
-    def __init__(
-        self, num_gpus: int = 1, checkpoint_dir: str = "/mnt/pvc/cosmos-transfer1", output_dir: str = "outputs/"
-    ):
+    def __init__(self, num_gpus: int = 1, checkpoint_dir: str = "/mnt/pvc/cosmos-transfer1"):
 
-        self.pipeline = None
-        self.preprocessors = None
-        self.device_rank = 0
-        self.process_group = None
-
-        self.output_dir = output_dir
         self.video_save_name = "output"
-        self.control_inputs = {
-            "vis": {
-                "ckpt_path": os.path.join(checkpoint_dir, default_model_names["vis"]),
-                "control_weight": 0.5,
-            },
-        }
 
     def infer(self, args: dict):
         return self.generate(**args)
@@ -55,17 +41,21 @@ class TransferPipeline:
         sigma_max=70.0,
         blur_strength="medium",
         canny_threshold="medium",
+        output_dir="/mnt/pvc/gradio_output",
     ):
 
-        prompt_save_path = os.path.join(self.output_dir, f"{self.video_save_name}.txt")
-
-        # Save prompt to text file alongside video
+        prompt_save_path = os.path.join(output_dir, f"{self.video_save_name}.txt")
+        prompt_save_path = None
         with open(prompt_save_path, "wb") as f:
             f.write(prompt.encode("utf-8"))
 
         log.info(f"Saved prompt to {prompt_save_path}")
 
 
-def create_dummy_pipeline(cfg):
+def create_pipeline(cfg, create_model=True):
     log.info("Creating dummy pipeline for testing")
-    return TransferPipeline(num_gpus=1, output_dir=cfg.output_dir), TransferValidator()
+    model = None
+    if create_model:
+        model = TransferPipeline(num_gpus=cfg.num_gpus, checkpoint_dir=cfg.checkpoint_dir)
+
+    return model, TransferValidator()

@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from cosmos_transfer1.diffusion.inference.dummy_pipeline import create_dummy_pipeline
 from server.model_server import ModelServer
 from cosmos_transfer1.utils import log
 
@@ -33,9 +32,7 @@ def create_pipeline_IPC(cfg):
 
 def create_pipeline(cfg):
 
-    if cfg.num_gpus == 0:
-        pipeline, validator = create_dummy_pipeline(cfg)
-    elif cfg.num_gpus == 1:
+    if cfg.num_gpus == 1:
         pipeline, validator = create_worker_pipeline(cfg)
     else:
         pipeline, validator = create_pipeline_IPC(cfg)

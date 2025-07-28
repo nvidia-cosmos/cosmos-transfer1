@@ -76,8 +76,7 @@ class ModelServer:
             )
 
             log.info("waiting for workers to start...")
-            if not self.worker_status.wait_for_status():
-                raise Exception("Failed to start all workers")
+            self.worker_status.wait_for_status()
 
         except Exception as e:
             log.error(f"Error starting workers: {e}")
@@ -93,7 +92,8 @@ class ModelServer:
         # Wait a bit for graceful shutdown
         time.sleep(2)
 
-        # Terminate process if still running
+        # we sent a shutdown command to all workers,
+        # now we poll the torchrun process as this the only process we've started from this process
         if self.process.poll() is None:
             self.process.terminate()
             self.process.wait(timeout=10)
@@ -107,13 +107,14 @@ class ModelServer:
             self.worker_command.broadcast("inference", args)
 
             log.info("Waiting for tasks to complete...")
-            if not self.worker_status.wait_for_status():
-                log.error(f"inference failed for some workers")
+            self.worker_status.wait_for_status()
 
         except Exception as e:
-            log.error(f"Error during workflow: {e}")
+            # only debug here. client need to handle errors
+            log.debug(f"Error during inference: {e}")
+            raise e
         finally:
-            # todo should the worker consume command and clean up?
+            # just in case a worker was hanging and didn't clean up
             self.worker_command.cleanup()
 
     def __del__(self):
