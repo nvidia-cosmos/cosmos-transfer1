@@ -21,6 +21,7 @@ from cosmos_transfer1.utils import log
 from server.deploy_config import Config
 import gradio as gr
 from server import gradio_file_server
+from server import gradio_log_file_viewer
 from server.model_factory import create_pipeline
 
 
@@ -150,6 +151,8 @@ def create_gradio_interface():
                 output_video = gr.Video(label="Generated Video", height=400)
                 status_text = gr.Textbox(label="Status", lines=5, interactive=False)
                 generate_btn = gr.Button("Generate Video", variant="primary", size="lg")
+
+        gradio_log_file_viewer.log_file_viewer(log_file=Config.log_file, num_lines=100, update_interval=1)
 
         generate_btn.click(
             fn=infer_wrapper,

@@ -20,6 +20,7 @@ class Config:
     checkpoint_dir = os.getenv("CHECKPOINT_DIR", "checkpoints")
     output_dir = os.getenv("OUTPUT_DIR", "outputs/")
     uploads_dir = os.getenv("UPLOADS_DIR", "uploads/")
+    log_file = os.getenv("LOG_FILE", "output.log")
     num_gpus = int(os.environ.get("NUM_GPU", 1))
     factory_module = os.getenv("FACTORY_MODULE", "cosmos_transfer1.diffusion.inference.transfer_pipeline")
     factory_function = os.getenv("FACTORY_FUNCTION", "create_transfer_pipeline")
