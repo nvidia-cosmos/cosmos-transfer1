@@ -303,16 +303,19 @@ def file_server_components(upload_dir: str, open: bool = True) -> gr.Accordion:
         fn=lambda temp_files: _handle_file_upload_event(temp_files, upload_dir),
         inputs=[file_upload],
         outputs=[upload_status, view_file_dropdown],
+        api_name=False,  # UI only component.
     )
     refresh_btn.click(
         fn=lambda dropdown_value: _handle_refresh_button_click_event(dropdown_value, upload_dir),
         inputs=[view_file_dropdown],
         outputs=[view_file_dropdown],
+        api_name=False,  # UI only component.
     )
     view_file_dropdown.select(
         fn=_handle_view_file_dropdown_select_event,
         inputs=[view_file_dropdown],
         outputs=[output_video, output_image, output_json, output_text],
+        api_name=False,  # UI only component.
     )
 
     return top_level_accordion
