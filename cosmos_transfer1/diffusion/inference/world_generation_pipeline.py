@@ -497,18 +497,82 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 t, h, w = latent_hint.shape[-3:]
                 data_batch_i["control_weight"] = resize_control_weight_map(control_weight_t, (t, h // 2, w // 2))
 
-            if i_clip == 0:
+            # ------------------------------------------------------------
+            # Determine how many conditioning frames to use and where to
+            # fetch them from.  Two possible situations:
+            #   1) i_clip == 0 **and** we already supplied an RGB context
+            #      via `input_video` (rolling-window scenario)  → use the
+            #      *last* `self.num_input_frames` frames from that context.
+            #   2) Subsequent clips (i_clip > 0)  → use `prev_frames`, as
+            #      in the original implementation.
+            #   3) No conditioning requested (self.num_input_frames == 0)
+            #      → fall back to the original zero-latent behaviour.
+            # ------------------------------------------------------------
+
+            if self.num_input_frames == 0:
+                # No latent overlap requested – keep original behaviour
                 num_input_frames = 0
                 latent_tmp = latent_hint if latent_hint.ndim == 5 else latent_hint[:, 0]
                 condition_latent = torch.zeros_like(latent_tmp)
-            else:
+
+            elif i_clip == 0:
+                # First clip in this call.  If an RGB context tensor was
+                # supplied (rolling-window case) we use its trailing
+                # `num_input_frames` frames as conditioning.  Otherwise we
+                # fall back to zero-latent (same as the num_input_frames==0
+                # branch) so that single-clip generation without an
+                # input-video still works.
+
+                if input_video is not None and self.num_input_frames > 0:
+                    num_input_frames = self.num_input_frames
+
+                    chunk_len = self.model.tokenizer.pixel_chunk_duration  # typically 121
+
+                    # Use the *original* un-padded tensor to validate that
+                    # the caller supplied enough real frames for the requested overlap.
+                    _T_raw = input_video_tensor.shape[1]
+                    assert _T_raw >= self.num_input_frames, (
+                        f"input_video_tensor has {_T_raw} frame(s) but at least "
+                        f"{self.num_input_frames} are required to build conditioning."
+                    )
+
+                    # Use the RGB tensor's own shape so that the channel count
+                    # matches the true number of color channels (usually 3) and
+                    # not the channel count of the *control* tensor which might
+                    # be larger when multi-control is enabled.
+                    B_rgb, C_rgb, _T_pad, H, W = input_video.shape  # C_rgb is typically 3
+                    cond_src = input_video.new_zeros((B_rgb, C_rgb, chunk_len, H, W)).cuda()
+                    # Take the *last* `num_input_frames` from the original, un-padded
+                    # context clip.  The first `_T_raw` slots in `input_video` hold the
+                    # genuine frames; everything beyond `_T_raw` are duplicates that
+                    # `get_ctrl_batch` appended to reach `num_video_frames` (121).  By
+                    # slicing from `_T_raw - num_input_frames` we guarantee that we
+                    # never pick up any of those duplicates, even if the caller
+                    # supplied more than `num_input_frames` real frames.
+                    start_idx = _T_raw - self.num_input_frames
+                    end_idx = _T_raw  # exclusive
+                    cond_frames = input_video[:, :, start_idx:end_idx].cuda()  # [-1,1]
+                    cond_src[:, :, : self.num_input_frames] = cond_frames
+
+                    condition_latent = self.model.encode(cond_src).contiguous()
+                else:
+                    # No input video available – behave like num_input_frames == 0
+                    num_input_frames = 0
+                    latent_tmp = latent_hint if latent_hint.ndim == 5 else latent_hint[:, 0]
+                    condition_latent = torch.zeros_like(latent_tmp)
+
+            else:  # i_clip > 0
                 num_input_frames = self.num_input_frames
-                prev_frames = split_video_into_patches(prev_frames, control_input.shape[-2], control_input.shape[-1])
-                condition_latent = []
+                prev_frames = split_video_into_patches(
+                    prev_frames, control_input.shape[-2], control_input.shape[-1]
+                )
+                condition_latent_list = []
                 for b in range(B):
-                    input_frames = prev_frames[b : b + 1].cuda().bfloat16() / 255.0 * 2 - 1
-                    condition_latent += [self.model.encode(input_frames).contiguous()]
-                condition_latent = torch.cat(condition_latent)
+                    input_frames = (
+                        prev_frames[b : b + 1].cuda().bfloat16() / 255.0 * 2 - 1
+                    )
+                    condition_latent_list.append(self.model.encode(input_frames).contiguous())
+                condition_latent = torch.cat(condition_latent_list)
 
             # Generate video frames
             latents, intermediates = generate_world_from_control(
