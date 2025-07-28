@@ -441,7 +441,8 @@ def get_ctrl_batch(
 
             latent_sample = model.encode(input_video_bcthw).contiguous()
             print(f">>>>>>>>>> latent_sample shape: {latent_sample.shape}")
-            data_batch["input_video"][:, :, :latent_cutoff_frame, :, :] = 0  # mask latent region
+            # TODO: masking or no masking?
+            #data_batch["input_video"][:, :, :latent_cutoff_frame, :, :] = 0  # mask latent region
 
             data_batch["guided_image"] = latent_sample
             guided_mask = torch.zeros_like(latent_sample)
