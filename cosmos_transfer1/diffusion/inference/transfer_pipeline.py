@@ -54,7 +54,7 @@ default_negative_prompt = "The video captures a game playing, with bad crappy gr
 """
 class validates parameters which can be in from of regular variables or in the form of a controlnet_specs dictionary.
 This is complex enough to warrant a separate class:
-Eventually we want to extend this python validators or something schema based.
+Eventually we want to extend this to python validators or a schema based class.
 Also we want to module test this class separately w/o the complexity of the actual pipeline.
 """
 
@@ -184,7 +184,40 @@ class TransferValidator:
         return full_dict
 
 
-class TransferPipeline:
+"""
+This class defines the interface for the worker pipeline:
+The model_server+model_worker expect a pipeline
+- with a __init__ that loads the checkpoints ahead of time before inference is called
+- with a method `infer(args: dict)`.
+"""
+
+
+class WorkerPipeline:
+    def __init__(self):
+
+        self.video_save_name = "output"
+
+    def infer(self, args: dict):
+        output_dir = args.get("output_dir", "/mnt/pvc/gradio_output")
+        prompt = args.get("prompt", "")
+        prompt_save_path = os.path.join(output_dir, f"{self.video_save_name}.txt")
+        prompt_save_path = None
+        with open(prompt_save_path, "wb") as f:
+            f.write(prompt.encode("utf-8"))
+
+        log.info(f"Saved prompt to {prompt_save_path}")
+
+
+def create_test_pipeline(cfg, create_model=True):
+    log.info("Creating dummy pipeline for testing")
+    model = None
+    if create_model:
+        model = WorkerPipeline(num_gpus=cfg.num_gpus, checkpoint_dir=cfg.checkpoint_dir)
+
+    return model, TransferValidator()
+
+
+class TransferPipeline(WorkerPipeline):
     def __init__(
         self,
         num_gpus: int = 1,
@@ -401,7 +434,7 @@ def create_transfer_pipeline_AV(cfg, create_model=True):
     return pipeline, validator
 
 
-def test_AV():
+def test_transfer_AV():
     pipeline = TransferPipeline(
         num_gpus=int(os.environ.get("NUM_GPU", 1)),
         checkpoint_name=BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
@@ -410,13 +443,14 @@ def test_AV():
     validator = TransferValidator(hint_keys=hint_keys_av)
 
     model_params = validator.prune_and_validate(
-        input_video_path="assets/example1_input_video.mp4",
-        controlnet_specs=get_spec("assets/sample_av_hdmap_spec.json"),
+        sigma_max=80,
+        controlnet_specs=get_spec("assets/sample_av_multi_control_spec.json"),
     )
+
     pipeline.infer(model_params)
 
 
-def test_base():
+def test_transfer():
     validator = TransferValidator(hint_keys=hint_keys)
     model_params = validator.prune_and_validate(
         input_video_path="assets/example1_input_video.mp4",
@@ -440,5 +474,5 @@ def test_base():
 
 
 if __name__ == "__main__":
-    test_base()
-    # test_AV()
+    # test_transfer()
+    test_transfer_AV()

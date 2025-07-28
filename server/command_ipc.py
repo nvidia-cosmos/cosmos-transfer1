@@ -37,7 +37,7 @@ class WorkerCommand:
         with open(command_file, "w") as f:
             json.dump(command_data, f)
 
-        log.info(f"Sent command '{command}' to worker {rank}")
+        log.debug(f"Sent command '{command}' to worker {rank}")
 
     def cleanup(self):
         for rank in range(self.num_workers):
@@ -47,14 +47,14 @@ class WorkerCommand:
 
     # asynchronous command to all workers
     def broadcast(self, task_name: str, task_params: Dict[str, Any]):
-        log.info(f"Broadcasting task '{task_name}' to all workers...")
+        log.debug(f"Broadcasting task '{task_name}' to all workers...")
 
         for rank in range(self.num_workers):
             self._send_command_to_worker(rank, task_name, task_params)
 
     def wait_for_command(self, rank: int) -> Optional[Dict[str, Any]]:
         command_file = f"/tmp/worker_{rank}_commands.json"
-        log.info(f"worker {rank}: Waiting for command file {command_file}")
+        log.debug(f"worker {rank}: Waiting for command file {command_file}")
         while not os.path.exists(command_file):
             time.sleep(0.5)
 
@@ -133,7 +133,7 @@ class WorkerStatus:
                     f"Worker {rank} failed with status: {worker_status.get('status', 'unknown')}", statuses
                 )
 
-        log.info("All workers reported success")
+        log.debug("All workers reported success")
 
     def cleanup(self):
         for rank in range(self.num_workers):
