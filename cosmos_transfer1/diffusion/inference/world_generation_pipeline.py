@@ -617,8 +617,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             #      → fall back to the original zero-latent behaviour.
             # ------------------------------------------------------------
 
-            if self.num_input_frames == 0:
-                # No latent overlap requested – keep original behaviour
+            if self.num_input_frames == 0 or (i_clip == 0 and input_video is None):
+                # No latent overlap requested or first clip and no input video
                 num_input_frames = 0
                 latent_tmp = latent_hint if latent_hint.ndim == 5 else latent_hint[:, 0]
                 condition_latent = torch.zeros_like(latent_tmp)
@@ -663,11 +663,6 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                     cond_src[:, :, : self.num_input_frames] = cond_frames
 
                     condition_latent = self.model.encode(cond_src).contiguous()
-                else:
-                    # No input video available – behave like num_input_frames == 0
-                    num_input_frames = 0
-                    latent_tmp = latent_hint if latent_hint.ndim == 5 else latent_hint[:, 0]
-                    condition_latent = torch.zeros_like(latent_tmp)
 
             else:  # i_clip > 0
                 num_input_frames = self.num_input_frames
