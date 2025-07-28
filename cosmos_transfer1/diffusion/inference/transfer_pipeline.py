@@ -201,7 +201,6 @@ class WorkerPipeline:
         output_dir = args.get("output_dir", "/mnt/pvc/gradio_output")
         prompt = args.get("prompt", "")
         prompt_save_path = os.path.join(output_dir, f"{self.video_save_name}.txt")
-        prompt_save_path = None
         with open(prompt_save_path, "wb") as f:
             f.write(prompt.encode("utf-8"))
 
@@ -212,7 +211,7 @@ def create_test_pipeline(cfg, create_model=True):
     log.info("Creating dummy pipeline for testing")
     model = None
     if create_model:
-        model = WorkerPipeline(num_gpus=cfg.num_gpus, checkpoint_dir=cfg.checkpoint_dir)
+        model = WorkerPipeline()
 
     return model, TransferValidator()
 

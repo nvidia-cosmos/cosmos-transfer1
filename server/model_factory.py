@@ -24,17 +24,12 @@ def create_worker_pipeline(cfg, create_model=True):
     return factory_function(cfg, create_model=create_model)
 
 
-def create_pipeline_IPC(cfg):
-    pipeline = ModelServer(num_workers=cfg.num_gpus)
-    _, validator = create_worker_pipeline(cfg, create_model=False)
-    return pipeline, validator
-
-
 def create_pipeline(cfg):
 
     if cfg.num_gpus == 1:
         pipeline, validator = create_worker_pipeline(cfg)
     else:
-        pipeline, validator = create_pipeline_IPC(cfg)
+        pipeline = ModelServer(num_workers=cfg.num_gpus)
+        _, validator = create_worker_pipeline(cfg, create_model=False)
 
     return pipeline, validator
