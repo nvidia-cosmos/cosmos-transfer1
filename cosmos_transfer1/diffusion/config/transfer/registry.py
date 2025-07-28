@@ -25,7 +25,6 @@ from cosmos_transfer1.diffusion.config.transfer.conditioner import (
 from cosmos_transfer1.diffusion.config.transfer.net_ctrl import (
     FADITV2EncoderConfig,
     FADITV2MultiCamEncoderConfig,
-    DebugDITEncoderConfig,
 )
 
 
@@ -38,7 +37,6 @@ def register_experiment_ctrlnet(cs):
     # in cosmos_transfer1/diffusion/config/registry.py. Isn't an error but could be confusing.
     cs.store(group="net_ctrl", package="model.net_ctrl", name="faditv2_7b", node=FADITV2EncoderConfig)
     cs.store(group="net_ctrl", package="model.net_ctrl", name="faditv2_7b_mv", node=FADITV2MultiCamEncoderConfig)
-    cs.store(group="net_ctrl", package="model.net_ctrl", name="tiny_fa", node=DebugDITEncoderConfig)
 
     cs.store(group="conditioner", package="model.conditioner", name="ctrlnet", node=BaseVideoConditionerWithCtrlConfig)
     cs.store(

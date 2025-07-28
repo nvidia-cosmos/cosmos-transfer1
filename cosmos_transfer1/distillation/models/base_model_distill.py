@@ -102,6 +102,9 @@ class BaseDistillationMixin(DiffusionModel, ABC):
             model_dict: The model dictionary containing the base model in control net setting
         """
         log.info("start loading pretrained base model to net.")
+        if self.config.base_load_from is None:
+            log.warning("base_load_from is not set, skipping loading pretrained base model to net.")
+            return
         checkpoint_path = self.config.base_load_from["load_path"]
         load_from_tp_checkpoint = False
 

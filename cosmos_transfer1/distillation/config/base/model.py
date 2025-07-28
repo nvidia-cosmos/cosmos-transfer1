@@ -34,7 +34,7 @@ class FSDPConfig:
 
 @attrs.define(slots=False)
 class DistillModelConfig:
-    vae: LazyDict = None
+    tokenizer: LazyDict = None
     conditioner: LazyDict = None
     net: LazyDict = None
     teacher_net_name: str = "net"  # Pointer to config property to base module on

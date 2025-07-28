@@ -20,7 +20,7 @@ from cosmos_transfer1.distillation.models.model_dmd2 import DMD2DistillCtrlModel
 
 """
 Sample command to run the debug experiment:
-torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation.train -- experiment=debug_local_ddp trainer.max_iter=5
+torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation.train --dryrun --config=cosmos_transfer1/distillation/config/config_base_dmd2.py -- experiment=debug_local_ddp trainer.max_iter=5 trainer.logging_iter=1
 """
 
 # ------------------------------------------------------
@@ -28,8 +28,8 @@ torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation
 
 DEBUG_LOCAL_DDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill_data_loader"},
-        {"override /data_val": "mock_distill_data_loader"},
+        {"override /data_train": "mock_distill"},
+        {"override /data_val": "mock_distill"},
         {"override /net": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /conditioner": "add_fps_image_size_padding_mask"},
@@ -63,8 +63,8 @@ DEBUG_LOCAL_DDP_EXP = dict(
 
 DEBUG_LOCAL_CP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill_data_loader"},
-        {"override /data_val": "mock_distill_data_loader"},
+        {"override /data_train": "mock_distill"},
+        {"override /data_val": "mock_distill"},
         {"override /net": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /conditioner": "add_fps_image_size_padding_mask"},
@@ -95,8 +95,8 @@ DEBUG_LOCAL_CP_EXP = dict(
 
 DEBUG_LOCAL_FSDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill_data_loader"},
-        {"override /data_val": "mock_distill_data_loader"},
+        {"override /data_train": "mock_distill"},
+        {"override /data_val": "mock_distill"},
         {"override /net": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /callbacks": ["basic"]},
@@ -137,8 +137,8 @@ DEBUG_LOCAL_FSDP_EXP = dict(
 
 DEBUG_LOCAL_CP_FSDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill_data_loader"},
-        {"override /data_val": "mock_distill_data_loader"},
+        {"override /data_train": "mock_distill"},
+        {"override /data_val": "mock_distill"},
         {"override /net": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /callbacks": ["basic"]},
@@ -179,8 +179,8 @@ DEBUG_LOCAL_CP_FSDP_EXP = dict(
 
 DEBUG_CTRLNET_LOCAL_DDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill_ctrlnet_data_loader"},
-        {"override /data_val": "mock_distill_ctrlnet_data_loader"},
+        {"override /data_train": "mock_ctrl_distill"},
+        {"override /data_val": "mock_ctrl_distill"},
         {"override /net": "tiny_fa"},
         {"override /net_ctrl": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},
@@ -226,8 +226,8 @@ DEBUG_CTRLNET_LOCAL_DDP_EXP = dict(
 
 DEBUG_CTRLNET_LOCAL_CP_FSDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill_ctrlnet_data_loader"},
-        {"override /data_val": "mock_distill_ctrlnet_data_loader"},
+        {"override /data_train": "mock_ctrl_distill"},
+        {"override /data_val": "mock_ctrl_distill"},
         {"override /net": "tiny_fa"},
         {"override /net_ctrl": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},

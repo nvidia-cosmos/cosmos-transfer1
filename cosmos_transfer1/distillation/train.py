@@ -34,15 +34,9 @@ if TYPE_CHECKING:
     from cosmos_transfer1.distillation.models.base_model_distill import BaseDistillationModel
 
 """
-The training entry script for the Cosmos nano diffusion distillation project. Works for both DDP and FSDP training.
+The training entry script for distillation. Works for both DDP and FSDP training.
 Due to the new FSDP implementation for distillation training, the `config.model_obj` does not take `fsdp_checkpointer`
-as an attribute (different from `train.py` in `edify_image/v4`).
-
-Example usage:
-    # launch ddp
-    PYTHONPATH=$(pwd) torchrun --nproc_per_node=2 --master_port=12341 projects/cosmos/nano/v1/train.py -- experiment=debug_local_basic_cb_ddp trainer.max_iter=5
-    # launch fsdp
-    PYTHONPATH=$(pwd) torchrun --nproc_per_node=2 --master_port=12341 projects/cosmos/nano/v1/train.py -- experiment=debug_local_cp_fsdp
+as an attribute, which differs from `cosmos_transfer1/diffusion/training/train.py`.
 """
 
 
@@ -88,7 +82,7 @@ def launch(config: Config, args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Training")
-    parser.add_argument("--config", default="projects.cosmos.nano.v1.config.config", help="Path to the config file")
+    parser.add_argument("--config", default="cosmos_transfer1/distillation/config/config_ctrl_dmd2.py", help="Path to the config file")
     parser.add_argument(
         "opts",
         help="""

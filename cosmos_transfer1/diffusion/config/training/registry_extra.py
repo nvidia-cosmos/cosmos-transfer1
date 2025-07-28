@@ -24,7 +24,10 @@ from hydra.core.config_store import ConfigStore
 import cosmos_transfer1.diffusion.config.training.registry as base_training_registry
 from cosmos_transfer1.diffusion.config.base.data import register_data_ctrlnet
 from cosmos_transfer1.diffusion.config.registry import register_conditioner
-from cosmos_transfer1.diffusion.config.training.tokenizer import get_cosmos_diffusion_tokenizer_comp8x8x8
+from cosmos_transfer1.diffusion.config.training.tokenizer import (
+    get_cosmos_diffusion_tokenizer_comp8x8x8,
+    DebugTokenizerConfig,
+)
 from cosmos_transfer1.diffusion.config.transfer.conditioner import (
     CTRL_HINT_KEYS,
     BaseVideoConditionerWithCtrlConfig,
@@ -63,6 +66,13 @@ FADITV2ConfigTrain: LazyDict = L(GeneralDIT)(
     legacy_patch_emb=False,
 )
 
+DebugDITConfigTrain: LazyDict = copy.deepcopy(FADITV2ConfigTrain)
+DebugDITConfigTrain.patch_spatial = 2
+DebugDITConfigTrain.patch_temporal = 1
+DebugDITConfigTrain.model_channels = 128 * 2
+DebugDITConfigTrain.num_blocks = 4
+DebugDITConfigTrain.num_heads = 2
+
 num_blocks = FADITV2ConfigTrain["num_blocks"]
 FADITV2EncoderConfigTrain = copy.deepcopy(FADITV2ConfigTrain)
 FADITV2EncoderConfigTrain["_target_"] = GeneralDITEncoder
@@ -73,6 +83,10 @@ FADITV2MultiCamEncoderConfig = copy.deepcopy(FADITV2ConfigTrain)
 FADITV2MultiCamEncoderConfig["_target_"] = GeneralDITMulticamEncoder
 FADITV2MultiCamEncoderConfig["layer_mask"] = [True if i > num_blocks // 2 else False for i in range(num_blocks)]
 
+num_blocks = DebugDITConfigTrain["num_blocks"]
+DebugDITEncoderConfigTrain = copy.deepcopy(DebugDITConfigTrain)
+DebugDITEncoderConfigTrain["_target_"] = GeneralDITEncoder
+DebugDITEncoderConfigTrain["layer_mask"] = [True if i > 2 else False for i in range(num_blocks)]
 
 def register_net_train(cs):
     cs.store(
@@ -81,8 +95,16 @@ def register_net_train(cs):
         name="faditv2_7b",
         node=FADITV2ConfigTrain,
     )
+    cs.store(
+        group="net",
+        package="model.net",
+        name="tiny_fa",
+        node=DebugDITConfigTrain,
+    )
+
     cs.store(group="net_ctrl", package="model.net_ctrl", name="faditv2_7b", node=FADITV2EncoderConfigTrain)
     cs.store(group="net_ctrl", package="model.net_ctrl", name="faditv2_sv2mv", node=FADITV2MultiCamEncoderConfig)
+    cs.store(group="net_ctrl", package="model.net_ctrl", name="tiny_fa", node=DebugDITEncoderConfigTrain)
 
 
 def register_conditioner_ctrlnet(cs):
@@ -113,6 +135,7 @@ def register_tokenizer(cs):
         name="cosmos_diffusion_tokenizer_res720_comp8x8x8_t121_ver092624",
         node=get_cosmos_diffusion_tokenizer_comp8x8x8(resolution="720", chunk_duration=121),
     )
+    cs.store(group="tokenizer", package="model.tokenizer", name="debug_tokenizer", node=DebugTokenizerConfig)
 
 
 def register_configs():

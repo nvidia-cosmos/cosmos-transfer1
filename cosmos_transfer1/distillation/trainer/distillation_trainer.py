@@ -28,7 +28,7 @@ from cosmos_transfer1.distillation.utils import fsdp_distill
 
 
 class Trainer(BaseTrainer):
-    """The trainer class of Cosmos-nano for diffusion acceleration training.
+    """The trainer class for diffusion step distillation.
 
     It contains the basic functionality for model training (particularly suited for large-scale training),
     including data parallel (DDP/FSDP), mixed-precision training (fp16/bf16).
@@ -50,9 +50,8 @@ class Trainer(BaseTrainer):
         """The training function.
 
         Args:
+            args (argparse.Namespace): The arguments passed to the training script.
             model (BaseDistillationModel): The video distillation model.
-            dataloader_train (torch.utils.data.DataLoader): The training data loader.
-            dataloader_val (torch.utils.data.DataLoader): The validation data loader.
         """
         model.on_train_start(self.config.trainer.memory_format)
 
@@ -94,13 +93,11 @@ class Trainer(BaseTrainer):
         if self.config.trainer.run_validation and iteration == 0:
             self.validate(model, dataloader_val, iteration=iteration)
         _end_training = False
-        self.callbacks.on_before_dataloading(iteration)
         while True:
             dataloader_train_iter = iter(dataloader_train)
             while True:
-                with self.straggler_detector.profile_section(
-                    "dataloading", self.config.trainer.straggler_detection.analyze_dataloading, profile_cuda=False
-                ):
+                self.callbacks.on_before_dataloading(iteration)
+                with self.training_timer("dataloader_train"):
                     try:
                         data_batch = next(dataloader_train_iter)
                     except StopIteration:
@@ -114,7 +111,6 @@ class Trainer(BaseTrainer):
                 data_batch = misc.to(data_batch, device="cuda")
                 # The actual training step.
                 self.callbacks.on_training_step_start(model, data_batch, iteration=iteration)
-                self.callbacks.on_training_step_batch_start(model, data_batch, iteration=iteration)
                 if not model.training:
                     model_ddp.train()
                 assert model_ddp.training, "model_ddp is not in training mode."
@@ -126,7 +122,6 @@ class Trainer(BaseTrainer):
                     iteration=iteration,
                     grad_accum_iter=grad_accum_iter,
                 )
-                self.callbacks.on_training_step_batch_end(model, data_batch, output_batch, loss, iteration=iteration)
                 # If the gradients are still being accumulated, continue to load the next training batch.
                 if grad_accum_iter != 0:
                     continue
@@ -141,10 +136,8 @@ class Trainer(BaseTrainer):
                     self.checkpointer.save(
                         model, model.optimizer_dict, model.scheduler_dict, grad_scaler, iteration=iteration
                     )
-
+                # This iteration is successful; reset the timeout signal.
                 signal.alarm(self.config.trainer.timeout_period)
-                self.straggler_detector.generate_report(iteration)
-                self.callbacks.on_before_dataloading(iteration)
             if _end_training:
                 break
         log.success("Done with training.")
@@ -189,34 +182,25 @@ class Trainer(BaseTrainer):
         with distributed.ddp_sync_grad(model_ddp, grad_accum_iter == self.config.trainer.grad_accum_iter - 1):
             self.callbacks.on_before_forward(iteration=iteration)
             with self.training_timer("forward"):
-                with self.straggler_detector.profile_section(
-                    "fwd", self.config.trainer.straggler_detection.analyze_forward
-                ):
-                    output_batch, loss = model_ddp.training_step(data, iteration)
+                output_batch, loss = model_ddp.training_step(data, iteration)
             self.callbacks.on_after_forward(iteration=iteration)
             self.callbacks.on_before_backward(model_ddp, loss, iteration=iteration)
             with self.training_timer("backward"):
-                with self.straggler_detector.profile_section(
-                    "bwd", self.config.trainer.straggler_detection.analyze_backward
-                ):
-                    loss_scaled = grad_scaler.scale(loss / self.config.trainer.grad_accum_iter)
-                    loss_scaled.backward()
-                    model.on_after_backward()
+                loss_scaled = grad_scaler.scale(loss / self.config.trainer.grad_accum_iter)
+                loss_scaled.backward()
+                model.on_after_backward()
             self.callbacks.on_after_backward(model_ddp, iteration=iteration)
         grad_accum_iter += 1
         if grad_accum_iter == self.config.trainer.grad_accum_iter:
             with self.training_timer("optimizer_step"):
-                with self.straggler_detector.profile_section(
-                    "opt", self.config.trainer.straggler_detection.analyze_optimizer
-                ):
-                    self.callbacks.on_before_optimizer_step(
-                        model_ddp,
-                        model.optimizer_dict["net"],  # back-compatibility
-                        model.scheduler_dict["net"],  # back-compatibility
-                        grad_scaler,
-                        iteration=iteration,
-                    )
-                    model.optimizers_schedulers_step(grad_scaler, iteration=iteration)
-                    model.optimizers_zero_grad(iteration=iteration)
+                self.callbacks.on_before_optimizer_step(
+                    model_ddp,
+                    model.optimizer_dict["net"],  # back-compatibility
+                    model.scheduler_dict["net"],  # back-compatibility
+                    grad_scaler,
+                    iteration=iteration,
+                )
+                model.optimizers_schedulers_step(grad_scaler, iteration=iteration)
+                model.optimizers_zero_grad(iteration=iteration)
             grad_accum_iter = 0
         return output_batch, loss, grad_accum_iter

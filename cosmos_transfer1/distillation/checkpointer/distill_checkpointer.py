@@ -150,7 +150,7 @@ class DistillCheckpointer(Checkpointer):
             log.info("Training from scratch.")
         torch.cuda.empty_cache()
 
-        self.callbacks.on_load_checkpoint_end(model, iteration=iteration, checkpoint_path=checkpoint_path)
+        self.callbacks.on_load_checkpoint_end(model)
 
         return iteration
 

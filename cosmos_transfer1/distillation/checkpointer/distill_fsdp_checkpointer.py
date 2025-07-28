@@ -349,7 +349,7 @@ class DistillFSDPCheckpointer(AbstractCheckpointer):
             log.info("Training from scratch.")
         torch.cuda.empty_cache()
 
-        self.callbacks.on_load_checkpoint_end(model, iteration=iteration, checkpoint_path=checkpoint_path)
+        self.callbacks.on_load_checkpoint_end(model)
         return iteration
 
     def _async_with_pinned_memory(self, checkpoint_file: str, state_dict: Dict[str, Any]) -> None:

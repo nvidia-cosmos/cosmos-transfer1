@@ -15,11 +15,16 @@
 
 from hydra.core.config_store import ConfigStore
 
-from cosmos_transfer1.diffusion.config.transfer.registry import register_experiment_ctrlnet
-from cosmos_transfer1.diffusion.config.registry import register_net, register_conditioner, register_tokenizer
-from cosmos_transfer1.diffusion.config.training.registry import register_checkpoint_credential
 from cosmos_transfer1.diffusion.config.base.data import register_data_ctrlnet
+from cosmos_transfer1.diffusion.config.registry import register_conditioner
 from cosmos_transfer1.diffusion.config.training.callbacks import BASIC_CALLBACKS
+from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS
+from cosmos_transfer1.diffusion.config.training.registry import register_checkpoint_credential
+from cosmos_transfer1.diffusion.config.training.registry_extra import (
+    register_net_train,
+    register_conditioner_ctrlnet,
+    register_tokenizer,
+)
 from cosmos_transfer1.distillation.config.base.checkpoint import DISTILL_CHECKPOINTER, DISTILL_FSDP_CHECKPOINTER
 from cosmos_transfer1.distillation.config.base.discriminator import (
     CONV3D_POOL_FADITV2_Config,
@@ -46,7 +51,7 @@ def register_fsdp(cs):
     cs.store(group="fsdp", package="_global_", name="hybrid", node=HYBRID_FSDP_CONFIG)
 
 
-def register_experiment(cs):
+def register_debug_experiments(cs):
     cs.store(
         group="experiment",
         package="_global_",
@@ -94,6 +99,13 @@ def register_mock_data(cs):
     cs.store(
         group="data_train",
         package="dataloader_train",
+        name="mock_ctrl_distill",
+        node=MOCK_DISTILL_CTRLNET_DATA_LOADER,
+    )
+    cs.store(group="data_val", package="dataloader_val", name="mock_distill", node=MOCK_DISTILL_DATA_LOADER)
+    cs.store(
+        group="data_val",
+        package="dataloader_val",
         name="mock_ctrl_distill",
         node=MOCK_DISTILL_CTRLNET_DATA_LOADER,
     )
@@ -154,19 +166,37 @@ def register_schedulers(cs):
 def register_configs():
     cs = ConfigStore.instance()
 
-    register_net(cs)
+    # register all the basic configs: net, conditioner, tokenizer, checkpoint
+    register_net_train(cs)
     register_conditioner(cs)
+    register_conditioner_ctrlnet(cs)
     register_tokenizer(cs)
-
-    register_fsdp(cs)
-    register_callbacks(cs)
     register_checkpoint_credential(cs)
+
+    # register distillation training configs
+    register_callbacks(cs)
     register_checkpointer(cs)
+    register_debug_experiments(cs)
     register_discriminator(cs)
+    register_fsdp(cs)
+    register_mock_data(cs)
     register_optimizers(cs)
     register_schedulers(cs)
-    register_experiment(cs)
-    register_mock_data(cs)
 
+    # register ctrlnet data
     register_data_ctrlnet(cs)
-    register_experiment_ctrlnet(cs)
+
+    # register ctrlnet hint keys
+    for hint_key in CTRL_HINT_KEYS:
+        cs.store(
+            group="hint_key",
+            package="model",
+            name=hint_key,
+            node=dict(hint_key=dict(hint_key=hint_key, grayscale=False)),
+        )
+        cs.store(
+            group="hint_key",
+            package="model",
+            name=f"{hint_key}_grayscale",
+            node=dict(hint_key=dict(hint_key=hint_key, grayscale=True)),
+        )
