@@ -41,8 +41,6 @@ The pipeline is configured for to NOT offload the models in favor of speed.
 For now we assume a fixed configuration of the controlnets for the lifetime of the pipeline.
 This makes the config.json file for the controlnets a init parameter of the pipeline.
 
-TODO regional prompt support
-
 """
 
 # todo "keypoint" is causing dependency issue
@@ -121,6 +119,7 @@ class TransferValidator:
         blur_strength="medium",
         canny_threshold="medium",
         output_dir: str = "outputs/",
+        num_input_frames: int = 1,
     ):
         """
         advanced parameter check
@@ -147,20 +146,22 @@ class TransferValidator:
         args_dict["blur_strength"] = blur_strength
         args_dict["canny_threshold"] = canny_threshold
         args_dict["output_dir"] = output_dir
+        args_dict["num_input_frames"] = num_input_frames
+
+        # validate controlnet_specs
         self.validate_control_spec(controlnet_specs)
         args_dict["controlnet_specs"] = controlnet_specs
         log.info(f"Model parameters: {json.dumps(args_dict, indent=4)}")
 
-        # TODO
-        # if edge_weight > 0 and not input_video:
-        #     raise ValueError("Edge controlnet must have 'input_video' specified if no 'input_control' video specified.")
-
-        # if seg_weight > 0 and not input_video:
-        #     raise ValueError(
-        #         "Segment controlnet must have 'input_video' specified if no 'input_control' video specified."
-        #     )
-        # Regardless whether "control_weight_prompt" is provided (i.e. whether we automatically
-        # generate spatiotemporal control weight binary masks), control_weight is needed to.
+        # finally validate interdependencies of the controlnet_specs and input_video_path
+        if not input_video_path:
+            for key in controlnet_specs:
+                if key is "vis" or key is "edge":
+                    raise ValueError(f"Controlnet '{key}' requires an input video. Please specify 'input_video_path'.")
+            else:
+                controlnet = controlnet_specs.get(key)
+                if not controlnet.get("input_control"):
+                    raise ValueError(f"Controlnet '{key}' requires an 'input_control' video OR input_video_path.")
 
         return args_dict
 
@@ -262,7 +263,7 @@ class TransferPipeline(WorkerPipeline):
             offload_prompt_upsampler=False,
             upsample_prompt=False,
             fps=24,
-            num_input_frames=24,
+            num_input_frames=1,
             disable_guardrail=True,
         )
 
@@ -309,6 +310,7 @@ class TransferPipeline(WorkerPipeline):
         sigma_max=70.0,
         blur_strength="medium",
         canny_threshold="medium",
+        num_input_frames: int = 1,
         output_dir: str = "outputs/",
     ):
 
@@ -346,6 +348,7 @@ class TransferPipeline(WorkerPipeline):
         self.pipeline.sigma_max = sigma_max
         self.pipeline.blur_strength = blur_strength
         self.pipeline.canny_threshold = canny_threshold
+        self.pipeline.num_input_frames = num_input_frames
 
         # self.pipeline.control_inputs = current_control_inputs
 
@@ -442,6 +445,7 @@ def test_transfer_AV():
     validator = TransferValidator(hint_keys=hint_keys_av)
 
     model_params = validator.prune_and_validate(
+        prompt="The video is captured from a camera mounted on a car. The camera is facing forward. The video showcases a scenic golden-hour drive through a suburban area, bathed in the warm, golden hues of the setting sun. The dashboard camera captures the play of light and shadow as the sun’s rays filter through the trees, casting elongated patterns onto the road. The streetlights remain off, as the golden glow of the late afternoon sun provides ample illumination. The two-lane road appears to shimmer under the soft light, while the concrete barrier on the left side of the road reflects subtle warm tones. The stone wall on the right, adorned with lush greenery, stands out vibrantly under the golden light, with the palm trees swaying gently in the evening breeze. Several parked vehicles, including white sedans and vans, are seen on the left side of the road, their surfaces reflecting the amber hues of the sunset. The trees, now highlighted in a golden halo, cast intricate shadows onto the pavement. Further ahead, houses with red-tiled roofs glow warmly in the fading light, standing out against the sky, which transitions from deep orange to soft pastel blue. As the vehicle continues, a white sedan is seen driving in the same lane, while a black sedan and a white van move further ahead. The road markings are crisp, and the entire setting radiates a peaceful, almost cinematic beauty. The golden light, combined with the quiet suburban landscape, creates an atmosphere of tranquility and warmth, making for a mesmerizing and soothing drive.",
         sigma_max=80,
         controlnet_specs=get_spec("assets/sample_av_multi_control_spec.json"),
     )
