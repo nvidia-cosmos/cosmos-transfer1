@@ -161,6 +161,12 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Run the generation in benchmark mode. It means that generation will be rerun a few times and the average generation time will be shown.",
     )
+    parser.add_argument(
+        "--benchmark_iterations",
+        type=int, 
+        default=4,
+        help="Number of iterations to run in benchmark mode, default is 4, only used if benchmark is True",
+    )
     cmd_args = parser.parse_args()
 
     # Load and parse JSON input
@@ -340,7 +346,7 @@ def demo(cfg, control_inputs):
             pipeline.region_definitions = region_definitions
 
         # Generate videos in batch
-        num_repeats = 4 if cfg.benchmark else 1
+        num_repeats = cfg.benchmark_iterations if cfg.benchmark else 1
         time_sum = 0
         for i in range(num_repeats):
             if cfg.benchmark and i > 0:
