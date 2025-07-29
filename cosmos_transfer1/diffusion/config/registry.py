@@ -32,6 +32,7 @@ def register_net(cs):
         node=FADITV2Config,
     )
 
+
 def register_conditioner(cs):
     cs.store(
         group="conditioner",
