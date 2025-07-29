@@ -74,6 +74,40 @@ def _format_file_path_with_icon(file_path: str) -> str:
     icon = _get_file_icon(file_path)
     return f"{icon} {file_path}"
 
+def _handle_api_file_upload_event(file: str, upload_dir: str) -> typing.Dict[str, str]:
+    """
+    Event handler for the hidden file upload component.
+    
+    Used to upload files to the server without showing them in the UI (i.e. via the Python client).
+
+    Args:
+        file (str): The path to the temporary file created by Gradio
+        upload_dir (str): The directory to save the uploaded files
+    
+    Returns:
+        dict[str, any]: A dictionary with either of the following keys:
+            - "path": (optional) The path to the uploaded file
+            - "error": (optional) A message describing the error that occurred
+    """
+    dest_path = None
+    try:
+        logger.info(f"Uploading file: {file=} {upload_dir=}")
+        
+        # Create timestamped subfolder
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        upload_folder = os.path.join(upload_dir, f"upload_{timestamp}")
+        os.makedirs(upload_folder, exist_ok=True)
+
+        filename = os.path.basename(file)
+        dest_path = os.path.join(upload_folder, filename)
+
+        shutil.copy2(file, dest_path)
+        logger.info(f"File uploaded to: {dest_path}")
+        return dest_path
+    except Exception as e:
+        message = f"Upload error: {e}"
+        logger.error(message)
+        return {"error": message}
 
 def _handle_file_upload_event(temp_files, output_dir: str):
     """Handle file uploads by copying to output directory"""
@@ -103,8 +137,8 @@ def _handle_file_upload_event(temp_files, output_dir: str):
                 shutil.copy2(temp_file.name, dest_path)
                 uploaded_paths.append(dest_path)
 
-        files_list = _get_files_in_output_dir(output_dir)
-        choices = [f["relative_path"] for f in files_list]
+        # Get updated list of choices for the file browser dropdown
+        choices = _format_files_list(output_dir=output_dir)
 
         # Format status message with full paths
         if uploaded_paths:
@@ -251,6 +285,12 @@ def file_server_components(upload_dir: str, open: bool = True) -> gr.Accordion:
     with gr.Accordion("File Upload and Viewer", open=open) as top_level_accordion:
         with top_level_accordion:
             gr.Markdown(f"**Directory**: `{upload_dir}`")
+            # Hidden components to support API file uploads (i.e. via the Python client)
+            with gr.Row(visible=False):
+                api_upload_file_input = gr.File(visible=False)
+                api_upload_file_response = gr.Textbox(visible=False)
+
+            # UI components for file upload/browsing
             with gr.Row():
                 with gr.Column(scale=1):
                     gr.Markdown("## Upload Files")
@@ -299,6 +339,12 @@ def file_server_components(upload_dir: str, open: bool = True) -> gr.Accordion:
                     _instructions()
 
     # Set up event handlers
+    api_upload_file_input.upload(
+        fn=lambda file: _handle_api_file_upload_event(file, upload_dir),
+        inputs=[api_upload_file_input],
+        outputs=[api_upload_file_response],
+        api_name="upload_file",
+    )
     file_upload.upload(
         fn=lambda temp_files: _handle_file_upload_event(temp_files, upload_dir),
         inputs=[file_upload],
@@ -337,4 +383,4 @@ if __name__ == "__main__":
     logger.info(f"Starting app - {server_name}:{server_port} -> {save_dir}")
 
     blocks = create_gradio_blocks(output_dir=save_dir)
-    blocks.launch(server_name=server_name, server_port=server_port, share=False)
+    blocks.launch(server_name=server_name, server_port=server_port, allowed_paths=[save_dir], share=False)
