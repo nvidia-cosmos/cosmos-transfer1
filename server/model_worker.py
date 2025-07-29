@@ -14,8 +14,6 @@
 # limitations under the License.
 
 import os
-import sys
-import time
 import traceback
 import torch.distributed as dist
 from loguru import logger as log
@@ -27,21 +25,10 @@ from loguru import logger
 from server.model_factory import create_worker_pipeline
 
 
-# Configure loguru with custom color for this worker process
-logger.remove()  # Remove default handler
-logger.add(
-    sys.stderr,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <white>{level}</white> | <green>{name}</green>:<yellow>{function}</yellow>:<yellow>{line}</yellow> - <white>{message}</white>",
-    level="INFO",
-)
-
-
 """
 Entry point for the worker process. The worker process will wait for an inference request with inference parameters from the model server.
 Upon completion of the request by the underlying model pipeline, the worker will signal to the server the completion by sending a status message.
 """
-
-
 def worker_main():
 
     rank = int(os.environ.get("LOCAL_RANK", 0))
@@ -52,14 +39,7 @@ def worker_main():
     worker_status = WorkerStatus(world_size)
 
     try:
-
-        pipeline = None
-        if Config.factory_module and Config.factory_function:
-            pipeline, _ = create_worker_pipeline(Config)
-        else:
-            log.error("initializing model: FACTORY_MODULE and FACTORY_FUNCTION environment variables are not set.")
-            time.sleep(10)
-
+        pipeline, _ = create_worker_pipeline(Config)
         worker_status.signal_status(rank, "success", "Worker initialized successfully")
 
         while True:
@@ -72,13 +52,7 @@ def worker_main():
 
                 # Process commands
                 if command == "inference":
-
-                    if pipeline:
-                        pipeline.infer(params)
-                    else:
-                        log.error("run inference: Pipeline is not initialized")
-                        time.sleep(10)
-
+                    pipeline.infer(params)
                     worker_status.signal_status(rank, "success", "result_placeholder")
                 elif command == "shutdown":
                     log.info(f"Worker {rank} shutting down")

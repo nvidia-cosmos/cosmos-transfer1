@@ -17,14 +17,11 @@ Main function that creates 8 worker processes with torchrun.
 Workers have control loops to wait for input from the main function.
 Worker processes are now handled by worker_sandbox.py.
 """
-
-import json
 import os
 import subprocess
 import time
 from loguru import logger as log
-import signal
-import sys
+
 from server.command_ipc import WorkerCommand, WorkerStatus
 from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferPipeline
 
@@ -132,44 +129,3 @@ class ModelServer:
         self.stop_workers()
         self.worker_command.cleanup()
         self.worker_status.cleanup()
-
-
-def get_spec(spec_file):
-    with open(spec_file, "r") as f:
-        controlnet_specs = json.load(f)
-    return controlnet_specs
-
-
-if __name__ == "__main__":
-
-    def signal_handler(sig, frame):
-        """Handle Ctrl+C and other termination signals."""
-        log.info("Received interrupt signal, shutting down gracefully...")
-        sys.exit(0)
-
-    # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    num_gpus = int(os.environ.get("NUM_GPU", 1))
-    with ModelServer(num_workers=num_gpus) as pipeline:
-
-        model_params = TransferPipeline.validate_params(
-            input_video="assets/example1_input_video.mp4",
-            controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_depth.json"),
-        )
-        pipeline.infer(model_params)
-
-        model_params = TransferPipeline.validate_params(
-            input_video="assets/example1_input_video.mp4",
-            controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_edge.json"),
-        )
-        pipeline.infer(model_params)
-
-        log.info("Inference complete****************************************")
-
-        model_params = TransferPipeline.validate_params(
-            input_video="assets/example1_input_video.mp4",
-            controlnet_specs=get_spec("assets/inference_cosmos_transfer1_multi_control.json"),
-        )
-        pipeline.infer(model_params)

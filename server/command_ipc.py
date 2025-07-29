@@ -13,10 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-WorkerManager class for managing communication with distributed worker processes.
-
-"""
 
 import json
 import os

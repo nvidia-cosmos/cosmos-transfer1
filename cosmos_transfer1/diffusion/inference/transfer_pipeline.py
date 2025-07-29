@@ -158,10 +158,10 @@ class TransferValidator:
             for key in controlnet_specs:
                 if key == "vis" or key == "edge":
                     raise ValueError(f"Controlnet '{key}' requires an input video. Please specify 'input_video_path'.")
-            else:
-                controlnet = controlnet_specs.get(key)
-                if not controlnet.get("input_control"):
-                    raise ValueError(f"Controlnet '{key}' requires an 'input_control' video OR input_video_path.")
+                else:
+                    controlnet = controlnet_specs.get(key)
+                    if not controlnet.get("input_control"):
+                        raise ValueError(f"Controlnet '{key}' requires an 'input_control' video OR input_video_path.")
 
         return args_dict
 
@@ -396,12 +396,6 @@ class TransferPipeline(WorkerPipeline):
             dist.destroy_process_group()
 
 
-def get_spec(spec_file):
-    with open(spec_file, "r") as f:
-        controlnet_specs = json.load(f)
-    return controlnet_specs
-
-
 def create_transfer_pipeline(cfg, create_model=True):
     log.info(f"Initializing model using factory function {cfg.factory_module}.{cfg.factory_function}")
 
@@ -434,48 +428,3 @@ def create_transfer_pipeline_AV(cfg, create_model=True):
 
     validator = TransferValidator(hint_keys=hint_keys_av)
     return pipeline, validator
-
-
-def test_transfer_AV():
-    pipeline = TransferPipeline(
-        num_gpus=int(os.environ.get("NUM_GPU", 1)),
-        checkpoint_name=BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
-        hint_keys=hint_keys_av,
-    )
-    validator = TransferValidator(hint_keys=hint_keys_av)
-
-    model_params = validator.prune_and_validate(
-        prompt="The video is captured from a camera mounted on a car. The camera is facing forward. The video showcases a scenic golden-hour drive through a suburban area, bathed in the warm, golden hues of the setting sun. The dashboard camera captures the play of light and shadow as the sun’s rays filter through the trees, casting elongated patterns onto the road. The streetlights remain off, as the golden glow of the late afternoon sun provides ample illumination. The two-lane road appears to shimmer under the soft light, while the concrete barrier on the left side of the road reflects subtle warm tones. The stone wall on the right, adorned with lush greenery, stands out vibrantly under the golden light, with the palm trees swaying gently in the evening breeze. Several parked vehicles, including white sedans and vans, are seen on the left side of the road, their surfaces reflecting the amber hues of the sunset. The trees, now highlighted in a golden halo, cast intricate shadows onto the pavement. Further ahead, houses with red-tiled roofs glow warmly in the fading light, standing out against the sky, which transitions from deep orange to soft pastel blue. As the vehicle continues, a white sedan is seen driving in the same lane, while a black sedan and a white van move further ahead. The road markings are crisp, and the entire setting radiates a peaceful, almost cinematic beauty. The golden light, combined with the quiet suburban landscape, creates an atmosphere of tranquility and warmth, making for a mesmerizing and soothing drive.",
-        sigma_max=80,
-        controlnet_specs=get_spec("assets/sample_av_multi_control_spec.json"),
-    )
-
-    pipeline.infer(model_params)
-
-
-def test_transfer():
-    validator = TransferValidator(hint_keys=hint_keys)
-    model_params = validator.prune_and_validate(
-        input_video_path="assets/example1_input_video.mp4",
-        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_depth.json"),
-    )
-    pipeline = TransferPipeline(num_gpus=int(os.environ.get("NUM_GPU", 1)))
-    pipeline.infer(model_params)
-    model_params = validator.prune_and_validate(
-        input_video_path="assets/example1_input_video.mp4",
-        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_single_control_edge.json"),
-    )
-    pipeline.infer(model_params)
-
-    log.info("Inference complete****************************************")
-
-    model_params = validator.prune_and_validate(
-        input_video_path="assets/example1_input_video.mp4",
-        controlnet_specs=get_spec("assets/inference_cosmos_transfer1_multi_control.json"),
-    )
-    pipeline.infer(model_params)
-
-
-if __name__ == "__main__":
-    # test_transfer()
-    test_transfer_AV()
