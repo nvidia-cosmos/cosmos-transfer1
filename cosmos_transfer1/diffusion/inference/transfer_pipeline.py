@@ -156,7 +156,7 @@ class TransferValidator:
         # finally validate interdependencies of the controlnet_specs and input_video_path
         if not input_video_path:
             for key in controlnet_specs:
-                if key is "vis" or key is "edge":
+                if key == "vis" or key == "edge":
                     raise ValueError(f"Controlnet '{key}' requires an input video. Please specify 'input_video_path'.")
             else:
                 controlnet = controlnet_specs.get(key)
