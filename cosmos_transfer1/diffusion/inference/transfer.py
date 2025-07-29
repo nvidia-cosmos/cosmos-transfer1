@@ -163,7 +163,7 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--benchmark_iterations",
-        type=int, 
+        type=int,
         default=4,
         help="Number of iterations to run in benchmark mode, default is 4, only used if benchmark is True",
     )
