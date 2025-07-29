@@ -158,6 +158,7 @@ def create_gradio_interface():
             fn=infer_wrapper,
             inputs=[request_input],
             outputs=[output_video, status_text],
+            api_name="generate_video",
         )
 
     return interface

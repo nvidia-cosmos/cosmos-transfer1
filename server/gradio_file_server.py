@@ -100,10 +100,13 @@ def _handle_api_file_upload_event(file: str, upload_dir: str) -> typing.Dict[str
 
         filename = os.path.basename(file)
         dest_path = os.path.join(upload_folder, filename)
-
         shutil.copy2(file, dest_path)
         logger.info(f"File uploaded to: {dest_path}")
-        return dest_path
+
+        response = { "path": dest_path }
+        logger.info(f"{response=}")
+        return json.dumps(response)
+
     except Exception as e:
         message = f"Upload error: {e}"
         logger.error(message)
