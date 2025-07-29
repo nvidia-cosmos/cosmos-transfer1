@@ -61,7 +61,7 @@ def model_to_fsdp(model: BaseDistillationModel) -> BaseDistillationModel:
                 auto_wrap_policy=wrap_policy,
                 sharding_strategy=sharding_strategy,
                 sync_module_states=True,
-                use_orig_params=False,
+                use_orig_params=True,
             )
         setattr(model, k, wrapped_v)
         model_dict[k] = wrapped_v
@@ -87,7 +87,7 @@ def module_dict_to_fsdp(module_dict: dict, sharding_strategy, wrap_policy, devic
             auto_wrap_policy=wrap_policy,
             sharding_strategy=sharding_strategy,
             sync_module_states=True,
-            use_orig_params=False,
+            use_orig_params=True,
         )
         module_dict[k] = wrapped_v
         log.info(f"Wrapped nested model {k}")
