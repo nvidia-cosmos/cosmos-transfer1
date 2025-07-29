@@ -17,6 +17,7 @@ import argparse
 import copy
 import json
 import os
+import time
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Workaround to suppress MP warning
 
@@ -162,6 +163,11 @@ def parse_arguments() -> argparse.Namespace:
         "--save_intermediates", action="store_true", help="Save intermediate videos from the diffusion steps"
     )
 
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Run the generation in benchmark mode. It means that generation will be rerun a few times and the average generation time will be shown.",
+    )
     cmd_args = parser.parse_args()
 
     # Load and parse JSON input
@@ -343,17 +349,32 @@ def demo(cfg, control_inputs):
             pipeline.region_definitions = region_definitions
 
         # Generate videos in batch
-        batch_outputs = pipeline.generate(
-            prompt=batch_prompt_texts,
-            video_path=batch_video_paths,
-            negative_prompt=cfg.negative_prompt,
-            control_inputs=batch_control_inputs,
-            save_folder=video_save_subfolder,
-            batch_size=actual_batch_size,
-        )
-        if batch_outputs is None:
-            log.critical("Guardrail blocked generation for entire batch.")
-            continue
+        num_repeats = 4 if cfg.benchmark else 1
+        time_sum = 0
+        for i in range(num_repeats):
+            if cfg.benchmark and i > 0:
+                torch.cuda.synchronize()
+                start_time = time.time()
+            batch_outputs = pipeline.generate(
+                prompt=batch_prompt_texts,
+                video_path=batch_video_paths,
+                negative_prompt=cfg.negative_prompt,
+                control_inputs=batch_control_inputs,
+                save_folder=video_save_subfolder,
+                batch_size=actual_batch_size,
+            )
+            if cfg.benchmark and i > 0:
+                torch.cuda.synchronize()
+                elapsed = time.time() - start_time
+                time_sum += elapsed
+                log.info(f"[iter {i} / {num_repeats - 1}] Generation time: {elapsed:.1f} seconds.")
+            if batch_outputs is None:
+                log.critical("Guardrail blocked generation for entire batch.")
+                continue
+
+        if cfg.benchmark:
+            time_avg = time_sum / (num_repeats - 1)
+            log.critical(f"The benchmarked generation time for Cosmos-Transfer1 is {time_avg:.1f} seconds.")
 
         videos, intermediate_videos, final_prompts = batch_outputs
         for i, (video, intermediate_video, prompt) in enumerate(zip(videos, intermediate_videos, final_prompts)):
@@ -364,6 +385,7 @@ def demo(cfg, control_inputs):
             else:
                 video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
                 prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
+
             # Save video and prompt
             if device_rank == 0:
                 os.makedirs(os.path.dirname(video_save_path), exist_ok=True)

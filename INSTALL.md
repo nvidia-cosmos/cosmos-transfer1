@@ -28,6 +28,7 @@ export VLLM_ATTENTION_BACKEND=FLASHINFER
 pip install vllm==0.9.0
 # Install decord
 pip install decord==0.6.0
+pip install torch==2.7.0 torchvision==0.22.0 --ignore-installed --index-url https://download.pytorch.org/whl/cu128
 # Patch Transformer engine linking issues in conda environments.
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.12

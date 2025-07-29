@@ -18,7 +18,6 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
 
 import amp_C
 import torch
-from apex.multi_tensor_apply import multi_tensor_applier
 from einops import rearrange
 from megatron.core import parallel_state
 from torch import Tensor
@@ -26,6 +25,7 @@ from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 from torch.distributed import broadcast_object_list, get_process_group_ranks
 from torch.distributed.utils import _verify_param_shape_across_processes
 
+from apex.multi_tensor_apply import multi_tensor_applier
 from cosmos_transfer1.diffusion.conditioner import BaseVideoCondition, DataType
 from cosmos_transfer1.diffusion.diffusion.modules.res_sampler import COMMON_SOLVER_OPTIONS
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
