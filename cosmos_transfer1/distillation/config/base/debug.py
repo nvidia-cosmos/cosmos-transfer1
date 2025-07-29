@@ -13,14 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from cosmos_transfer1.utils.lazy_config import PLACEHOLDER
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
-from cosmos_transfer1.diffusion.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
-from cosmos_transfer1.distillation.models.model_dmd2 import DMD2DistillCtrlModel
+from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
 
 """
 Sample command to run the debug experiment:
-torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation.train --dryrun --config=cosmos_transfer1/distillation/config/config_base_dmd2.py -- experiment=debug_local_ddp trainer.max_iter=5 trainer.logging_iter=1
+torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation.train --config=cosmos_transfer1/distillation/config/config_base_dmd2.py -- experiment=debug_local_ddp trainer.max_iter=5 trainer.logging_iter=1
+torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation.train --config=cosmos_transfer1/distillation/config/config_ctrl_kd.py -- experiment=debug_ctrlnet_local_ddp trainer.max_iter=5 trainer.logging_iter=1
+torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation.train --config=cosmos_transfer1/distillation/config/config_ctrl_dmd2.py -- experiment=debug_ctrlnet_local_ddp trainer.max_iter=5 trainer.logging_iter=1
 """
 
 # ------------------------------------------------------
@@ -28,8 +28,8 @@ torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation
 
 DEBUG_LOCAL_DDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill"},
-        {"override /data_val": "mock_distill"},
+        {"override /data_train": "mock_distill_debug"},
+        {"override /data_val": "mock_distill_debug"},
         {"override /net": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /conditioner": "add_fps_image_size_padding_mask"},
@@ -63,8 +63,8 @@ DEBUG_LOCAL_DDP_EXP = dict(
 
 DEBUG_LOCAL_CP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill"},
-        {"override /data_val": "mock_distill"},
+        {"override /data_train": "mock_distill_debug"},
+        {"override /data_val": "mock_distill_debug"},
         {"override /net": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /conditioner": "add_fps_image_size_padding_mask"},
@@ -95,8 +95,8 @@ DEBUG_LOCAL_CP_EXP = dict(
 
 DEBUG_LOCAL_FSDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill"},
-        {"override /data_val": "mock_distill"},
+        {"override /data_train": "mock_distill_debug"},
+        {"override /data_val": "mock_distill_debug"},
         {"override /net": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /callbacks": ["basic"]},
@@ -137,8 +137,8 @@ DEBUG_LOCAL_FSDP_EXP = dict(
 
 DEBUG_LOCAL_CP_FSDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_distill"},
-        {"override /data_val": "mock_distill"},
+        {"override /data_train": "mock_distill_debug"},
+        {"override /data_val": "mock_distill_debug"},
         {"override /net": "tiny_fa"},
         {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /callbacks": ["basic"]},
@@ -181,9 +181,10 @@ DEBUG_CTRLNET_LOCAL_DDP_EXP = dict(
     defaults=[
         {"override /data_train": "mock_ctrl_distill"},
         {"override /data_val": "mock_ctrl_distill"},
+        {"override /hint_key": "control_input_edge"},
         {"override /net": "tiny_fa"},
         {"override /net_ctrl": "tiny_fa"},
-        {"override /discriminator": "conv3d_pool_tiny_fa"},
+        # {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /callbacks": ["basic"]},
         {"override /conditioner": "ctrlnet_add_fps_image_size_padding_mask"},
         {"override /ckpt_klass": "multi_rank"},
@@ -215,12 +216,9 @@ DEBUG_CTRLNET_LOCAL_DDP_EXP = dict(
         net=L(VideoExtendGeneralDIT)(
             num_blocks=2,
         ),
-        discriminator=dict(
-            num_blocks=2,
-        ),
-    ),
-    model_obj=L(DMD2DistillCtrlModel)(
-        config=PLACEHOLDER,
+        # discriminator=dict(
+        #     num_blocks=2,
+        # ),
     ),
 )
 
@@ -228,9 +226,10 @@ DEBUG_CTRLNET_LOCAL_CP_FSDP_EXP = dict(
     defaults=[
         {"override /data_train": "mock_ctrl_distill"},
         {"override /data_val": "mock_ctrl_distill"},
+        {"override /hint_key": "control_input_edge"},
         {"override /net": "tiny_fa"},
         {"override /net_ctrl": "tiny_fa"},
-        {"override /discriminator": "conv3d_pool_tiny_fa"},
+        # {"override /discriminator": "conv3d_pool_tiny_fa"},
         {"override /callbacks": ["basic"]},
         {"override /conditioner": "ctrlnet_add_fps_image_size_padding_mask"},
         {"override /tokenizer": "debug_tokenizer"},
@@ -267,9 +266,6 @@ DEBUG_CTRLNET_LOCAL_CP_FSDP_EXP = dict(
             sharding_strategy="full",
         ),
         net=L(VideoExtendGeneralDIT)(),
-    ),
-    model_obj=L(DMD2DistillCtrlModel)(
-        config=PLACEHOLDER,
     ),
     model_parallel=dict(
         context_parallel_size=2,

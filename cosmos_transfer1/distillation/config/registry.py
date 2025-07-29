@@ -34,6 +34,8 @@ from cosmos_transfer1.distillation.config.base.fsdp import FULL_FSDP_CONFIG, HYB
 from cosmos_transfer1.distillation.config.base.mock_data import (
     MOCK_DISTILL_DATA_LOADER,
     MOCK_DISTILL_CTRLNET_DATA_LOADER,
+    MOCK_DISTILL_DATA_LOADER_DEBUG,
+    MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG,
 )
 from cosmos_transfer1.distillation.config.base.debug import (
     DEBUG_LOCAL_CP_EXP,
@@ -99,15 +101,34 @@ def register_mock_data(cs):
     cs.store(
         group="data_train",
         package="dataloader_train",
+        name="mock_distill_debug",
+        node=MOCK_DISTILL_DATA_LOADER_DEBUG,
+    )
+    cs.store(
+        group="data_train",
+        package="dataloader_train",
         name="mock_ctrl_distill",
         node=MOCK_DISTILL_CTRLNET_DATA_LOADER,
     )
+    cs.store(
+        group="data_train",
+        package="dataloader_train",
+        name="mock_ctrl_distill_debug",
+        node=MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG,
+    )
     cs.store(group="data_val", package="dataloader_val", name="mock_distill", node=MOCK_DISTILL_DATA_LOADER)
+    cs.store(group="data_val", package="dataloader_val", name="mock_distill_debug", node=MOCK_DISTILL_DATA_LOADER_DEBUG)
     cs.store(
         group="data_val",
         package="dataloader_val",
         name="mock_ctrl_distill",
         node=MOCK_DISTILL_CTRLNET_DATA_LOADER,
+    )
+    cs.store(
+        group="data_val",
+        package="dataloader_val",
+        name="mock_ctrl_distill_debug",
+        node=MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG,
     )
 
 

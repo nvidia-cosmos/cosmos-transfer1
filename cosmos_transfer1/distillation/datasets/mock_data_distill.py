@@ -25,6 +25,7 @@ def get_mock_distill_dataset(
     w: int,
     num_video_frames: int,
     len_t5: int = 512,
+    is_debug_tokenizer: bool = False,
 ):
     """
     Mock dataset for distillation model training.
@@ -34,16 +35,22 @@ def get_mock_distill_dataset(
         w (int): width of the video
         num_video_frames (int): number of video frames
         len_t5 (int): size of t5 embedding
+        is_debug_tokenizer (bool): whether debug tokenizer is used
     """
 
     def video_fn():
         return torch.randint(0, 255, size=(3, num_video_frames, h, w)).to(dtype=torch.uint8)
 
+    if is_debug_tokenizer:
+        noise_fn = partial(torch.randn, size=(16, num_video_frames // 17 * 3, h // 16, w // 16))
+    else:
+        noise_fn = partial(torch.randn, size=(16, (num_video_frames - 1) // 8 + 1, h // 8, w // 8))
+
     return CombinedDictDataset(
         **{
             "video": LambdaDataset(video_fn),
             # Noise tensor is used for KD training only
-            "noise": LambdaDataset(partial(torch.randn, size=(16, num_video_frames // 17 * 3, h // 16, w // 16))),
+            "noise": LambdaDataset(noise_fn),
             "t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
             "t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
             # Negative prompt is used for DMD2 training only if using CFG with negative prompt
@@ -70,7 +77,8 @@ def get_mock_distill_ctrlnet_dataset(
     w: int,
     num_video_frames: int,
     len_t5: int = 512,
-    hint_key: str = "control_input_canny",
+    hint_key: str = "control_input_edge",
+    is_debug_tokenizer: bool = False,
 ):
     """
     Mock dataset for ctrlnet distillation model training.
@@ -81,6 +89,7 @@ def get_mock_distill_ctrlnet_dataset(
         num_video_frames (int): number of video frames
         len_t5 (int): size of t5 embedding
         hint_key (str): control hint key
+        is_debug_tokenizer (bool): whether debug tokenizer is used
     """
 
     def video_fn():
@@ -89,12 +98,17 @@ def get_mock_distill_ctrlnet_dataset(
     def hint_fn():
         return torch.randint(0, 255, size=(3, num_video_frames, h, w)).to(dtype=torch.uint8)
 
+    if is_debug_tokenizer:
+        noise_fn = partial(torch.randn, size=(16, num_video_frames // 17 * 3, h // 16, w // 16))
+    else:
+        noise_fn = partial(torch.randn, size=(16, (num_video_frames - 1) // 8 + 1, h // 8, w // 8))
+
     return CombinedDictDataset(
         **{
             "video": LambdaDataset(video_fn),
             hint_key: LambdaDataset(hint_fn),
             # Noise tensor is used for KD training only
-            "noise": LambdaDataset(partial(torch.randn, size=(16, (num_video_frames - 1) // 8 + 1, h // 8, w // 8))),
+            "noise": LambdaDataset(noise_fn),
             "t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
             "t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
             # Negative prompt is used for DMD2 training only if using CFG with negative prompt

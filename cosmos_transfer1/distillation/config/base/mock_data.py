@@ -25,7 +25,21 @@ MOCK_DISTILL_DATA_LOADER = L(DataLoader)(
     dataset=L(get_mock_distill_dataset)(
         h=704,
         w=1280,
+        num_video_frames=121,
+    ),
+    batch_size=1,
+    shuffle=False,
+    num_workers=8,
+    pin_memory=True,
+)
+
+# Mock dataloader for debugging purposes, works with debug tokenizer
+MOCK_DISTILL_DATA_LOADER_DEBUG = L(DataLoader)(
+    dataset=L(get_mock_distill_dataset)(
+        h=704,
+        w=1280,
         num_video_frames=136,
+        is_debug_tokenizer=True,
     ),
     batch_size=1,
     shuffle=False,
@@ -38,7 +52,22 @@ MOCK_DISTILL_CTRLNET_DATA_LOADER = L(DataLoader)(
         h=704,
         w=1280,
         num_video_frames=121,
-        hint_key="control_input_canny",
+        hint_key="control_input_edge",
+    ),
+    batch_size=1,
+    shuffle=False,
+    num_workers=8,
+    pin_memory=True,
+)
+
+# Mock dataloader for debugging purposes, works with debug tokenizer
+MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG = L(DataLoader)(
+    dataset=L(get_mock_distill_ctrlnet_dataset)(
+        h=704,
+        w=1280,
+        num_video_frames=136,
+        hint_key="control_input_edge",
+        is_debug_tokenizer=True,
     ),
     batch_size=1,
     shuffle=False,
