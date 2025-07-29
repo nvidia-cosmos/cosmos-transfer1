@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import importlib
 import json
 import os
@@ -422,6 +423,15 @@ def get_video_batch_for_multiview_model(
 
 
 def get_ctrl_batch_mv(H, W, data_batch, num_total_frames, control_inputs, num_views, num_video_frames):
+    """Prepare control inputs for multiview models.
+
+    TODO: add *cutoff_frame* support identical to single-view `get_ctrl_batch` so AV-style
+    past/future masking works in multiview pipelines.
+
+    TODO: Add `input_video_tensor` parameter and forward it to `get_ctrl_batch`
+        for each sample in the batch so that callers can bypass disk I/O when
+        their video context is already in memory.
+    """
     # Initialize control input dictionary
     control_input_dict = {k: v for k, v in data_batch.items()}
     control_weights = []
@@ -499,6 +509,8 @@ def get_batched_ctrl_batch(
     control_inputs_list,  # List[dict], length B
     blur_strength,
     canny_threshold,
+    cutoff_frame=-1,
+    input_video_tensor=None,
 ):
     """
     Create a fully batched data_batch for video generation, including all control and video inputs.
@@ -511,6 +523,11 @@ def get_batched_ctrl_batch(
         input_video_paths: List of input video paths, length B.
         control_inputs_list: List of control input dicts, length B.
         blur_strength, canny_threshold: ControlNet augmentation parameters.
+        cutoff_frame (int): If > -1, separates past / future frames in the input video —frames up to
+            this index remain unchanged; later frames are zero-masked in the latent and the guided-sampling
+            fields are populated so the model only inpaints the “future” portion.
+        input_video_tensor: Optional tensor of input video frames,
+            used when the caller already has the frames
 
     Returns:
         data_batch: Dict with all fields batched along dim 0 (batch dimension).
@@ -545,6 +562,8 @@ def get_batched_ctrl_batch(
             control_inputs_list[b],
             blur_strength,
             canny_threshold,
+            cutoff_frame,
+            input_video_tensor=input_video_tensor,
         )
         single_batches.append(processed)
 
@@ -573,15 +592,34 @@ def get_batched_ctrl_batch(
 
 
 def get_ctrl_batch(
-    model, data_batch, num_video_frames, input_video_path, control_inputs, blur_strength, canny_threshold
+    model,
+    data_batch,
+    num_video_frames,
+    input_video_path,
+    control_inputs,
+    blur_strength,
+    canny_threshold,
+    cutoff_frame,
+    input_video_tensor=None,
 ):
     """Prepare complete input batch for video generation including latent dimensions.
 
     Args:
         model: Diffusion model instance
+        data_batch (dict): Partially-filled batch (text embeddings etc.)
+        num_video_frames (int): Number of frames to generate
+        input_video_path (str): Optional RGB video to guide generation
+        control_inputs (dict): ControlNet specification dictionary
+        blur_strength (str): Preset for bilateral-blur augmentor
+        canny_threshold (str): Preset for Canny-edge augmentor
+        cutoff_frame (int): If > ‑1, only frames up to this index are preserved; frames
+            after the cutoff are zero-masked in the latent and corresponding
+            guided-mask tensors are added so the model inpaints the “future”.
+        input_video_tensor (torch.Tensor): Optional RGB video as a tensor with shape C×T×H×W,
+            uint8 range [0,255], used when the caller already has the frames.
 
     Returns:
-        - data_batch (dict): Complete model input batch
+        data_batch (dict): Complete model input batch with control hints, weights, etc.
     """
     state_shape = model.state_shape
 
@@ -592,29 +630,93 @@ def get_ctrl_batch(
 
     # Initialize control input dictionary
     control_input_dict = {k: v for k, v in data_batch.items()}
-    num_total_frames = NUM_MAX_FRAMES
-    if input_video_path:
-        input_frames, fps, aspect_ratio = read_and_resize_input(
-            input_video_path, num_total_frames=num_total_frames, interpolation=cv2.INTER_AREA
+    clip_len_requested = num_video_frames  # length requested by caller
+    context_num_frames = -1  # updated once we know RGB context length
+
+    if input_video_tensor is not None or input_video_path:
+        if input_video_tensor is not None:
+            # Tensor branch
+            input_frames = input_video_tensor  # C T H W, np.uint8 or torch tensor acceptable
+            _, context_num_frames, H, W = input_frames.shape
+            fps = 24  # default FPS when reading from in-memory tensor
+            aspect_ratio = detect_aspect_ratio((W, H))
+        else:
+            # Path branch
+            input_frames, fps, aspect_ratio = read_and_resize_input(
+                input_video_path, num_total_frames=clip_len_requested, interpolation=cv2.INTER_AREA
+            )
+            _, context_num_frames, H, W = input_frames.shape
+
+        # pad with the last frame when necessary (same strategy as for control streams)
+        input_frames = pad_last_frame(input_frames, num_video_frames, dim=1)
+
+        # Store video in control_input_dict for downstream processing
+        control_input_dict["video"] = (
+            input_frames.numpy() if hasattr(input_frames, "numpy") else input_frames
         )
-        _, num_total_frames, H, W = input_frames.shape
-        control_input_dict["video"] = input_frames.numpy()  # CTHW
-        data_batch["input_video"] = input_frames.bfloat16()[None] / 255 * 2 - 1  # BCTHW
+
+        # Normalize and move to device
+        input_video_bcthw = (
+            torch.as_tensor(input_frames).bfloat16()[None].cuda() / 255 * 2 - 1
+        )  # B C T H W
+        data_batch["input_video"] = input_video_bcthw
+
+        if cutoff_frame != -1:
+            # ----------------------------------------------------
+            # Encode the (masked) context video into latent space so
+            # that the first `latent_cutoff_frame` tokens can be
+            # treated as *ground-truth* by the denoiser.
+            # 121 video frames  -> 16 latent frames
+            # 1st video frame   -> 1st latent frame
+            # Remaining 120 vf  -> 15 latent frames (8 video frames → 1 latent)
+            # ----------------------------------------------------
+            latent_cutoff_frame = 1 + ((cutoff_frame - 1) // 8) if cutoff_frame > 1 else 1
+            log.info(
+                f"Using latent cutoff frame {latent_cutoff_frame} corresponding to the cutoff frame {cutoff_frame} in the input video"
+            )
+
+            latent_sample = model.encode(input_video_bcthw).contiguous()
+            print(f">>>>>>>>>> latent_sample shape: {latent_sample.shape}")
+            # TODO: masking or no masking?
+            #data_batch["input_video"][:, :, :latent_cutoff_frame, :, :] = 0  # mask latent region
+
+            data_batch["guided_image"] = latent_sample
+            guided_mask = torch.zeros_like(latent_sample)
+
+            # Guide_mask is 1 for the first latent_cutoff_frame and 0 for the rest
+            guided_mask[:, :, :latent_cutoff_frame] = 1
+            data_batch["guided_mask"] = guided_mask
     else:
+        # No context video provided
         data_batch["input_video"] = None
+
     target_w, target_h = W, H
 
     control_weights = []
+    control_num_frames = float("inf")
     for hint_key, control_info in control_inputs.items():
         if "input_control" in control_info:
-            in_file = control_info["input_control"]
-            interpolation = cv2.INTER_NEAREST if hint_key == "seg" else cv2.INTER_LINEAR
-            log.info(f"reading control input {in_file} for hint {hint_key}")
-            control_input_dict[f"control_input_{hint_key}"], fps, aspect_ratio = read_and_resize_input(
-                in_file, num_total_frames=num_total_frames, interpolation=interpolation
-            )  # CTHW
-            num_total_frames = min(num_total_frames, control_input_dict[f"control_input_{hint_key}"].shape[1])
-            target_h, target_w = H, W = control_input_dict[f"control_input_{hint_key}"].shape[2:]
+            in_ctrl = control_info["input_control"]
+            # Accept in-memory numpy arrays to bypass disk I/O.
+            if isinstance(in_ctrl, np.ndarray):
+                log.info(
+                    f"using pre-loaded control input for hint {hint_key} (frames={in_ctrl.shape[0]})"
+                )
+                # in_ctrl is T×H×W×C uint8 → convert to C×T×H×W torch
+                ctrl_torch = torch.from_numpy(in_ctrl.transpose(3, 0, 1, 2))  # CTHW
+                aspect_ratio = detect_aspect_ratio((ctrl_torch.shape[-1], ctrl_torch.shape[-2]))
+                control_input_dict[f"control_input_{hint_key}"] = ctrl_torch
+                control_num_frames = min(control_num_frames, ctrl_torch.shape[1])
+                target_h, target_w = H, W = ctrl_torch.shape[2:]
+            else:
+                in_file = in_ctrl  # path string
+                interpolation = cv2.INTER_NEAREST if hint_key == "seg" else cv2.INTER_LINEAR
+                log.info(f"reading control input {in_file} for hint {hint_key}")
+                control_input_dict[f"control_input_{hint_key}"], fps, aspect_ratio = read_and_resize_input(
+                    in_file, num_total_frames=clip_len_requested, interpolation=interpolation
+                )  # CTHW
+                control_num_frames = min(control_num_frames, control_input_dict[f"control_input_{hint_key}"].shape[1])
+                target_h, target_w = H, W = control_input_dict[f"control_input_{hint_key}"].shape[2:]
         if hint_key == "upscale":
             orig_size = (W, H)
             target_w, target_h = get_upscale_size(orig_size, aspect_ratio, upscale_factor=3)
@@ -630,16 +732,40 @@ def get_ctrl_batch(
             data_batch["input_video"] = control_input_dict["control_input_upscale"].bfloat16() / 255 * 2 - 1
         control_weights.append(control_info["control_weight"])
 
-    # Trim all control videos and input video to be the same length.
-    log.info(f"Making all control and input videos to be length of {num_total_frames} frames.")
+    # Decide how many frames to use for this batch.
+    # 1) Determine the overall clip length (clip_len_final)
+    #    Priority: RGB context (if any)  >  control streams  >  pipeline default
+    clip_len_final = (
+        context_num_frames
+        if context_num_frames != -1
+        else (control_num_frames if control_num_frames != float("inf") else clip_len_requested)
+    )
+
+    # 2) Decide how many frames from the control streams are actually *informative*
+    #    • If both RGB context *and* control videos are provided:
+    #        – Online mode  → control has exactly context+1 frames (look-ahead)
+    #        – Offline mode → control is longer than context → keep full control clip
+    #    • Any other situation → use the same length as the generated clip.
+    if context_num_frames != -1 and control_num_frames != float("inf"):
+        if control_num_frames == context_num_frames + 1:
+            # Online case – one-frame look-ahead
+            num_control_frames_to_use = context_num_frames + 1
+        else:
+            # Offline (or shorter) control clip
+            num_control_frames_to_use = int(control_num_frames)
+    else:
+        num_control_frames_to_use = clip_len_final
+
+    # Log final decision on how many frames are used for context and control streams
+    log.info(
+        f"Preparing batch: context_frames={clip_len_final}, control_frames={num_control_frames_to_use}"
+    )
+
     if len(control_inputs) > 1:
         for hint_key in control_inputs.keys():
             cur_key = f"control_input_{hint_key}"
             if cur_key in control_input_dict:
-                control_input_dict[cur_key] = control_input_dict[cur_key][:, :num_total_frames]
-    if input_video_path:
-        control_input_dict["video"] = control_input_dict["video"][:, :num_total_frames]
-        data_batch["input_video"] = data_batch["input_video"][:, :, :num_total_frames]
+                control_input_dict[cur_key] = control_input_dict[cur_key][:, :num_control_frames_to_use]
 
     hint_key = "control_input_" + "_".join(control_inputs.keys())
     add_control_input = get_augmentor_for_eval(
@@ -652,8 +778,21 @@ def get_ctrl_batch(
 
     if len(control_input_dict):
         control_input = add_control_input(control_input_dict)[hint_key]
+        # Ensure the control input has shape [B, C, T, H, W]
+        #  - If ndim == 4  -> assume [C, T, H, W] and add batch dim
+        #  - If ndim == 3  -> assume [C, H, W]   and add batch & temporal dims (T=1)
         if control_input.ndim == 4:
-            control_input = control_input[None]
+            # Shape: [C, T, H, W] -> [1, C, T, H, W]
+            control_input = control_input.unsqueeze(0)
+        elif control_input.ndim == 3:
+            # Shape: [C, H, W] -> [1, C, 1, H, W]
+            control_input = control_input.unsqueeze(0).unsqueeze(2)
+
+        # If the control input has fewer temporal frames than required by the
+        # diffusion pipeline, replicate the last frame to reach the desired
+        # length (num_video_frames).
+        control_input = pad_last_frame(control_input, num_video_frames, dim=2)
+
         control_input = control_input.bfloat16() / 255 * 2 - 1
         control_weights = load_spatial_temporal_weights(
             control_weights, B=1, T=num_video_frames, H=target_h, W=target_w, patch_h=H, patch_w=W
@@ -744,7 +883,7 @@ def generate_world_from_control(
         ).contiguous()
     num_of_latent_condition = compute_num_latent_frames(model, num_input_frames)
 
-    sample = model.generate_samples_from_batch(
+    sample, intermediates = model.generate_samples_from_batch(
         data_batch,
         guidance=guidance,
         state_shape=[c, t, h, w],
@@ -762,7 +901,7 @@ def generate_world_from_control(
         patch_w=w,
         use_batch_processing=use_batch_processing,
     )
-    return sample
+    return sample, intermediates
 
 
 def read_video_or_image_into_frames_BCTHW(
@@ -1283,3 +1422,26 @@ def validate_controlnet_specs(cfg, controlnet_specs) -> Dict[str, Any]:
                     )
 
     return controlnet_specs
+
+def pad_last_frame(tensor: torch.Tensor, target_len: int, dim: int) -> torch.Tensor:
+    """Repeat the last frame along *dim* until *target_len* is reached.
+
+    Args:
+        tensor (torch.Tensor): Input video/feature tensor.
+        target_len (int): Desired length along *dim*.
+        dim (int): Dimension that represents time.
+
+    Returns:
+        torch.Tensor: Tensor padded to *target_len* along *dim*.
+    """
+    cur_len = tensor.shape[dim]
+    if cur_len >= target_len:
+        return tensor
+
+    pad_size = target_len - cur_len
+    # Slice the last frame and repeat it *pad_size* times.
+    last_frame = tensor.select(dim, cur_len - 1).unsqueeze(dim)
+    repeat_shape = [1] * tensor.dim()
+    repeat_shape[dim] = pad_size
+    last_frame = last_frame.repeat(*repeat_shape)
+    return torch.cat([tensor, last_frame], dim=dim)

@@ -183,7 +183,7 @@ class DiffusionV2WModel(DiffusionT2WModel):
         x_sigma_max: Optional[torch.Tensor] = None,
         sigma_max: Optional[float] = None,
         **kwargs,
-    ) -> Tensor:
+    ) -> tuple[Tensor, list[Tensor]]:
         """Generates video samples conditioned on input frames.
 
         Args:
@@ -239,12 +239,12 @@ class DiffusionV2WModel(DiffusionT2WModel):
         if self.net.is_context_parallel_enabled:
             x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
 
-        samples = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
+        samples, intermediates = self.sampler(x0_fn, x_sigma_max, num_steps=num_steps, sigma_max=sigma_max)
 
         if self.net.is_context_parallel_enabled:
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
 
-        return samples
+        return samples, intermediates
 
     def get_x0_fn_from_batch_with_condition_latent(
         self,
@@ -502,7 +502,7 @@ class DistillV2WModel(DistillT2WModel):
 
         if not condition.video_cond_bool:
             # Unconditional case, drop out the condition region
-            augment_latent = self.drop_out_condition_region(augment_latent, xt, cfg_video_cond_bool)
+            augment_latent = self.drop_out_condition_region(augment_latent, noise_x, cfg_video_cond_bool)
 
         # Compose the model input with condition region (augment_latent) and generation region (noise_x)
         new_noise_xt = condition_video_indicator * augment_latent + (1 - condition_video_indicator) * noise_x
