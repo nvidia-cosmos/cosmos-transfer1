@@ -22,9 +22,16 @@ from loguru import logger as log
 
 
 class WorkerCommand:
+    """wrapper around file based IPC command"""
 
     def __init__(self, num_workers: int):
         self.num_workers = num_workers
+
+    def cleanup(self):
+        for rank in range(self.num_workers):
+            for file_path in [f"/tmp/worker_{rank}_commands.json"]:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
 
     def _send_command_to_worker(self, rank: int, command: str, params: Optional[Dict[str, Any]] = None):
         command_file = f"/tmp/worker_{rank}_commands.json"
@@ -35,20 +42,18 @@ class WorkerCommand:
 
         log.debug(f"Sent command '{command}' to worker {rank}")
 
-    def cleanup(self):
-        for rank in range(self.num_workers):
-            for file_path in [f"/tmp/worker_{rank}_commands.json"]:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-
-    # asynchronous command to all workers
     def broadcast(self, task_name: str, task_params: Dict[str, Any]):
+        """Broadcast non-blocking a task to all workers."""
         log.debug(f"Broadcasting task '{task_name}' to all workers...")
 
         for rank in range(self.num_workers):
             self._send_command_to_worker(rank, task_name, task_params)
 
     def wait_for_command(self, rank: int) -> Optional[Dict[str, Any]]:
+        """wait blocking for a command from the worker.
+
+        This is an infinite blocking call by design. we want to infintely wait until typically user is sending a request to the worker.
+        """
         command_file = f"/tmp/worker_{rank}_commands.json"
         log.debug(f"worker {rank}: Waiting for command file {command_file}")
         while not os.path.exists(command_file):
@@ -74,11 +79,19 @@ class WorkerException(Exception):
 
 
 class WorkerStatus:
+    """wrapper around file based IPC status"""
 
     def __init__(self, num_workers: int):
         self.num_workers = num_workers
 
+    def cleanup(self):
+        for rank in range(self.num_workers):
+            for file_path in [f"/tmp/worker_{rank}_status.json"]:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+
     def signal_status(self, rank: int, status: str, message: str = "") -> None:
+        """signal individual worker status per rank"""
         status_file = f"/tmp/worker_{rank}_status.json"
 
         log.debug(f"worker {rank} status: {status}, message: {message}")
@@ -113,10 +126,13 @@ class WorkerStatus:
             log.error(f"Failed to read status file for worker {rank}")
             return {"status": "unknown", "rank": rank}
 
-    """blocking call to wait for completion of all workers"""
-
     def wait_for_status(self, timeout: int = 1800) -> bool:
         statuses = {}
+        """blocking call to wait for completion of all workers
+        
+            This functions waits for all workers to signal their status.
+            Upon failure of any worker, it raises a WorkerException with a compound status dictionary.
+        """
 
         # Collect statuses from all workers, ensure status file is removed after reading
         for rank in range(self.num_workers):
@@ -130,9 +146,3 @@ class WorkerStatus:
                 )
 
         log.debug("All workers reported success")
-
-    def cleanup(self):
-        for rank in range(self.num_workers):
-            for file_path in [f"/tmp/worker_{rank}_status.json"]:
-                if os.path.exists(file_path):
-                    os.remove(file_path)

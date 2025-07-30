@@ -15,21 +15,41 @@
 
 import os
 import traceback
+
 import torch.distributed as dist
-from loguru import logger as log
+from cosmos_transfer1.utils import log
+
 from server.command_ipc import WorkerCommand, WorkerStatus
 from server.deploy_config import Config
-import sys
-from loguru import logger
-
 from server.model_factory import create_worker_pipeline
 
 
-"""
-Entry point for the worker process. The worker process will wait for an inference request with inference parameters from the model server.
-Upon completion of the request by the underlying model pipeline, the worker will signal to the server the completion by sending a status message.
-"""
 def worker_main():
+    """Main entry point for the worker process.
+
+    A worker process in this context is created and managed by the ModelServer class.
+    This function handles:
+    - Initializing command and status communication channels
+    - Creating the model pipeline using the factory function
+    - Receiving and processing commands in a continuous loop
+    - Handling errors and sending back status to the server
+
+
+    Command Processing:
+        The worker processes commands received from the model server:
+        - 'inference': Calls pipeline.infer() with provided parameters
+        - 'shutdown': Breaks from the main loop and performs cleanup
+        - Unknown commands: Logs warning and sends error status
+
+    Error Handling:
+        All exceptions during command processing are caught, logged with
+        full stack traces, and reported back to the server via status updates.
+
+    Cleanup:
+        On exit (normal or exception), the worker performs:
+        - Command/status channel cleanup
+        - Distributed process group cleanup (if initialized)
+    """
 
     rank = int(os.environ.get("LOCAL_RANK", 0))
     world_size = int(os.environ.get("WORLD_SIZE", 1))
@@ -63,19 +83,23 @@ def worker_main():
 
             except Exception as e:
                 log.error(f"Worker {rank} error processing command: {e}")
-                error_trace = traceback.format_exc()
-                log.error(f"Stack trace:\n{error_trace}")
+                worker_status.signal_status(rank, "error", str(e) + f"\n{traceback.format_exc()}")
 
-                worker_status.signal_status(rank, "error", str(e) + f"\n{error_trace}")
-
-    except KeyboardInterrupt:
-        log.info(f"Worker {rank} keyboard interrupt, shutting down gracefully...")
+    except Exception as e:
+        log.error(f"Worker {rank} initialization error processing: {e}")
+        worker_status.signal_status(rank, "error", str(e) + f"\n{traceback.format_exc()}")
     finally:
+        log.info(f"Worker {rank} shutting down...")
+
+        if pipeline:
+            del pipeline
+
         worker_cmd.cleanup()
         worker_status.cleanup()
 
         if dist.is_initialized():
             dist.destroy_process_group()
+        log.info(f"Worker {rank} shutting down complete.")
 
 
 if __name__ == "__main__":

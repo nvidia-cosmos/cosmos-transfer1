@@ -32,15 +32,14 @@ from cosmos_transfer1.utils import log
 from cosmos_transfer1.utils.io import save_video
 
 """
-pipeline class similar to demo function.
-we can't use the demo function as the function discards the underlying pipeline after each inference.
+This module wrapper classes required for the transfer pipeline to work with model server/worker classes.
+The pipeline wrapper maintains loaded models across multiple inferences for better performance,
+unlike the demo function which discards the pipeline after each inference.
 
-This class creates the pipeline during initialization and keeps it alive for multiple inferences.
-The pipeline is configured for to NOT offload the models in favor of speed.
-
-For now we assume a fixed configuration of the controlnets for the lifetime of the pipeline.
-This makes the config.json file for the controlnets a init parameter of the pipeline.
-
+Key Components:
+    - TransferValidator: Validates and processes inference parameters
+    - WorkerPipeline: Base interface for model server/worker
+    - TransferPipeline: pipeline wrapper implementation for video transfer
 """
 
 # todo "keypoint" is causing dependency issue
@@ -49,19 +48,23 @@ hint_keys_av = {"hdmap", "lidar"}
 default_prompt = "The video captures a stunning, photorealistic scene with remarkable attention to detail, giving it a lifelike appearance that is almost indistinguishable from reality. It appears to be from a high-budget 4K movie, showcasing ultra-high-definition quality with impeccable resolution."
 default_negative_prompt = "The video captures a game playing, with bad crappy graphics and cartoonish frames. It represents a recording of old outdated games. The lighting looks very fake. The textures are very raw and basic. The geometries are very primitive. The images are very pixelated and of poor CG quality. There are many subtitles in the footage. Overall, the video is unrealistic at all."
 
-"""
-class validates parameters which can be in from of regular variables or in the form of a controlnet_specs dictionary.
-This is complex enough to warrant a separate class:
-Eventually we want to extend this to python validators or a schema based class.
-Also we want to module test this class separately w/o the complexity of the actual pipeline.
-"""
-
 
 class TransferValidator:
+    """Validates and processes inference paramters.
+
+    This class handles inference parameter validation and validation of controlnet specifications.
+    This class allows to use and test the validation independently from the pipeline.
+
+    Args:
+        hint_keys (set): Valid hint keys for controlnet specifications
+
+    Attributes:
+        valid_keys (set): Set of valid controlnet hint keys
+
+    """
+
     def __init__(self, hint_keys=hint_keys):
         self.valid_keys = hint_keys
-        self.default_prompt = default_prompt
-        self.default_negative_prompt = default_negative_prompt
 
     def extract_params(self, controlnet_specs):
         args_dict = {}
@@ -101,11 +104,6 @@ class TransferValidator:
                             f"Control weight for {key} must be a valid non-negative float or a path to a .pt file."
                         )
 
-    """
-    Naming of the parameters is inline with original CLI and thus the parameters allowed in controlnet_specs.
-    This way we can pass a parameter dictionary directly from the json.
-    """
-
     def validate_params(
         self,
         controlnet_specs,
@@ -121,8 +119,19 @@ class TransferValidator:
         output_dir: str = "outputs/",
         num_input_frames: int = 1,
     ):
-        """
-        advanced parameter check
+        """Validate and process transfer generation parameters.
+
+        Performs comprehensive validation of all parameters including interdependency
+        checks between controlnet specifications and input requirements.
+
+        Naming of the parameters is inline with original CLI and thus the parameters allowed in controlnet_specs.
+        This way we can pass a parameter dictionary directly from the json.
+
+        Returns:
+            dict: Validated parameter dictionary ready for pipeline use
+
+        Raises:
+            ValueError: If parameters are invalid, incompatible, or missing required inputs
         """
         args = argparse.Namespace()
 
@@ -185,15 +194,18 @@ class TransferValidator:
         return full_dict
 
 
-"""
-This class defines the interface for the worker pipeline:
-The model_server+model_worker expect a pipeline
-- with a __init__ that loads the checkpoints ahead of time before inference is called
-- with a method `infer(args: dict)`.
-"""
-
-
 class WorkerPipeline:
+    """Base interface for worker pipeline implementations.
+
+    This class defines the expected interface for worker pipelines used by
+    model_server and model_worker components. Implementations must provide:
+    - __init__() that loads checkpoints before inference is called
+    - infer(args: dict) method that processes inference requests
+
+    Attributes:
+        video_save_name (str): Default filename for saved videos
+    """
+
     def __init__(self):
 
         self.video_save_name = "output"
@@ -204,11 +216,21 @@ class WorkerPipeline:
         prompt_save_path = os.path.join(output_dir, f"{self.video_save_name}.txt")
         with open(prompt_save_path, "wb") as f:
             f.write(prompt.encode("utf-8"))
+        print(self.not_a_var)
 
         log.info(f"Saved prompt to {prompt_save_path}")
 
 
 def create_test_pipeline(cfg, create_model=True):
+    """Create a dummy pipeline for testing purposes.
+
+    Args:
+        cfg: Configuration object (unused for test pipeline)
+        create_model (bool): Whether to create the test model instance
+
+    Returns:
+        tuple: (model, validator) - Test WorkerPipeline and TransferValidator
+    """
     log.info("Creating dummy pipeline for testing")
     model = None
     if create_model:
@@ -218,6 +240,21 @@ def create_test_pipeline(cfg, create_model=True):
 
 
 class TransferPipeline(WorkerPipeline):
+    """Main transfer pipeline implementation for video-to-video generation.
+
+    This pipeline maintains loaded Cosmos models for efficient video transfer inference.
+    Models are kept loaded to avoid repeated initialization overhead.
+
+    The pipeline dynamically updates controlnet configurations and reloads models
+    only when necessary, optimizing for inference speed over memory usage.
+
+    Args:
+        num_gpus (int): Number of GPUs for distributed inference (default: 1)
+        checkpoint_dir (str): Directory containing model checkpoints
+        checkpoint_name (str): Specific checkpoint file to load
+        hint_keys (set): Valid controlnet hint keys for this pipeline
+    """
+
     def __init__(
         self,
         num_gpus: int = 1,
@@ -313,6 +350,23 @@ class TransferPipeline(WorkerPipeline):
         num_input_frames: int = 1,
         output_dir: str = "outputs/",
     ):
+        """Generate video using the transfer pipeline.
+
+        Performs end-to-end video generation including controlnet configuration updates,
+        preprocessing, diffusion generation, and output saving. The method automatically
+        handles model reloading when controlnet specifications change.
+
+        The method performs these steps:
+        1. Updates controlnet specifications and reloads models if needed
+        2. Runs preprocessing on the input video
+        3. Configures pipeline parameters
+        4. Executes diffusion generation
+        5. Saves output video and prompt files
+
+        Note:
+            Only the primary device (rank 0) saves output files in distributed setups.
+            Regional prompts and region definitions are reset to empty lists.
+        """
 
         config_changed = self.update_controlnet_spec(
             checkpoint_dir=self.checkpoint_dir,
@@ -397,6 +451,15 @@ class TransferPipeline(WorkerPipeline):
 
 
 def create_transfer_pipeline(cfg, create_model=True):
+    """Factory function to create transfer pipeline and validator.
+
+    Args:
+        cfg: Configuration object with model settings including checkpoint_dir
+        create_model (bool): Whether to actually create the model pipeline (default: True)
+
+    Returns:
+        tuple: (pipeline, validator) - TransferPipeline instance and TransferValidator
+    """
     log.info(f"Initializing model using factory function {cfg.factory_module}.{cfg.factory_function}")
 
     pipeline = None
@@ -413,6 +476,18 @@ def create_transfer_pipeline(cfg, create_model=True):
 
 
 def create_transfer_pipeline_AV(cfg, create_model=True):
+    """Factory function to create AV-specific transfer pipeline and validator.
+
+    Creates a pipeline configured for autonomous vehicle data with specialized
+    hint keys (hdmap, lidar) and AV sample checkpoint.
+
+    Args:
+        cfg: Configuration object with model settings including checkpoint_dir
+        create_model (bool): Whether to actually create the model pipeline (default: True)
+
+    Returns:
+        tuple: (pipeline, validator) - AV-configured TransferPipeline and TransferValidator
+    """
     log.info(f"Initializing model using factory function {cfg.factory_module}.{cfg.factory_function}")
 
     pipeline = None
