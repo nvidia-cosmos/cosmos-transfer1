@@ -49,7 +49,7 @@ class GradClip(GradClipVideo):
         else:
             model = model_ddp
 
-        # unscale the optimizer related to the `model_key`: [net, fake_fake, discriminator]
+        # unscale the optimizer related to the `model_key`: [net, fake_score, discriminator]
         assert (
             self.model_key in model.optimizer_dict.keys()
         ), f"Keys in optimizer_dict: {list(model.optimizer_dict.keys())}."

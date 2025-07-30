@@ -116,7 +116,7 @@ class BaseDistillationMixin(DiffusionModel, ABC):
 
         if checkpoint_path:
             log.info(f"Loading base model checkpoint (local): {checkpoint_path}")
-            state_dict = torch.load(checkpoint_path, map_location=lambda storage, loc: storage)
+            state_dict = torch.load(checkpoint_path, map_location=lambda storage, loc: storage, weights_only=False)
             log.success(f"Complete loading base model checkpoint (local): {checkpoint_path}")
 
             new_state_dict_model = {}

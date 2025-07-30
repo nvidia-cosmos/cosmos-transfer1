@@ -200,6 +200,9 @@ DEBUG_CTRLNET_LOCAL_DDP_EXP = dict(
         logging_iter=10,
     ),
     model=dict(
+        ema=dict(
+            enabled=False,
+        ),
         conditioner=dict(
             video_cond_bool=dict(
                 condition_location="first_random_n",
@@ -227,9 +230,6 @@ DEBUG_CTRLNET_LOCAL_DDP_EXP = dict(
             extra_per_block_abs_pos_emb=True,
             pos_emb_learnable=True,
             extra_per_block_abs_pos_emb_type="learnable",
-        ),
-        ema=dict(
-            enabled=False,
         ),
         teacher_net_name="net_ctrl",
         fake_score_net_name="net_ctrl",
@@ -261,6 +261,16 @@ DEBUG_CTRLNET_LOCAL_CP_FSDP_EXP = dict(
         distributed_parallelism="fsdp",
     ),
     model=dict(
+        ema=dict(
+            enabled=False,
+        ),
+        fsdp_enabled=True,
+        fsdp=dict(
+            policy="block",
+            checkpoint=False,
+            min_num_params=3000,
+            sharding_strategy="full",
+        ),
         conditioner=dict(
             video_cond_bool=dict(
                 condition_location="first_random_n",
@@ -291,16 +301,6 @@ DEBUG_CTRLNET_LOCAL_CP_FSDP_EXP = dict(
         ),
         teacher_net_name="net_ctrl",
         fake_score_net_name="net_ctrl",
-        ema=dict(
-            enabled=False,
-        ),
-        fsdp_enabled=True,
-        fsdp=dict(
-            policy="block",
-            checkpoint=False,
-            min_num_params=3000,
-            sharding_strategy="full",
-        ),
     ),
     model_parallel=dict(
         context_parallel_size=2,

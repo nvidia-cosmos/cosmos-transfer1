@@ -32,9 +32,7 @@ class KDModelMixin(DiffusionModel, ABC):
     """Knowledge distillation mixin class for diffusion step distillation."""
 
     def build_model(self) -> torch.nn.ModuleDict:
-        """Expand model building process to delete an eventual Teacher module"""
         model_dict = super().build_model()
-
         return model_dict
 
     def setup_context_parallel(
