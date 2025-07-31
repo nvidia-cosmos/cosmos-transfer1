@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from server.model_server import ModelServer
 from cosmos_transfer1.utils import log
+from server.model_server import ModelServer
 
 
 def create_worker_pipeline(cfg, create_model=True):
@@ -25,7 +25,6 @@ def create_worker_pipeline(cfg, create_model=True):
 
 
 def create_pipeline(cfg):
-
     if cfg.num_gpus == 1:
         pipeline, validator = create_worker_pipeline(cfg)
     else:

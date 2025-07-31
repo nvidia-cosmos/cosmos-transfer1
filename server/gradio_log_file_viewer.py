@@ -14,8 +14,9 @@
 # limitations under the License.
 
 
-from server.deploy_config import Config
 import gradio as gr
+
+from server.deploy_config import Config
 
 
 def _tail_file(file_path: str, num_lines: int) -> str:
@@ -35,24 +36,25 @@ def _tail_file(file_path: str, num_lines: int) -> str:
             block_number = -1
             blocks = []
             while lines_to_go > 0 and block_end_byte > 0:
-                if (block_end_byte - BLOCK_SIZE > 0):
-                    f.seek(block_number*BLOCK_SIZE, 2)
+                if block_end_byte - BLOCK_SIZE > 0:
+                    f.seek(block_number * BLOCK_SIZE, 2)
                     blocks.append(f.read(BLOCK_SIZE))
                 else:
-                    f.seek(0,0)
+                    f.seek(0, 0)
                     blocks.append(f.read(block_end_byte))
-                lines_found = blocks[-1].count(b'\n')
+                lines_found = blocks[-1].count(b"\n")
                 lines_to_go -= lines_found
                 block_end_byte -= BLOCK_SIZE
                 block_number -= 1
-            all_read_text = b''.join(reversed(blocks))
+            all_read_text = b"".join(reversed(blocks))
             # Decode bytes to string and return
-            text = all_read_text.decode('utf-8', errors='replace')
-            return '\n'.join(text.splitlines()[-total_lines_wanted:])
+            text = all_read_text.decode("utf-8", errors="replace")
+            return "\n".join(text.splitlines()[-total_lines_wanted:])
     except FileNotFoundError:
         return f"Log file not found: {file_path}"
     except Exception as e:
         return f"Error reading log file: {e}"
+
 
 def log_file_viewer(
     log_file: str = Config.log_file,

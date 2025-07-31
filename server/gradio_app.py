@@ -13,17 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import json
+import os
 from datetime import datetime
-from cosmos_transfer1.utils import log
 
-from server.deploy_config import Config
 import gradio as gr
-from server import gradio_file_server
-from server import gradio_log_file_viewer
-from server.model_factory import create_pipeline
 
+from cosmos_transfer1.utils import log
+from server import gradio_file_server, gradio_log_file_viewer
+from server.deploy_config import Config
+from server.model_factory import create_pipeline
 
 pipeline = None
 validator = None
@@ -72,7 +71,6 @@ def infer_wrapper(
 
 
 def create_gradio_interface():
-
     with gr.Blocks(title="Cosmos-Transfer1 Video Generation", theme=gr.themes.Soft()) as interface:
         gr.Markdown("# Cosmos-Transfer1: World Generation with Adaptive Multimodal Control")
         gr.Markdown("Upload a video and configure controls to generate a new video with the Cosmos-Transfer1 model.")
@@ -140,7 +138,7 @@ def create_gradio_interface():
                         """
                     - **Use the file browser above** to upload your video and copy its path for the `input_video` field
                     - **Describe a single, captivating scene**: Focus on one scene to prevent unnecessary shot changes
-                    - **Use detailed prompts**: Rich descriptions lead to better quality outputs  
+                    - **Use detailed prompts**: Rich descriptions lead to better quality outputs
                     - **Experiment with control weights**: Different combinations can yield different artistic effects
                     - **Adjust sigma_max**: Lower values preserve more of the input video structure
                     """
@@ -165,7 +163,6 @@ def create_gradio_interface():
 
 
 if __name__ == "__main__":
-
     # Check if checkpoints exist
     if not os.path.exists(Config.checkpoint_dir):
         print(f"Error: checkpoints directory {Config.checkpoint_dir} not found.")

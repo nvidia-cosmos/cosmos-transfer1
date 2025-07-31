@@ -17,7 +17,8 @@
 import json
 import os
 import time
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from loguru import logger as log
 
 
@@ -129,7 +130,7 @@ class WorkerStatus:
     def wait_for_status(self, timeout: int = 1800) -> bool:
         statuses = {}
         """blocking call to wait for completion of all workers
-        
+
             This functions waits for all workers to signal their status.
             Upon failure of any worker, it raises a WorkerException with a compound status dictionary.
         """

@@ -15,6 +15,7 @@
 import os
 import subprocess
 import time
+
 from cosmos_transfer1.utils import log
 from server.command_ipc import WorkerCommand, WorkerStatus
 
@@ -95,8 +96,8 @@ class ModelServer:
         torchrun_cmd = [
             "torchrun",
             f"--nproc_per_node={self.num_workers}",
-            f"--nnodes=1",
-            f"--node_rank=0",
+            "--nnodes=1",
+            "--node_rank=0",
             "server/model_worker.py",
         ]
 
