@@ -166,7 +166,9 @@ def _async_with_upload_example(url: str, input_video_path: str):
     logger.info(f"Local video path (downloaded to local machine): {local_video_path=}")
 
 
-def _async_wait_for_job(job: gradio_client.Job) -> typing.Tuple[gradio_client.StatusUpdate, typing.Any, typing.Optional[Exception]]:
+def _async_wait_for_job(
+    job: gradio_client.Job,
+) -> typing.Tuple[gradio_client.StatusUpdate, typing.Any, typing.Optional[Exception]]:
     """
     Waits for a job to complete.
 
@@ -196,7 +198,9 @@ def _async_wait_for_job(job: gradio_client.Job) -> typing.Tuple[gradio_client.St
 def main():
     args = argparse.ArgumentParser()
     args.add_argument("--url", required=True, type=str, default="http://localhost:8080/")
-    args.add_argument("--example", required=True, choices=["sync", "sync_with_upload", "async", "async_with_upload"], default="sync")
+    args.add_argument(
+        "--example", required=True, choices=["sync", "sync_with_upload", "async", "async_with_upload"], default="sync"
+    )
     args.add_argument("--input_video_path", required=True, type=str, default="assets/example1_input_video.mp4")
     args = args.parse_args()
 

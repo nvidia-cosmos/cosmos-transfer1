@@ -19,9 +19,8 @@ import os
 import shutil
 import typing
 
-from loguru import logger
-
 import gradio as gr
+from loguru import logger
 
 VIDEO_EXTENSION = typing.Literal[".mp4", ".avi", ".mov", ".mkv", ".webm"]
 IMAGE_EXTENSION = typing.Literal[".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]
@@ -83,16 +82,17 @@ def _format_file_path_with_icon(file_path: str) -> str:
     icon = _get_file_icon(file_path)
     return f"{icon} {file_path}"
 
+
 def _handle_api_file_upload_event(file: str, upload_dir: str) -> typing.Dict[str, str]:
     """
     Event handler for the hidden file upload component.
-    
+
     Used to upload files to the server without showing them in the UI (i.e. via the Python client).
 
     Args:
         file (str): The path to the temporary file created by Gradio
         upload_dir (str): The directory to save the uploaded files
-    
+
     Returns:
         dict[str, any]: A dictionary with either of the following keys:
             - "path": (optional) The path to the uploaded file
@@ -101,7 +101,7 @@ def _handle_api_file_upload_event(file: str, upload_dir: str) -> typing.Dict[str
     dest_path = None
     try:
         logger.info(f"Uploading file: {file=} {upload_dir=}")
-        
+
         # Create timestamped subfolder
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         upload_folder = os.path.join(upload_dir, f"upload_{timestamp}")
@@ -112,7 +112,7 @@ def _handle_api_file_upload_event(file: str, upload_dir: str) -> typing.Dict[str
         shutil.copy2(file, dest_path)
         logger.info(f"File uploaded to: {dest_path}")
 
-        response = { "path": dest_path }
+        response = {"path": dest_path}
         logger.info(f"{response=}")
         return json.dumps(response)
 
@@ -120,6 +120,7 @@ def _handle_api_file_upload_event(file: str, upload_dir: str) -> typing.Dict[str
         message = f"Upload error: {e}"
         logger.error(message)
         return {"error": message}
+
 
 def _handle_file_upload_event(temp_files, output_dir: str):
     """Handle file uploads by copying to output directory"""
@@ -265,7 +266,7 @@ def _instructions():
             2. One or more files can be uploaded at once
             3. Supported file types:
             - Videos: .mp4, .avi, .mov, .mkv, .webm
-            - Images: .jpg, .jpeg, .png, .gif, .bmp, .webp 
+            - Images: .jpg, .jpeg, .png, .gif, .bmp, .webp
             - JSON: .json
             - Text: .txt, .md
             4. The upload status will show if files were uploaded successfully
