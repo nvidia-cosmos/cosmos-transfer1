@@ -22,6 +22,54 @@ from cosmos_transfer1.utils import log
 from server.command_ipc import WorkerCommand, WorkerStatus
 from server.deploy_config import Config
 from server.model_factory import create_worker_pipeline
+from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferValidator
+
+
+class ModelWorker:
+    """Base class for any model/pipeline we want to run in the server/worker setup.
+
+    Any model we want to run in continuously running worker processes
+    needs to implement the following methods:
+    - __init__() that loads checkpoints before inference is called
+    - infer(args: dict) method that processes inference requests
+
+    """
+
+    def __init__(self):
+
+        self.video_save_name = "output"
+
+    def infer(self, args: dict):
+        output_dir = args.get("output_dir", "/mnt/pvc/gradio_output")
+        prompt = args.get("prompt", "")
+        prompt_save_path = os.path.join(output_dir, f"{self.video_save_name}.txt")
+        with open(prompt_save_path, "wb") as f:
+            f.write(prompt.encode("utf-8"))
+
+        log.info(f"Saved prompt to {prompt_save_path}")
+
+
+def create_sample_worker(cfg, create_model=True):
+    """Create a sample worker for testing purposes.
+
+    For any deployed model a factor function needs to be defined.
+    This factory function needs to be specified in the docker environment:
+    - FACTORY_MODULE="server.model_worker"
+    - FACTORY_FUNCTION="create_sample_worker"
+
+    Args:
+        cfg: Configuration object
+        create_model (bool): Whether to create the test model instance
+
+    Returns:
+        tuple: (model, validator) - Test ModelWorker and TransferValidator
+    """
+    log.info("Creating sample pipeline for testing")
+    model = None
+    if create_model:
+        model = ModelWorker()
+
+    return model, TransferValidator()
 
 
 def worker_main():

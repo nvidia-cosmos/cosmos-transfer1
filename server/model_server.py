@@ -42,8 +42,8 @@ class ModelServer:
 
     Usage:
         define in your environment which model to use. default:
-        "FACTORY_MODULE": "cosmos_transfer1.diffusion.inference.transfer_pipeline"
-        "FACTORY_FUNCTION": "create_transfer_pipeline"
+        FACTORY_MODULE="cosmos_transfer1.diffusion.inference.transfer_pipeline"
+        FACTORY_FUNCTION="create_transfer_pipeline"
 
         with ModelServer(num_workers=4) as server:
             server.infer({"prompt": "A beautiful sunset", "seed": 42})

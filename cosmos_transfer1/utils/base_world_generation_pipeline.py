@@ -56,6 +56,7 @@ class BaseWorldGenerationPipeline(ABC):
             offload_tokenizer: If True, moves tokenizer to CPU after use
             offload_text_encoder_model: If True, moves T5 encoder to CPU after encoding
             offload_guardrail_models: If True, moves safety models to CPU after checks
+            disable_guardrail: If True, disables all safety checks and guardrail models
         """
         self.inference_type = inference_type
         self.checkpoint_dir = checkpoint_dir

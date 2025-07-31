@@ -194,52 +194,7 @@ class TransferValidator:
         return full_dict
 
 
-class WorkerPipeline:
-    """Base interface for worker pipeline implementations.
-
-    This class defines the expected interface for worker pipelines used by
-    model_server and model_worker components. Implementations must provide:
-    - __init__() that loads checkpoints before inference is called
-    - infer(args: dict) method that processes inference requests
-
-    Attributes:
-        video_save_name (str): Default filename for saved videos
-    """
-
-    def __init__(self):
-
-        self.video_save_name = "output"
-
-    def infer(self, args: dict):
-        output_dir = args.get("output_dir", "/mnt/pvc/gradio_output")
-        prompt = args.get("prompt", "")
-        prompt_save_path = os.path.join(output_dir, f"{self.video_save_name}.txt")
-        with open(prompt_save_path, "wb") as f:
-            f.write(prompt.encode("utf-8"))
-        print(self.not_a_var)
-
-        log.info(f"Saved prompt to {prompt_save_path}")
-
-
-def create_test_pipeline(cfg, create_model=True):
-    """Create a dummy pipeline for testing purposes.
-
-    Args:
-        cfg: Configuration object (unused for test pipeline)
-        create_model (bool): Whether to create the test model instance
-
-    Returns:
-        tuple: (model, validator) - Test WorkerPipeline and TransferValidator
-    """
-    log.info("Creating dummy pipeline for testing")
-    model = None
-    if create_model:
-        model = WorkerPipeline()
-
-    return model, TransferValidator()
-
-
-class TransferPipeline(WorkerPipeline):
+class TransferPipeline:
     """Main transfer pipeline implementation for video-to-video generation.
 
     This pipeline maintains loaded Cosmos models for efficient video transfer inference.
@@ -403,8 +358,6 @@ class TransferPipeline(WorkerPipeline):
         self.pipeline.blur_strength = blur_strength
         self.pipeline.canny_threshold = canny_threshold
         self.pipeline.num_input_frames = num_input_frames
-
-        # self.pipeline.control_inputs = current_control_inputs
 
         batch_outputs = self.pipeline.generate(
             prompt=[prompt],

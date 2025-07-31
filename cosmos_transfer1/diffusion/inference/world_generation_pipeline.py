@@ -179,6 +179,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             offload_prompt_upsampler: Whether to offload prompt upsampler after use
             process_group: Process group for distributed training
             waymo_example: Whether to use the waymo example post-training checkpoint
+            disable_guardrail: Whether to disable guardrail checks
         """
         self.num_input_frames = num_input_frames
         self.control_inputs = control_inputs
