@@ -42,7 +42,7 @@ for dir in "${directories[@]}"; do
 done
 
 # Install dependencies
-dependencies=("python-magic" "gradio")
+dependencies=("gradio")
 for dependency in "${dependencies[@]}"; do
     echo "Checking if $dependency is installed..."
     installed_version=$(python3 -m pip show $dependency 2>/dev/null | grep '^Version:')
