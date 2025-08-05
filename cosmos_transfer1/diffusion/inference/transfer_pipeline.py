@@ -13,18 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 import argparse
 import copy
+import gc
 import json
 import os
-import torch
-import gc
 
-from cosmos_transfer1.checkpoints import (
-    BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
-    BASE_7B_CHECKPOINT_PATH,
-)
+import torch
+
+from cosmos_transfer1.checkpoints import BASE_7B_CHECKPOINT_AV_SAMPLE_PATH, BASE_7B_CHECKPOINT_PATH
 from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
 from cosmos_transfer1.diffusion.inference.preprocessors import Preprocessors
 from cosmos_transfer1.diffusion.inference.world_generation_pipeline import DiffusionControl2WorldGenerationPipeline
@@ -81,7 +78,6 @@ class TransferValidator:
         return args_dict, controlnet_specs_clean
 
     def validate_control_spec(self, controlnet_specs_clean):
-
         for key in controlnet_specs_clean:
             if key not in self.valid_keys:
                 log.warning(f"Invalid hint_key: {key}. Must be one of {self.valid_keys}")
@@ -224,6 +220,7 @@ class TransferPipeline:
 
         if num_gpus > 1:
             from megatron.core import parallel_state
+
             from cosmos_transfer1.utils import distributed
 
             distributed.init()
@@ -372,7 +369,6 @@ class TransferPipeline:
         elif self.device_rank == 0:
             videos, final_prompts = batch_outputs
             for i, (video, prompt) in enumerate(zip(videos, final_prompts)):
-
                 video_save_path = os.path.join(output_dir, f"{self.video_save_name}.mp4")
                 prompt_save_path = os.path.join(output_dir, f"{self.video_save_name}.txt")
                 os.makedirs(os.path.dirname(video_save_path), exist_ok=True)
@@ -396,8 +392,8 @@ class TransferPipeline:
     def cleanup(self, cfg):
         """Clean up resources"""
         if cfg.num_gpus > 1:
-            from megatron.core import parallel_state
             import torch.distributed as dist
+            from megatron.core import parallel_state
 
             parallel_state.destroy_model_parallel()
             dist.destroy_process_group()

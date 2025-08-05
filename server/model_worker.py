@@ -17,12 +17,12 @@ import os
 import traceback
 
 import torch.distributed as dist
-from cosmos_transfer1.utils import log
 
+from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferValidator
+from cosmos_transfer1.utils import log
 from server.command_ipc import WorkerCommand, WorkerStatus
 from server.deploy_config import Config
 from server.model_factory import create_worker_pipeline
-from cosmos_transfer1.diffusion.inference.transfer_pipeline import TransferValidator
 
 
 class ModelWorker:
@@ -36,7 +36,6 @@ class ModelWorker:
     """
 
     def __init__(self):
-
         self.video_save_name = "output"
 
     def infer(self, args: dict):
@@ -151,5 +150,4 @@ def worker_main():
 
 
 if __name__ == "__main__":
-
     worker_main()
