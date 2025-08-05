@@ -17,7 +17,6 @@ from hydra.core.config_store import ConfigStore
 
 from cosmos_transfer1.diffusion.config.base.data import register_data_ctrlnet
 from cosmos_transfer1.diffusion.config.registry import register_conditioner
-from cosmos_transfer1.diffusion.config.training.callbacks import BASIC_CALLBACKS
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS
 from cosmos_transfer1.diffusion.config.training.registry import register_checkpoint_credential
 from cosmos_transfer1.diffusion.config.training.registry_extra import (
@@ -25,13 +24,15 @@ from cosmos_transfer1.diffusion.config.training.registry_extra import (
     register_conditioner_ctrlnet,
     register_tokenizer,
 )
+from cosmos_transfer1.distillation.config.base.callbacks import BASIC_CALLBACKS, TRAIN_VIS_CALLBACK
 from cosmos_transfer1.distillation.config.base.checkpoint import DISTILL_CHECKPOINTER, DISTILL_FSDP_CHECKPOINTER
+from cosmos_transfer1.distillation.config.base.data import get_kd_transfer_dataset
 from cosmos_transfer1.distillation.config.base.discriminator import (
     CONV3D_POOL_FADITV2_Config,
     CONV3D_POOL_TINY_FA_Config,
 )
 from cosmos_transfer1.distillation.config.base.fsdp import FULL_FSDP_CONFIG, HYBRID_FSDP_CONFIG
-from cosmos_transfer1.distillation.config.base.mock_data import (
+from cosmos_transfer1.distillation.config.base.data import (
     MOCK_DISTILL_DATA_LOADER,
     MOCK_DISTILL_CTRLNET_DATA_LOADER,
     MOCK_DISTILL_DATA_LOADER_DEBUG,
@@ -94,9 +95,10 @@ def register_debug_experiments(cs):
 
 def register_callbacks(cs):
     cs.store(group="callbacks", package="trainer.callbacks", name="basic", node=BASIC_CALLBACKS)
+    cs.store(group="callbacks", package="trainer.callbacks", name="train_vis", node=TRAIN_VIS_CALLBACK)
 
 
-def register_mock_data(cs):
+def register_data(cs):
     cs.store(group="data_train", package="dataloader_train", name="mock_distill", node=MOCK_DISTILL_DATA_LOADER)
     cs.store(
         group="data_train",
@@ -130,6 +132,20 @@ def register_mock_data(cs):
         name="mock_ctrl_distill_debug",
         node=MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG,
     )
+
+    for hint_key in CTRL_HINT_KEYS:
+        cs.store(
+            group="data_train",
+            package="dataloader_train",
+            name=f"kd_transfer_train_data_{hint_key}",
+            node=get_kd_transfer_dataset(hint_key=hint_key, is_train=True),
+        )
+        cs.store(
+            group="data_val",
+            package="dataloader_val",
+            name=f"kd_transfer_val_data_{hint_key}",
+            node=get_kd_transfer_dataset(hint_key=hint_key, is_train=False),
+        )
 
 
 def register_discriminator(cs):
@@ -200,7 +216,7 @@ def register_configs():
     register_debug_experiments(cs)
     register_discriminator(cs)
     register_fsdp(cs)
-    register_mock_data(cs)
+    register_data(cs)
     register_optimizers(cs)
     register_schedulers(cs)
 
