@@ -24,7 +24,7 @@ Below is an example of the expected checkpoint structure (inside the checkpoints
     - checkpoints_teacher/edge_control.pt: The combined checkpoint for distillation.
 
 Usage:
-    python scripts/combine_base_ctrl_ckpt.py --ctrl edge
+    python cosmos_transfer1/distillation/scripts/combine_base_ctrl_ckpt.py --ctrl_type edge
 """
 
 import argparse
@@ -55,7 +55,7 @@ def combine_checkpoints(base_model_path: str, control_model_path: str, output_pa
     print(f"Saving combined checkpoint to: {output_path}")
     torch.save(combined_state_dict, output_path)
 
-    print("🟩 Successfully combined checkpoints!")
+    print("✅ Successfully combined checkpoints!")
     print(f"  Total parameters: {len(combined_state_dict)}")
 
     # Print some example keys for verification
@@ -69,14 +69,14 @@ def combine_checkpoints(base_model_path: str, control_model_path: str, output_pa
 
 def main():
     parser = argparse.ArgumentParser(description="Combine base model and control model checkpoints")
-    parser.add_argument("--ctrl", required=True, help="Control type: edge, vis, depth, seg, keypoint")
+    parser.add_argument("--ctrl_type", required=True, help="Control type: edge, vis, depth, seg, keypoint")
     parser.add_argument("--verbose", action="store_true", help="Print detailed information")
 
     args = parser.parse_args()
 
     base_model_path = "checkpoints/nvidia/Cosmos-Transfer1-7B/base_model.pt"
-    ctrl_model_path = f"checkpoints/nvidia/Cosmos-Transfer1-7B/{args.ctrl}_control.pt"
-    output_path = f"checkpoints/nvidia/Cosmos-Transfer1-7B/checkpoints_teacher/{args.ctrl}_control.pt"
+    ctrl_model_path = f"checkpoints/nvidia/Cosmos-Transfer1-7B/{args.ctrl_type}_control.pt"
+    output_path = f"checkpoints/nvidia/Cosmos-Transfer1-7B/checkpoints_teacher/{args.ctrl_type}_control.pt"
 
     # Validate input files exist
     if not Path(base_model_path).exists():
