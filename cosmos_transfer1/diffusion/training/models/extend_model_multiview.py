@@ -44,14 +44,14 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
     @torch.no_grad()
     def encode(self, state: torch.Tensor) -> torch.Tensor:
         state = rearrange(state, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
-        encoded_state = self.vae.encode(state)
+        encoded_state = self.tokenizer.encode(state)
         encoded_state = rearrange(encoded_state, "(B V) C T H W -> B C (V T) H W", V=self.n_views) * self.sigma_data
         return encoded_state
 
     @torch.no_grad()
     def decode(self, latent: torch.Tensor) -> torch.Tensor:
         latent = rearrange(latent, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
-        decoded_state = self.vae.decode(latent / self.sigma_data)
+        decoded_state = self.tokenizer.decode(latent / self.sigma_data)
         decoded_state = rearrange(decoded_state, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
         return decoded_state
 
@@ -565,7 +565,7 @@ class MultiviewExtendDiffusionModel(ExtendDiffusionModel):
             )
         raw_state, latent_state, condition = super().get_data_and_condition(data_batch, num_condition_t=num_condition_t)
         if condition.data_type == DataType.VIDEO and "view_indices" in data_batch:
-            comp_factor = self.vae.temporal_compression_factor
+            comp_factor = self.tokenizer.temporal_compression_factor
             # n_frames = data_batch['num_frames']
             view_indices = rearrange(data_batch["view_indices"], "B (V T) -> B V T", V=self.n_views)
             view_indices_B_V_0 = view_indices[:, :, :1]

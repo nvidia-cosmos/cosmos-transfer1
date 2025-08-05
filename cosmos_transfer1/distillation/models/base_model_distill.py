@@ -49,8 +49,7 @@ class BaseDistillationMixin(DiffusionModel, ABC):
 
         if config.is_ctrl_net:
             # Reload the base model for the control net setting.
-            # The previous loading function in edify_image/v4/models/model_ctrl.py for base model
-            # is incorrect for current checkpoint
+            # The previous loading function in model_ctrl.py for base model is incorrect for our current checkpoint.
             self._load_pretrained_net(self.teacher, model_dict)
         else:
             self._load_pretrained_net(self.teacher)

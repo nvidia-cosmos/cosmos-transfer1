@@ -83,10 +83,10 @@ class DiffusionModel(Model):
 
         # 3. vae
         with misc.timer("DiffusionModel: set_up_vae"):
-            self.vae: BaseVAE = lazy_instantiate(config.tokenizer)
+            self.tokenizer: BaseVAE = lazy_instantiate(config.tokenizer)
             assert (
-                self.vae.latent_ch == self.state_shape[0]
-            ), f"latent_ch {self.vae.latent_ch} != state_shape {self.state_shape[0]}"
+                self.tokenizer.latent_ch == self.state_shape[0]
+            ), f"latent_ch {self.tokenizer.latent_ch} != state_shape {self.state_shape[0]}"
 
         # 4. Set up loss options, including loss masking, loss reduce and loss scaling
         self.loss_masking: Optional[Dict] = config.loss_masking
@@ -150,8 +150,8 @@ class DiffusionModel(Model):
     def on_train_start(self, memory_format: torch.memory_format = torch.preserve_format) -> None:
         if self.config.ema.enabled:
             self.model_ema.to(dtype=torch.float32)
-        if hasattr(self.vae, "reset_dtype"):
-            self.vae.reset_dtype()
+        if hasattr(self.tokenizer, "reset_dtype"):
+            self.tokenizer.reset_dtype()
         self.model = self.model.to(memory_format=memory_format, **self.tensor_kwargs)
 
         if hasattr(self.config, "use_torch_compile") and self.config.use_torch_compile:  # compatible with old config
@@ -341,11 +341,11 @@ class DiffusionModel(Model):
 
     @torch.no_grad()
     def encode(self, state: torch.Tensor) -> torch.Tensor:
-        return self.vae.encode(state) * self.sigma_data
+        return self.tokenizer.encode(state) * self.sigma_data
 
     @torch.no_grad()
     def decode(self, latent: torch.Tensor) -> torch.Tensor:
-        return self.vae.decode(latent / self.sigma_data)
+        return self.tokenizer.decode(latent / self.sigma_data)
 
     def draw_training_sigma_and_epsilon(self, x0_size: int, condition: Any) -> torch.Tensor:
         del condition

@@ -265,7 +265,7 @@ class DiffusionV2WMultiviewModel(DiffusionV2WModel):
             condition, uncondition = self.conditioner.get_condition_uncondition(data_batch)
 
         if "view_indices" in data_batch:
-            comp_factor = self.vae.temporal_compression_factor
+            comp_factor = self.tokenizer.temporal_compression_factor
             view_indices = rearrange(data_batch["view_indices"], "B (V T) -> B V T", V=self.n_views)
             view_indices_B_V_0 = view_indices[:, :, :1]
             view_indices_B_V_1T = view_indices[:, :, 1:-1:comp_factor]

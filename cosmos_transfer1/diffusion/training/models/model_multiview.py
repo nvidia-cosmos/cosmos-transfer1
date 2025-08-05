@@ -53,14 +53,14 @@ class MultiviewDiffusionModel(DiffusionModel):
     @torch.no_grad()
     def encode(self, state: torch.Tensor) -> torch.Tensor:
         state = rearrange(state, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
-        encoded_state = self.vae.encode(state)
+        encoded_state = self.tokenizer.encode(state)
         encoded_state = rearrange(encoded_state, "(B V) C T H W -> B C (V T) H W", V=self.n_views) * self.sigma_data
         return encoded_state
 
     @torch.no_grad()
     def decode(self, latent: torch.Tensor) -> torch.Tensor:
         latent = rearrange(latent, "B C (V T) H W -> (B V) C T H W", V=self.n_views)
-        decoded_state = self.vae.decode(latent / self.sigma_data)
+        decoded_state = self.tokenizer.decode(latent / self.sigma_data)
         decoded_state = rearrange(decoded_state, "(B V) C T H W -> B C (V T) H W", V=self.n_views)
         return decoded_state
 

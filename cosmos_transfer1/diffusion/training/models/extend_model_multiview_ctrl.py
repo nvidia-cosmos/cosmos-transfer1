@@ -286,7 +286,7 @@ class MultiVideoDiffusionModelWithCtrl(MultiviewExtendDiffusionModel):
             condition, uncondition = self.conditioner.get_condition_uncondition(data_batch)
 
         if condition.data_type == DataType.VIDEO and "view_indices" in data_batch:
-            comp_factor = self.vae.temporal_compression_factor
+            comp_factor = self.tokenizer.temporal_compression_factor
             # n_frames = data_batch['num_frames']
             view_indices = rearrange(data_batch["view_indices"], "B (V T) -> B V T", V=self.n_views)
             view_indices_B_V_0 = view_indices[:, :, :1]
