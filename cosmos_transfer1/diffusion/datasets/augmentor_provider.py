@@ -19,6 +19,7 @@ from cosmos_transfer1.diffusion.datasets.augmentors.basic_augmentors import (
     ReflectionPadding,
     ResizeLargestSideAspectPreserving,
 )
+from cosmos_transfer1.diffusion.datasets.augmentors.text_transforms_for_video import TextTransformForVideo
 from cosmos_transfer1.diffusion.datasets.augmentors.control_input import (
     VIDEO_RES_SIZE_INFO,
     AddControlInput,
@@ -71,7 +72,7 @@ register all the video ctrlnet augmentors for data loading
 """
 for hint_key in CTRL_HINT_KEYS:
 
-    def get_video_ctrlnet_augmentor(hint_key, use_random=True):
+    def get_video_ctrlnet_augmentor(hint_key, is_kd_data: bool = False, use_random: bool = True):
         def _get_video_ctrlnet_augmentor(
             resolution: str,
             blur_config: BlurAugmentorConfig = random_blur_config,
@@ -96,6 +97,7 @@ for hint_key in CTRL_HINT_KEYS:
                     args={"comb": CTRL_HINT_KEYS_COMB[hint_key]},
                     use_random=use_random,
                     blur_config=blur_config,
+                    is_kd_data=is_kd_data,
                 )
             else:
                 add_control_input = L(AddControlInput)(
@@ -103,6 +105,7 @@ for hint_key in CTRL_HINT_KEYS:
                     output_keys=[hint_key],
                     use_random=use_random,
                     blur_config=blur_config,
+                    is_kd_data=is_kd_data,
                 )
             input_keys = ["video"]
             output_keys = [
@@ -135,8 +138,18 @@ for hint_key in CTRL_HINT_KEYS:
                     args={"size": VIDEO_RES_SIZE_INFO[resolution]},
                 ),
             }
+
+            if is_kd_data:
+                augmentation["text_transform"] = L(TextTransformForVideo)(
+                    input_keys=["t5_text_embeddings"],
+                    args={
+                        "t5_tokens": {"num": 512, "dim": 1024},
+                        "is_mask_all_ones": True,
+                    },
+                )
             return augmentation
 
         return _get_video_ctrlnet_augmentor
 
     augmentor_register(f"video_ctrlnet_augmentor_{hint_key}")(get_video_ctrlnet_augmentor(hint_key))
+    augmentor_register(f"kd_video_ctrlnet_augmentor_{hint_key}")(get_video_ctrlnet_augmentor(hint_key, is_kd_data=True))

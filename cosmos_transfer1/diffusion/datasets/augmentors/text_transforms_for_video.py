@@ -75,66 +75,7 @@ class TextTransformForVideo(Augmentor):
         Returns:
             data_dict (dict): Output dict with captions and t5 embeddings added
         """
-        data_source = data_dict["__url__"].meta.source
-        input_keys_by_source = self.input_keys[data_source]
-
-        if "chunk_index" not in data_dict:
-            log.warning(
-                "Chunk_index is not in data_dict, set chunk_index to be 0. This should only happen for sampling."
-            )
-            data_dict["chunk_index"] = 0  # this is for sampling only, whereas decoder is not loaded
-        try:
-            windows = data_dict[input_keys_by_source["ai_caption"]]["windows"]
-            n_windows = len(windows)
-            chunk_index = data_dict["chunk_index"]
-
-            if chunk_index == n_windows:
-                # This will only happen when the number of captions does not match number of chunks due to re-transcoding the videos.
-                log.info(
-                    f"Found {data_dict['orig_num_frames']} in video but captioning is done with videos of {windows[-1]['end_frame']} frames. This mismatch is due to video re-transcoding.",
-                    rank0_only=False,
-                )
-                chunk_index -= 1
-
-            selected_caption_window = windows[chunk_index]
-        except Exception as e:
-            log.warning(
-                f"TextTransform dataloader error: {data_dict['__url__']}, {data_dict['__key__']}, {data_dict['chunk_index']}\n error {e}",
-                rank0_only=False,
-            )
-            return None
-
-        try:
-            if "vila_caption" in selected_caption_window:
-                caption_type = "vila_caption"
-            else:
-                caption_type = random.choices(["long_caption", "short_caption"], weights=[0.95, 0.05], k=1)[0]
-            data_dict["ai_caption"] = selected_caption_window[caption_type]
-        except Exception as e:
-            log.warning(
-                f"TextTransform dataloader error: {data_dict['__url__']}, {data_dict['__key__']}, {selected_caption_window}\n error {e}",
-                rank0_only=False,
-            )
-            return None
-
-        if data_dict["ai_caption"] is None:
-            data_dict["ai_caption"] = ""
-        del data_dict[input_keys_by_source["ai_caption"]]
-
-        ai_caption_embedding_data = data_dict[input_keys_by_source["ai_caption_embedding"]]
-        try:
-            if caption_type in ["vila_caption"]:
-                t5_embedding = ai_caption_embedding_data[data_dict["chunk_index"]]
-            else:
-                t5_embedding = ai_caption_embedding_data[data_dict["chunk_index"]][
-                    caption_type.replace("_caption", "")
-                ]  # t5_embedding is saved in {"short": array, "long": array} format
-        except Exception as e:
-            log.warning(
-                f"TextTransform dataloader error: {data_dict['__url__']}, {data_dict['__key__']}, {data_dict['chunk_index']}, {len(ai_caption_embedding_data)} \n error {e}",
-                rank0_only=False,
-            )
-            return None
+        t5_embedding = data_dict[self.input_keys[0]]
         out_t5, out_t5_mask = pad_and_resize(
             t5_embedding,
             self.args["t5_tokens"]["num"],
@@ -142,6 +83,5 @@ class TextTransformForVideo(Augmentor):
         )
         data_dict["t5_text_embeddings"] = out_t5
         data_dict["t5_text_mask"] = out_t5_mask
-        del data_dict[input_keys_by_source["ai_caption_embedding"]]
 
         return data_dict

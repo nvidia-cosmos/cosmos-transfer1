@@ -13,10 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from torch.utils.data import DataLoader
+from megatron.core import parallel_state
+from torch.utils.data import DataLoader, DistributedSampler
 
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
-from cosmos_transfer1.distillation.datasets.mock_data_distill import (
+from cosmos_transfer1.distillation.datasets.example_kd_dataset import KDTransferDataset
+from cosmos_transfer1.distillation.datasets.mock_distill_dataset import (
     get_mock_distill_ctrlnet_dataset,
     get_mock_distill_dataset,
 )
@@ -74,3 +76,33 @@ MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG = L(DataLoader)(
     num_workers=8,
     pin_memory=True,
 )
+
+
+def get_sampler(dataset):
+    return DistributedSampler(
+        dataset,
+        num_replicas=parallel_state.get_data_parallel_world_size(),
+        rank=parallel_state.get_data_parallel_rank(),
+        shuffle=True,
+        seed=0,
+    )
+
+
+def get_kd_transfer_dataset(hint_key, is_train=True):
+    dataset = L(KDTransferDataset)(
+        dataset_dir="datasets/kd",
+        num_frames=121,
+        resolution="720",
+        hint_key=hint_key,
+        is_train=is_train,
+    )
+
+    return L(DataLoader)(
+        dataset=dataset,
+        sampler=L(get_sampler)(dataset=dataset),
+        batch_size=1,
+        drop_last=True,
+        num_workers=8,  # adjust as needed
+        prefetch_factor=2,  # adjust as needed
+        pin_memory=True,
+    )

@@ -432,6 +432,7 @@ class AddControlInputBlurDownUp(Augmentor):
         min_downup_factor: int = 4,  # minimum downup factor
         max_downup_factor: int = 16,  # maximum downup factor
         downsize_before_blur: bool = False,  # whether to downsize before applying blur and then upsize or downup after blur
+        is_kd_data: bool = False,  # whether the dataset is used for Knowledge Distillation
     ) -> None:
         super().__init__(input_keys, output_keys, args)
         self.use_random = use_random
@@ -450,6 +451,7 @@ class AddControlInputBlurDownUp(Augmentor):
         self.downsize_before_blur = downsize_before_blur
         self.min_downup_factor = min_downup_factor
         self.max_downup_factor = max_downup_factor
+        self.is_kd_data = is_kd_data
 
     def _load_frame(self, data_dict: dict) -> tuple[np.ndarray, bool]:
         key_img = self.input_keys[1]
@@ -465,8 +467,14 @@ class AddControlInputBlurDownUp(Augmentor):
         if "control_input_vis" in data_dict:
             # already processed
             return data_dict
-        key_img = self.input_keys[1]
         key_out = self.output_keys[0]
+
+        # For Knowledge Distillation data, we use the control input from the data dictionary
+        if self.is_kd_data:
+            vis = data_dict["vis"]["video"]
+            data_dict[key_out] = vis
+            return data_dict
+
         frames, is_image = self._load_frame(data_dict)
 
         # Resize the frames to target size before blurring.
@@ -525,11 +533,13 @@ class AddControlInputEdge(Augmentor):
         args: Optional[dict] = None,
         use_random: bool = True,
         preset_canny_threshold="medium",
+        is_kd_data: bool = False,  # whether the dataset is used for Knowledge Distillation
         **kwargs,
     ) -> None:
         super().__init__(input_keys, output_keys, args)
         self.use_random = use_random
         self.preset_strength = preset_canny_threshold
+        self.is_kd_data = is_kd_data
 
     def __call__(self, data_dict: dict) -> dict:
         if "control_input_edge" in data_dict:
@@ -537,6 +547,13 @@ class AddControlInputEdge(Augmentor):
             return data_dict
         key_img = self.input_keys[1]
         key_out = self.output_keys[0]
+
+        # For Knowledge Distillation data, we use the control input from the data dictionary
+        if self.is_kd_data:
+            edge = data_dict["edge"]["video"]
+            data_dict[key_out] = edge
+            return data_dict
+
         frames = data_dict[key_img]
         # Get lower and upper threshold for canny edge detection.
         if self.use_random:  # always on for training, always off for inference
@@ -588,6 +605,7 @@ class AddControlInput(Augmentor):
         blur_config: BlurAugmentorConfig = BlurAugmentorConfig(),
         use_random=True,
         preset_blur_strength="medium",
+        is_kd_data: bool = False,  # whether the dataset is used for Knowledge Distillation
         **kwargs,
     ) -> None:
         super().__init__(input_keys, output_keys, args)
@@ -599,6 +617,7 @@ class AddControlInput(Augmentor):
             blur_config=blur_config,
             downup_preset=preset_blur_strength,  # preset strength for downup factor
             use_random=use_random,
+            is_kd_data=is_kd_data,
         )
 
     def __call__(self, data_dict: dict) -> dict:

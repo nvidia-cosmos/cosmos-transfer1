@@ -13,6 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Run this command to interactively debug:
+PYTHONPATH=. python cosmos_transfer1/distillation/datasets/mock_distill_dataset.py
+"""
+
 from functools import partial
 
 import torch
@@ -53,21 +58,14 @@ def get_mock_distill_dataset(
             "noise": LambdaDataset(noise_fn),
             "t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
             "t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
-            # Negative prompt is used for DMD2 training only if using CFG with negative prompt
-            "neg_t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
-            "neg_t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
             "fps": LambdaDataset(lambda: 24.0),
             "image_size": LambdaDataset(partial(torch.tensor, [h, w, h, w], dtype=torch.float32)),
             "num_frames": LambdaDataset(lambda: num_video_frames),
             "padding_mask": LambdaDataset(partial(torch.zeros, size=(1, h, w))),
             "ai_caption": LambdaDataset(lambda: "placeholder"),
             "dataset_name": LambdaDataset(lambda: "video_data"),
-            "chunk_index": LambdaDataset(lambda: 0),
             "frame_end": LambdaDataset(lambda: 0),
             "frame_start": LambdaDataset(lambda: 0),
-            "orig_num_frames": LambdaDataset(lambda: 0),
-            "__url__": LambdaDataset(lambda: "placeholder"),
-            "__key__": LambdaDataset(lambda: "placeholder"),
         }
     )
 
@@ -111,20 +109,40 @@ def get_mock_distill_ctrlnet_dataset(
             "noise": LambdaDataset(noise_fn),
             "t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
             "t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
-            # Negative prompt is used for DMD2 training only if using CFG with negative prompt
-            "neg_t5_text_embeddings": LambdaDataset(partial(torch.randn, size=(len_t5, 1024))),
-            "neg_t5_text_mask": LambdaDataset(partial(torch.randint, low=0, high=2, size=(len_t5,), dtype=torch.int64)),
             "fps": LambdaDataset(lambda: 24.0),
             "image_size": LambdaDataset(partial(torch.tensor, [h, w, h, w], dtype=torch.float32)),
             "num_frames": LambdaDataset(lambda: num_video_frames),
             "padding_mask": LambdaDataset(partial(torch.zeros, size=(1, h, w))),
             "ai_caption": LambdaDataset(lambda: "placeholder"),
             "dataset_name": LambdaDataset(lambda: "video_data"),
-            "chunk_index": LambdaDataset(lambda: 0),
             "frame_end": LambdaDataset(lambda: 0),
             "frame_start": LambdaDataset(lambda: 0),
-            "orig_num_frames": LambdaDataset(lambda: 0),
-            "__url__": LambdaDataset(lambda: "placeholder"),
-            "__key__": LambdaDataset(lambda: "placeholder"),
         }
     )
+
+
+if __name__ == "__main__":
+    """
+    Sanity check for the dataset.
+    """
+    control_input_key = "control_input_edge"
+    dataset = get_mock_distill_ctrlnet_dataset(
+        h=704,
+        w=1280,
+        num_video_frames=121,
+        hint_key=control_input_key,
+    )
+    indices = [0, 5, -1]
+    for idx in indices:
+        data = dataset[idx]
+        print(
+            (
+                f"{idx=} "
+                f"{data['video'].sum()=}\n"
+                f"{data['video'].shape=}\n"
+                f"{data[control_input_key].shape=}\n"  # should match the video shape
+                f"{data['noise'].shape=}\n"
+                f"{data['t5_text_embeddings'].shape=}\n"
+                "---"
+            )
+        )
