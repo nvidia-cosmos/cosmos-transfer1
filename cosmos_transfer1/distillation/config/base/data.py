@@ -17,6 +17,7 @@ from megatron.core import parallel_state
 from torch.utils.data import DataLoader, DistributedSampler
 
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
+from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset
 from cosmos_transfer1.distillation.datasets.example_kd_dataset import KDTransferDataset
 from cosmos_transfer1.distillation.datasets.mock_distill_dataset import (
     get_mock_distill_ctrlnet_dataset,
@@ -91,6 +92,26 @@ def get_sampler(dataset):
 def get_kd_transfer_dataset(hint_key, is_train=True):
     dataset = L(KDTransferDataset)(
         dataset_dir="datasets/kd",
+        num_frames=121,
+        resolution="720",
+        hint_key=hint_key,
+        is_train=is_train,
+    )
+
+    return L(DataLoader)(
+        dataset=dataset,
+        sampler=L(get_sampler)(dataset=dataset),
+        batch_size=1,
+        drop_last=True,
+        num_workers=8,  # adjust as needed
+        prefetch_factor=2,  # adjust as needed
+        pin_memory=True,
+    )
+
+
+def get_dmd2_transfer_dataset(hint_key, is_train=True):
+    dataset = L(ExampleTransferDataset)(
+        dataset_dir="datasets/dmd2",
         num_frames=121,
         resolution="720",
         hint_key=hint_key,

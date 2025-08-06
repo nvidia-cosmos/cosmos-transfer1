@@ -26,7 +26,7 @@ from cosmos_transfer1.diffusion.config.training.registry_extra import (
 )
 from cosmos_transfer1.distillation.config.base.callbacks import BASIC_CALLBACKS, TRAIN_VIS_CALLBACK
 from cosmos_transfer1.distillation.config.base.checkpoint import DISTILL_CHECKPOINTER, DISTILL_FSDP_CHECKPOINTER
-from cosmos_transfer1.distillation.config.base.data import get_kd_transfer_dataset
+from cosmos_transfer1.distillation.config.base.data import get_kd_transfer_dataset, get_dmd2_transfer_dataset
 from cosmos_transfer1.distillation.config.base.discriminator import (
     CONV3D_POOL_FADITV2_Config,
     CONV3D_POOL_TINY_FA_Config,
@@ -145,6 +145,18 @@ def register_data(cs):
             package="dataloader_val",
             name=f"kd_transfer_val_data_{hint_key}",
             node=get_kd_transfer_dataset(hint_key=hint_key, is_train=False),
+        )
+        cs.store(
+            group="data_train",
+            package="dataloader_train",
+            name=f"dmd2_transfer_train_data_{hint_key}",
+            node=get_dmd2_transfer_dataset(hint_key=hint_key, is_train=True),
+        )
+        cs.store(
+            group="data_val",
+            package="dataloader_val",
+            name=f"dmd2_transfer_val_data_{hint_key}",
+            node=get_dmd2_transfer_dataset(hint_key=hint_key, is_train=False),
         )
 
 

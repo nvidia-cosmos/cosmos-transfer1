@@ -137,16 +137,14 @@ for hint_key in CTRL_HINT_KEYS:
                     input_keys=["video", hint_key],
                     args={"size": VIDEO_RES_SIZE_INFO[resolution]},
                 ),
-            }
-
-            if is_kd_data:
-                augmentation["text_transform"] = L(TextTransformForVideo)(
+                "text_transform": L(TextTransformForVideo)(
                     input_keys=["t5_text_embeddings"],
                     args={
                         "t5_tokens": {"num": 512, "dim": 1024},
                         "is_mask_all_ones": True,
                     },
-                )
+                ),
+            }
             return augmentation
 
         return _get_video_ctrlnet_augmentor
