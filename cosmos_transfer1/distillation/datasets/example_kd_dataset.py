@@ -163,10 +163,8 @@ class KDTransferDataset(ExampleTransferDataset):
                 data["frame_start"] = frame_ids[0]
                 data["frame_end"] = frame_ids[-1] + 1
                 data["num_frames"] = self.sequence_length
-                # data["image_size"] = torch.tensor([704, 1280, 704, 1280])  # .cuda()
-                # data["padding_mask"] = torch.zeros(1, 704, 1280)  # .cuda()
-                data["image_size"] = torch.tensor([192, 320, 192, 320])  # .cuda()
-                data["padding_mask"] = torch.zeros(1, 192, 320)  # .cuda()
+                data["image_size"] = torch.tensor([704, 1280, 704, 1280])  # .cuda()
+                data["padding_mask"] = torch.zeros(1, 704, 1280)  # .cuda()
 
                 if self.ctrl_type:
                     ctrl_data = self._load_control_data(

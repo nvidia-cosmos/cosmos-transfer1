@@ -71,7 +71,7 @@ class DistillModelConfig:
 class DistillCtrlModelConfig(DistillModelConfig):
     net_ctrl: LazyDict = None
     hint_key: str = None
-    finetune_base_model: bool = True
+    finetune_base_model: bool = False  # Set to False, used for teacher model only
     hint_mask: list = [True]
     hint_dropout_rate: float = 0.0
     num_control_blocks: int = 5
@@ -94,6 +94,7 @@ class DMD2ModelConfig(DistillModelConfig):
 
     # student update frequency
     student_update_freq: int = 5
+
     # guidance scale for cfg in teacher diffusion model
     guidance_scale: float = 0
 
@@ -107,7 +108,8 @@ class DMD2ModelConfig(DistillModelConfig):
     recon_loss_only: bool = False
 
     # use negative prompt or not for CFG in DMD2
-    use_negative_prompt: bool = True
+    use_negative_prompt: bool = False
+    negative_prompt_path: str = "datasets/negative_prompt/transfer1.pkl"
 
     # noise schedule type ["edm_sampling", "inference"]
     noise_schedule_type: str = "edm_sampling"
