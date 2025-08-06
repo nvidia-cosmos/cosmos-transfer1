@@ -16,7 +16,7 @@
 import torch
 from torch.distributed import ProcessGroup
 
-from cosmos_transfer1.diffusion.module.blocks import DITBuildingBlock
+from cosmos_transfer1.diffusion.training.modules.blocks import DITBuildingBlock
 from cosmos_transfer1.utils.lazy_config import instantiate as lazy_instantiate
 
 

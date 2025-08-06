@@ -82,7 +82,9 @@ def launch(config: Config, args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Training")
-    parser.add_argument("--config", default="cosmos_transfer1/distillation/config/config_ctrl_dmd2.py", help="Path to the config file")
+    parser.add_argument(
+        "--config", default="cosmos_transfer1/distillation/config/config_ctrl_dmd2.py", help="Path to the config file"
+    )
     parser.add_argument(
         "opts",
         help="""
