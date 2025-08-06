@@ -16,6 +16,7 @@
 # limitations under the License.
 
 # Start script for the gradio app:
+# - Verifies that CHECKPOINT_DIR and GRADIO_APP exist
 # - Creates directories specified by environment variables
 # - Installs gradio
 # - Starts the app, teeing output to the log file
@@ -28,6 +29,21 @@ export CHECKPOINT_DIR=${CHECKPOINT_DIR:-$REPO_ROOT/checkpoints}
 export OUTPUT_DIR=${OUTPUT_DIR:-$REPO_ROOT/outputs/gradio/output}
 export UPLOADS_DIR=${UPLOADS_DIR:-$REPO_ROOT/outputs/gradio/uploads}
 export LOG_FILE=${LOG_FILE:-$REPO_ROOT/outputs/gradio/logs/$(date +%Y%m%d_%H%M%S).txt}
+export GRADIO_APP=${GRADIO_APP:-$REPO_ROOT/server/gradio_app.py}
+
+# Verify that checkpoints directory exists
+echo "Checking if checkpoints directory exists: $CHECKPOINT_DIR"
+if [ ! -d "$CHECKPOINT_DIR" ]; then
+    echo "Error: Checkpoints directory does not exist: $CHECKPOINT_DIR"
+    exit 1
+fi
+
+# Verify that gradio app exists
+echo "Checking if gradio app exists: $GRADIO_APP"
+if [ ! -f "$GRADIO_APP" ]; then
+    echo "Error: Gradio app does not exist: $GRADIO_APP"
+    exit 1
+fi
 
 # Create output directories
 echo "Creating application directories..."
@@ -55,6 +71,6 @@ for dependency in "${dependencies[@]}"; do
 done
 
 # Start the app and tee output to the log file
-command="cd $REPO_ROOT && PYTHONPATH=. python3 server/gradio_app.py 2>&1 | tee -a $LOG_FILE"
+command="cd $REPO_ROOT && PYTHONPATH=. python3 $GRADIO_APP 2>&1 | tee -a $LOG_FILE"
 echo "Starting the app: $command"
 eval $command
