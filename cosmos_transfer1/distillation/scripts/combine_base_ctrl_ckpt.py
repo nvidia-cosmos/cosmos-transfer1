@@ -24,7 +24,7 @@ Below is an example of the expected checkpoint structure (inside the checkpoints
     - checkpoints_teacher/edge_control.pt: The combined checkpoint for distillation.
 
 Usage:
-    python cosmos_transfer1/distillation/scripts/combine_base_ctrl_ckpt.py --ctrl_type edge
+    PYTHONPATH=$(pwd) python cosmos_transfer1/distillation/scripts/combine_base_ctrl_ckpt.py --ctrl_type edge
 """
 
 import argparse
