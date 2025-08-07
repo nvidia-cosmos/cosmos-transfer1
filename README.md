@@ -80,6 +80,10 @@ Please refer to [INSTALL.md](INSTALL.md) for general instructions on environment
 * [Pre-train Cosmos-Transfer1-7B-Sample-AV [LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
 * [Pre-train Cosmos-Transfer1-7B-Sample-AV-Multiview[LiDAR|HDMap]](examples/training_cosmos_transfer_7B_sample_AV.md) **[with multi-GPU support]**
 
+### Distill your own Cosmos-Transfer1 models
+
+* [Distill Cosmos-Transfer1-7B [Depth | Edge | Keypoint | Segmentation | Vis]](examples/distillation_cosmos_transfer1_7b.md) **[with multi-GPU support]**
+
 ### Workflow
 
 *[Robotics Augmentation Workflow](/cosmos_transfer1/auxiliary/robot_augmentation/README.md): Scene augmentation for robotic manipulation, mapping one robotics synthetic example to multiple realistic examples
