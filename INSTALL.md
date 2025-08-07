@@ -26,6 +26,8 @@ pip install -r requirements.txt
 pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
 export VLLM_ATTENTION_BACKEND=FLASHINFER
 pip install vllm==0.9.0
+pip install transformers==4.51.1
+
 # Install decord
 pip install decord==0.6.0
 pip install torch==2.7.0 torchvision==0.22.0 --ignore-installed --index-url https://download.pytorch.org/whl/cu128
@@ -71,6 +73,8 @@ pip install -r requirements.txt
 pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
 export VLLM_ATTENTION_BACKEND=FLASHINFER
 pip install vllm==0.9.0
+pip install transformers==4.51.1
+
 # Install decord
 pip install decord==0.6.0
 # Patch Transformer engine linking issues in conda environments.
