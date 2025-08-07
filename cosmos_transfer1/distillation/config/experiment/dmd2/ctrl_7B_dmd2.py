@@ -53,7 +53,7 @@ def make_ctrl_dmd2_experiment(hint_key: str = "control_input_edge") -> dict:
 
     return dict(
         defaults=[
-            {"override /callbacks": ["basic"]},
+            {"override /callbacks": ["basic", "train_vis"]},
             {"override /data_train": "mock_ctrl_distill"},
             {"override /data_val": "mock_ctrl_distill"},
             {"override /conditioner": "ctrlnet_add_fps_image_size_padding_mask"},
@@ -72,15 +72,6 @@ def make_ctrl_dmd2_experiment(hint_key: str = "control_input_edge") -> dict:
             save_iter=500,
             load_path="",
         ),
-        dataloader_train=dict(
-            dataset=dict(
-                h=704 // 4,
-                w=1280 // 4,
-                num_video_frames=NUM_FRAMES,
-                hint_key=hint_key,
-            ),
-            batch_size=1,
-        ),
         trainer=dict(
             max_iter=100_000,
             logging_iter=100,
@@ -89,13 +80,16 @@ def make_ctrl_dmd2_experiment(hint_key: str = "control_input_edge") -> dict:
                 grad_clip=dict(
                     clip_norm=10.0,
                 ),
+                train_sample=dict(
+                    every_n=500,
+                ),
             ),
         ),
         model_parallel=dict(
             context_parallel_size=8,
         ),
         optimizer=dict(
-            lr=5e-5,
+            lr=5e-7,
             weight_decay=0.01,
         ),
         scheduler=dict(
@@ -103,14 +97,14 @@ def make_ctrl_dmd2_experiment(hint_key: str = "control_input_edge") -> dict:
         ),
         model=dict(
             discriminator_optimizer=dict(
-                lr=5e-5,
+                lr=5e-7,
                 weight_decay=0.01,
             ),
             discriminator_scheduler=dict(
                 warm_up_steps=[0],
             ),
             fake_score_optimizer=dict(
-                lr=5e-5,
+                lr=5e-7,
                 weight_decay=0.01,
             ),
             fake_score_scheduler=dict(
@@ -181,6 +175,7 @@ def make_ctrl_dmd2_experiment(hint_key: str = "control_input_edge") -> dict:
             is_ctrl_net=True,
             recon_loss_only=False,
             use_negative_prompt=True,
+            negative_prompt_path="datasets/negative_prompt/transfer1.pkl",
             noise_schedule_type="edm_sampling",
             ladd=False,
         ),

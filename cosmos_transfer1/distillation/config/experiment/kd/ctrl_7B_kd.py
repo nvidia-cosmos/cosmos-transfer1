@@ -53,7 +53,7 @@ def make_ctrl_kd_experiment(hint_key: str = "control_input_edge") -> dict:
 
     return dict(
         defaults=[
-            {"override /callbacks": ["basic"]},
+            {"override /callbacks": ["basic", "train_vis"]},
             {"override /data_train": "mock_ctrl_distill"},
             {"override /data_val": "mock_ctrl_distill"},
             {"override /conditioner": "ctrlnet_add_fps_image_size_padding_mask"},
@@ -71,15 +71,6 @@ def make_ctrl_kd_experiment(hint_key: str = "control_input_edge") -> dict:
             save_iter=500,
             load_path="",
         ),
-        dataloader_train=dict(
-            dataset=dict(
-                h=704,
-                w=1280,
-                num_video_frames=NUM_FRAMES,
-                hint_key=hint_key,
-            ),
-            batch_size=1,
-        ),
         trainer=dict(
             max_iter=100_000,
             logging_iter=100,
@@ -88,13 +79,16 @@ def make_ctrl_kd_experiment(hint_key: str = "control_input_edge") -> dict:
                 grad_clip=dict(
                     clip_norm=10.0,
                 ),
+                train_sample=dict(
+                    every_n=500,
+                ),
             ),
         ),
         model_parallel=dict(
             context_parallel_size=8,
         ),
         optimizer=dict(
-            lr=5e-5,
+            lr=1e-5,
             weight_decay=0.01,
         ),
         scheduler=dict(
