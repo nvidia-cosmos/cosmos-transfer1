@@ -35,7 +35,7 @@ pip install torch==2.7.0 torchvision==0.22.0 --ignore-installed --index-url http
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.12
 # Install Transformer engine.
-pip install transformer-engine[pytorch]
+pip install transformer-engine[pytorch]==2.5.0
 ```
 
 To test the environment setup for inference run
@@ -81,7 +81,7 @@ pip install decord==0.6.0
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.12
 # Install Transformer engine.
-pip install transformer-engine[pytorch]
+pip install transformer-engine[pytorch]==2.5.0
 # Install Apex for full training with bfloat16.
 git clone https://github.com/NVIDIA/apex
 pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./apex
