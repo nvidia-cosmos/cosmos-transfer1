@@ -171,9 +171,11 @@ def make_ctrlnet_config_7b_mv(
             model=dict(
                 n_views=6,
                 base_load_from=dict(
-                    load_path=f"checkpoints/{BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}"
-                    if t2w
-                    else f"checkpoints/{BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}",
+                    load_path=(
+                        f"checkpoints/{BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}"
+                        if t2w
+                        else f"checkpoints/{BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}"
+                    ),
                 ),
                 hint_mask=hint_mask,
                 hint_dropout_rate=0.3,
@@ -237,9 +239,11 @@ def make_ctrlnet_config_7b_mv_waymo(
             model=dict(
                 n_views=5,
                 base_load_from=dict(
-                    load_path=f"checkpoints/{BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}"
-                    if t2w
-                    else f"checkpoints/{BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}",
+                    load_path=(
+                        f"checkpoints/{BASE_t2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}"
+                        if t2w
+                        else f"checkpoints/{BASE_v2w_7B_SV2MV_CHECKPOINT_AV_SAMPLE_PATH}"
+                    ),
                 ),
                 hint_mask=hint_mask,
                 hint_dropout_rate=0.15,
@@ -396,6 +400,6 @@ distilled_config = make_ctrlnet_config_7b_distilled(hint_key="control_input_edge
 cs.store(
     group="experiment",
     package="_global_",
-    name="dev_v2w_ctrl_7bv1pt3_VisControlCanny_video_only_dmd2_fsdp",
+    name="CTRL_7Bv1pt3_lvg_fsdp_distilled_121frames_control_input_edge_block3",
     node=distilled_config,
 )

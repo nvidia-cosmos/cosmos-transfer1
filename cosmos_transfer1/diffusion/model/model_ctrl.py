@@ -743,26 +743,6 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
     def conditioner(self):
         return self.model.conditioner
 
-    def get_x_from_clean(
-        self,
-        in_clean_img: torch.Tensor,
-        sigma_max: float | None,
-        seed: int = 1,
-    ) -> Tensor:
-        """
-        in_clean_img (torch.Tensor): input clean image for image-to-image/video-to-video by adding noise then denoising
-        sigma_max (float): maximum sigma applied to in_clean_image for image-to-image/video-to-video
-        """
-        if in_clean_img is None:
-            return None
-        generator = torch.Generator(device=self.tensor_kwargs["device"])
-        generator.manual_seed(seed)
-        noise = torch.randn(*in_clean_img.shape, **self.tensor_kwargs, generator=generator)
-        if sigma_max is None:
-            sigma_max = self.sde.sigma_max
-        x_sigma_max = in_clean_img + noise * sigma_max
-        return x_sigma_max
-
     def encode_latent(self, data_batch: dict, cond_mask: list = []) -> torch.Tensor:
         x = data_batch[data_batch["hint_key"]]
         latent = []

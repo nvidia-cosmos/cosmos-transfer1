@@ -704,7 +704,7 @@ def generate_world_from_control(
     seed: int,
     condition_latent: torch.Tensor,
     num_input_frames: int,
-    sigma_max: float,
+    sigma_max: float | None,
     x_sigma_max=None,
     augment_sigma=None,
     use_batch_processing: bool = True,
@@ -1245,7 +1245,9 @@ def validate_controlnet_specs(cfg, controlnet_specs) -> Dict[str, Any]:
                 if hint_key in default_distilled_model_names:
                     ckpt_path = os.path.join(checkpoint_dir, default_distilled_model_names[hint_key])
                 else:
-                    log.info(f"No default distilled checkpoint for {hint_key}. Using full checkpoint")
+                    raise ValueError(
+                        f"No default distilled checkpoint for {hint_key}. Users must specify ckpt_path in config."
+                    )
 
             config["ckpt_path"] = ckpt_path
             log.info(f"Using default checkpoint path: {config['ckpt_path']}")
