@@ -54,8 +54,11 @@ def make_ctrl_kd_experiment(hint_key: str = "control_input_edge") -> dict:
     return dict(
         defaults=[
             {"override /callbacks": ["basic", "train_vis"]},
-            {"override /data_train": "mock_ctrl_distill"},
-            {"override /data_val": "mock_ctrl_distill"},
+            # For demo purposes, we use mock data that you can find in cosmos_transfer1/distillation/datasets/mock_distill_dataset.py.
+            # Replace with f"kd_transfer_train_data_{hint_key}" to use your own data.
+            {"override /data_train": f"mock_ctrl_distill_{hint_key}"},
+            # Replace with f"kd_transfer_val_data_{hint_key}" to use your own data.
+            {"override /data_val": f"mock_ctrl_distill_{hint_key}"},
             {"override /conditioner": "ctrlnet_add_fps_image_size_padding_mask"},
             {"override /tokenizer": "cosmos_diffusion_tokenizer_res720_comp8x8x8_t121_ver092624"},
             {"override /hint_key": hint_key},
@@ -69,6 +72,8 @@ def make_ctrl_kd_experiment(hint_key: str = "control_input_edge") -> dict:
         ),
         checkpoint=dict(
             save_iter=500,
+            # If load_path is specified, the student model will be initialized from the given checkpoint.
+            # Otherwise, the student model will be initialized from the teacher model.
             load_path="",
         ),
         trainer=dict(
@@ -83,6 +88,8 @@ def make_ctrl_kd_experiment(hint_key: str = "control_input_edge") -> dict:
                     every_n=500,
                 ),
             ),
+            # Set to 1 to disable gradient accumulation.
+            grad_accum_iter=1,
         ),
         model_parallel=dict(
             context_parallel_size=8,
@@ -103,8 +110,10 @@ def make_ctrl_kd_experiment(hint_key: str = "control_input_edge") -> dict:
                 policy="block",
                 checkpoint=False,
                 min_num_params=3000,
+                # By default, we use full FSDP. Change to "hybrid" to use hybrid FSDP.
                 sharding_strategy="full",
-                sharding_group_size=16,  # applies to the hybrid sharding strategy
+                # Applies to the hybrid sharding strategy. Unused for full sharding strategy.
+                sharding_group_size=16,
             ),
             base_load_from=dict(
                 load_path=teacher_checkpoint_path,
@@ -137,7 +146,8 @@ def make_ctrl_kd_experiment(hint_key: str = "control_input_edge") -> dict:
                 pos_emb_learnable=True,
                 extra_per_block_abs_pos_emb_type="learnable",
                 rope_t_extrapolation_ratio=2,
-                use_checkpoint=True,  # use aggressive gradient checkpointing
+                # Enable gradient checkpointing to reduce memory usage. Set to False to disable.
+                use_checkpoint=True,
             ),
             adjust_video_noise=True,
             net_ctrl=dict(
@@ -150,10 +160,10 @@ def make_ctrl_kd_experiment(hint_key: str = "control_input_edge") -> dict:
                 extra_per_block_abs_pos_emb=True,
                 pos_emb_learnable=True,
                 extra_per_block_abs_pos_emb_type="learnable",
-                use_checkpoint=True,  # use aggressive gradient checkpointing
+                # Enable gradient checkpointing to reduce memory usage. Set to False to disable.
+                use_checkpoint=True,
             ),
             teacher_net_name="net_ctrl",
-            is_ctrl_net=True,
         ),
     )
 

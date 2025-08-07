@@ -24,59 +24,36 @@ from cosmos_transfer1.distillation.datasets.mock_distill_dataset import (
 )
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
-MOCK_DISTILL_DATA_LOADER = L(DataLoader)(
-    dataset=L(get_mock_distill_dataset)(
-        h=704,
-        w=1280,
-        num_video_frames=121,
-    ),
-    batch_size=1,
-    shuffle=False,
-    num_workers=8,
-    pin_memory=True,
-)
 
-# Mock dataloader for debugging purposes, works with debug tokenizer
-MOCK_DISTILL_DATA_LOADER_DEBUG = L(DataLoader)(
-    dataset=L(get_mock_distill_dataset)(
-        h=704,
-        w=1280,
-        num_video_frames=136,
-        is_debug_tokenizer=True,
-    ),
-    batch_size=1,
-    shuffle=False,
-    num_workers=8,
-    pin_memory=True,
-)
-
-MOCK_DISTILL_CTRLNET_DATA_LOADER = L(DataLoader)(
-    dataset=L(get_mock_distill_ctrlnet_dataset)(
-        h=704,
-        w=1280,
-        num_video_frames=121,
-        hint_key="control_input_edge",
-    ),
-    batch_size=1,
-    shuffle=False,
-    num_workers=8,
-    pin_memory=True,
-)
-
-# Mock dataloader for debugging purposes, works with debug tokenizer
-MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG = L(DataLoader)(
-    dataset=L(get_mock_distill_ctrlnet_dataset)(
-        h=704,
-        w=1280,
-        num_video_frames=136,
-        hint_key="control_input_edge",
-        is_debug_tokenizer=True,
-    ),
-    batch_size=1,
-    shuffle=False,
-    num_workers=8,
-    pin_memory=True,
-)
+def get_mock_dataset(hint_key=None, is_debug_tokenizer=False):
+    num_video_frames = 136 if is_debug_tokenizer else 121
+    if hint_key is None:
+        return L(DataLoader)(
+            dataset=L(get_mock_distill_dataset)(
+                h=704,
+                w=1280,
+                num_video_frames=num_video_frames,
+                is_debug_tokenizer=is_debug_tokenizer,
+            ),
+            batch_size=1,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=True,
+        )
+    else:
+        return L(DataLoader)(
+            dataset=L(get_mock_distill_ctrlnet_dataset)(
+                h=704,
+                w=1280,
+                num_video_frames=num_video_frames,
+                hint_key=hint_key,
+                is_debug_tokenizer=is_debug_tokenizer,
+            ),
+            batch_size=1,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=True,
+        )
 
 
 def get_sampler(dataset):

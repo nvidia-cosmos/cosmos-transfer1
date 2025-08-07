@@ -177,8 +177,8 @@ DEBUG_LOCAL_CP_FSDP_EXP = dict(
 
 DEBUG_CTRLNET_LOCAL_DDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_ctrl_distill_debug"},
-        {"override /data_val": "mock_ctrl_distill_debug"},
+        {"override /data_train": "mock_ctrl_distill_debug_control_input_edge"},
+        {"override /data_val": "mock_ctrl_distill_debug_control_input_edge"},
         {"override /hint_key": "control_input_edge"},
         {"override /net": "tiny_fa"},
         {"override /net_ctrl": "tiny_fa"},
@@ -238,8 +238,8 @@ DEBUG_CTRLNET_LOCAL_DDP_EXP = dict(
 
 DEBUG_CTRLNET_LOCAL_CP_FSDP_EXP = dict(
     defaults=[
-        {"override /data_train": "mock_ctrl_distill_debug"},
-        {"override /data_val": "mock_ctrl_distill_debug"},
+        {"override /data_train": "mock_ctrl_distill_debug_control_input_edge"},
+        {"override /data_val": "mock_ctrl_distill_debug_control_input_edge"},
         {"override /hint_key": "control_input_edge"},
         {"override /net": "tiny_fa"},
         {"override /net_ctrl": "tiny_fa"},

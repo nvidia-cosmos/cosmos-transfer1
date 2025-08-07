@@ -28,12 +28,9 @@ from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEY
 from cosmos_transfer1.distillation.config.base.callbacks import BASIC_CALLBACKS, TRAIN_VIS_CALLBACK
 from cosmos_transfer1.distillation.config.base.checkpoint import DISTILL_CHECKPOINTER, DISTILL_FSDP_CHECKPOINTER
 from cosmos_transfer1.distillation.config.base.data import (
-    MOCK_DISTILL_CTRLNET_DATA_LOADER,
-    MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG,
-    MOCK_DISTILL_DATA_LOADER,
-    MOCK_DISTILL_DATA_LOADER_DEBUG,
     get_dmd2_transfer_dataset,
     get_kd_transfer_dataset,
+    get_mock_dataset,
 )
 from cosmos_transfer1.distillation.config.base.debug import (
     DEBUG_CTRLNET_LOCAL_CP_FSDP_EXP,
@@ -100,41 +97,50 @@ def register_callbacks(cs):
 
 
 def register_data(cs):
-    cs.store(group="data_train", package="dataloader_train", name="mock_distill", node=MOCK_DISTILL_DATA_LOADER)
+    # Mock dataset for debugging base model distillation with debug tokenizer
     cs.store(
         group="data_train",
         package="dataloader_train",
         name="mock_distill_debug",
-        node=MOCK_DISTILL_DATA_LOADER_DEBUG,
-    )
-    cs.store(
-        group="data_train",
-        package="dataloader_train",
-        name="mock_ctrl_distill",
-        node=MOCK_DISTILL_CTRLNET_DATA_LOADER,
-    )
-    cs.store(
-        group="data_train",
-        package="dataloader_train",
-        name="mock_ctrl_distill_debug",
-        node=MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG,
-    )
-    cs.store(group="data_val", package="dataloader_val", name="mock_distill", node=MOCK_DISTILL_DATA_LOADER)
-    cs.store(group="data_val", package="dataloader_val", name="mock_distill_debug", node=MOCK_DISTILL_DATA_LOADER_DEBUG)
-    cs.store(
-        group="data_val",
-        package="dataloader_val",
-        name="mock_ctrl_distill",
-        node=MOCK_DISTILL_CTRLNET_DATA_LOADER,
+        node=get_mock_dataset(is_debug_tokenizer=True),
     )
     cs.store(
         group="data_val",
         package="dataloader_val",
-        name="mock_ctrl_distill_debug",
-        node=MOCK_DISTILL_CTRLNET_DATA_LOADER_DEBUG,
+        name="mock_distill_debug",
+        node=get_mock_dataset(is_debug_tokenizer=True),
     )
 
     for hint_key in CTRL_HINT_KEYS:
+        # Mock dataset for debugging ctrlnet distillation with full tokenizer
+        cs.store(
+            group="data_train",
+            package="dataloader_train",
+            name=f"mock_ctrl_distill_{hint_key}",
+            node=get_mock_dataset(hint_key=hint_key, is_debug_tokenizer=False),
+        )
+        cs.store(
+            group="data_val",
+            package="dataloader_val",
+            name=f"mock_ctrl_distill_{hint_key}",
+            node=get_mock_dataset(hint_key=hint_key, is_debug_tokenizer=False),
+        )
+
+        # Mock dataset for debugging ctrlnet distillation with debug tokenizer
+        cs.store(
+            group="data_train",
+            package="dataloader_train",
+            name=f"mock_ctrl_distill_debug_{hint_key}",
+            node=get_mock_dataset(hint_key=hint_key, is_debug_tokenizer=True),
+        )
+        cs.store(
+            group="data_val",
+            package="dataloader_val",
+            name=f"mock_ctrl_distill_debug_{hint_key}",
+            node=get_mock_dataset(hint_key=hint_key, is_debug_tokenizer=True),
+        )
+
+        # Custom KD dataset
         cs.store(
             group="data_train",
             package="dataloader_train",
@@ -147,6 +153,8 @@ def register_data(cs):
             name=f"kd_transfer_val_data_{hint_key}",
             node=get_kd_transfer_dataset(hint_key=hint_key, is_train=False),
         )
+
+        # Custom DMD2 dataset
         cs.store(
             group="data_train",
             package="dataloader_train",

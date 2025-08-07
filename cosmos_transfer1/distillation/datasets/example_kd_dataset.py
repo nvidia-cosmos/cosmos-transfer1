@@ -14,8 +14,8 @@
 # limitations under the License.
 
 """
-Run this command to interactively debug:
-PYTHONPATH=. python cosmos_transfer1/distillation/datasets/example_kd_dataset.py
+Run this command to sanity check the dataset:
+PYTHONPATH=$(pwd) python cosmos_transfer1/distillation/datasets/example_kd_dataset.py
 """
 
 import os

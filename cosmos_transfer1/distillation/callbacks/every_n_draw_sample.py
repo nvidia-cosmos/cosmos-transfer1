@@ -64,7 +64,6 @@ class EveryNDrawSampleDistillation(EveryNDrawSample):
         )
         self.output_key = output_key
         self.include_teacher = include_teacher
-        self.name += "_combined" if self.include_teacher else ""
         self.num_of_latent_overlap = num_of_latent_overlap
 
     def _generate_sample(self, model, data_batch, x0, use_teacher: bool, seed: int = 0) -> torch.Tensor:

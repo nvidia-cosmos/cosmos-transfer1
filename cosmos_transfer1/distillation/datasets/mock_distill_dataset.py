@@ -14,8 +14,8 @@
 # limitations under the License.
 
 """
-Run this command to interactively debug:
-PYTHONPATH=. python cosmos_transfer1/distillation/datasets/mock_distill_dataset.py
+Run this command to sanity check the dataset:
+PYTHONPATH=$(pwd) python cosmos_transfer1/distillation/datasets/mock_distill_dataset.py
 """
 
 from functools import partial
