@@ -17,8 +17,11 @@ from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned 
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
 """
-Sample command to run the debug experiment:
+Sample command to run the debug base experiment:
 torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation.train --config=cosmos_transfer1/distillation/config/config_base_dmd2.py -- experiment=debug_local_ddp trainer.max_iter=5 trainer.logging_iter=1
+
+Sample command to run the debug ctrlnet experiment:
+torchrun --nproc_per_node=1 --master_port=12341 -m cosmos_transfer1.distillation.train --config=cosmos_transfer1/distillation/config/config_ctrl_dmd2.py -- experiment=debug_ctrlnet_local_ddp trainer.max_iter=5 trainer.logging_iter=1
 """
 
 # ------------------------------------------------------

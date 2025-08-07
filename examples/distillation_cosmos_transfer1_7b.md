@@ -113,6 +113,12 @@ For VisControl and EdgeControl models:
 
 - You can adapt our inference pipeline to additionally save the vis or edge control inputs used to generate the teacher output videos.
 
+After you have prepared your KD dataset, run the following command to sanity check the dataset:
+
+```bash
+PYTHONPATH=$(pwd) python cosmos_transfer1/distillation/datasets/example_kd_dataset.py
+```
+
 #### 4. Generating Teacher Data and Saving Noise Input
 
 Follow the steps in the [inference README](./inference_cosmos_transfer1_7b.md) to generate output videos using the teacher model. You will need to modify the inference pipeline to additionally save the noise inputs used to generate the teacher data.
@@ -129,67 +135,172 @@ PYTHONPATH=$(pwd) python cosmos_transfer1/distillation/scripts/combine_base_ctrl
 
 Inside the `checkpoints/nvidia/Cosmos-Transfer1-7B/` directory, the script will load `base_model.pt` and `edge_control.pt`, and it will save the combined checkpoint under `checkpoints_teacher/edge_control.pt`. The distillation codebase will then load the teacher model checkpoint directly from this location.
 
-<!-- #### 6. (Optional): Dry-run a Training Job
+#### 6. Dry-run a Training Job
 
-As a sanity check, run the following command to dry-run an example training job with the above data. The command will generated a full configuration of the experiment.
+As a sanity check, run the following command to dry-run an example training job. The command will generate a full configuration of the experiment.
 
 ```bash
 export OUTPUT_ROOT=checkpoints # default value
 
-# Training from scratch
-torchrun --nproc_per_node=1 -m cosmos_transfer1.diffusion.training.train --dryrun --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3_pretrain
-
-# Post-train from our provided checkpoint (need to first split checkpoint into TP checkpoints as instructed above)
-torchrun --nproc_per_node=1 -m cosmos_transfer1.diffusion.training.train --dryrun --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3_posttrain
+torchrun --nproc_per_node=1 -m cosmos_transfer1.distillation.train --dryrun --config=cosmos_transfer1/distillation/config/config_ctrl_kd.py -- experiment=DISTILL_CTRL_7Bv1_edge_fsdp_kd_train
 ```
 
 Explanation of the command:
 
-- The trainer and the passed (master) config script will, in the background, load the detailed experiment configurations defined in `cosmos_transfer1/diffusion/config/training/experiment/ctrl_7b_tp_121frames.py`, and register the experiments configurations for all `hint_keys` (control modalities), covering both pretrain and post-train. We use [Hydra](https://hydra.cc/docs/intro/) for advanced configuration composition and overriding.
+- The trainer and the passed base config script will, in the background, load the detailed experiment configurations defined in `cosmos_transfer1/distillation/config/experiment/kd/ctrl_7B_kd.py`, and register the experiments configurations for all `hint_keys` (control modalities). We use [Hydra](https://hydra.cc/docs/intro/) for advanced configuration composition and overriding.
 
-- The `CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3_pretrain` corresponds to an experiment name registered in `ctrl_7b_tp_121frames.py`. By specifiying this name, all the detailed config will be generated and then written to `checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_lvg/CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3_pretrain/config.yaml`.
+- The `DISTILL_CTRL_7Bv1_edge_fsdp_kd_train` corresponds to an experiment name registered in `ctrl_7B_kd.py`. By specifiying this name, all the detailed config will be generated and then written to `checkpoints/cosmos_transfer1_distill/DISTILL_CTRL_7Bv1/DISTILL_CTRL_7Bv1_edge_fsdp_kd_train/config.yaml`.
 
-- To customize your training, see `cosmos_transfer1/diffusion/config/training/experiment/ctrl_7b_tp_121frames.py` to understand how the detailed configs of the model, trainer, dataloader etc. are defined, and edit as needed.
+- To customize your training, see `cosmos_transfer1/distillation/config/experiment/kd/ctrl_7B_kd.py` to understand how the detailed configs of the model, trainer, dataloader etc. are defined, and edit as needed. The base config can be found in `cosmos_transfer1/distillation/config/config_ctrl_kd.py`, and the core distillation model config can be found in `cosmos_transfer1/distillation/config/base/model.py`. See `cosmos_transfer1/distillation/config/registry.py` for the comprehensive list of registered configs you can use in your experiments.
+
+- For demo purposes, the sample experiment config uses mock data that you can find in `cosmos_transfer1/distillation/datasets/mock_distill_dataset.py`. Once your dataset is set up properly, you can replace the `data_train` and `data_val` defaults to use your own data instead:
+
+```python
+{"override /data_train": f"kd_transfer_train_data_{hint_key}"},
+{"override /data_val": f"kd_transfer_val_data_{hint_key}"},
+```
 
 #### 7. Launch Training
 
-Now we can start a real training job! Removing the `--dryrun` and set `--nproc_per_node=8` will start a real training job on 8 GPUs:
+Now we can start a real training job! Removing the `--dryrun` and setting `--nproc_per_node=8` will start a real training job on 8 GPUs:
 
 ```bash
-torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3_pretrain
+torchrun --nproc_per_node=8 -m cosmos_transfer1.distillation.train --config=cosmos_transfer1/distillation/config/config_ctrl_kd.py -- experiment=DISTILL_CTRL_7Bv1_edge_fsdp_kd_train
 ```
 
-**Config group and override.** An `experiment` determines a complete group of configuration parameters (model architecture, data, trainer behavior, checkpointing, etc.). Changing the `experiment` value in the command above will decide which ControlNet model is trained, and whether it's pretrain or post-train. For example, replacing the experiment name in the command with `CTRL_7Bv1pt3_lvg_tp_121frames_control_input_depth_block3_posttrain` will post-train the DepthControl model from the downloaded checkpoint instead.
+**Config group and override.** An `experiment` determines a complete group of configuration parameters (model architecture, data, trainer behavior, checkpointing, etc.). Changing the `experiment` value in the command above will decide which ControlNet model is trained.
 
-To customize your training, see the job (experiment) config in `cosmos_transfer1/diffusion/config/training/experiment/ctrl_7b_tp_121frames.py` to understand how they are defined, and edit as needed.
+To customize your training, see the experiment config in `cosmos_transfer1/distillation/config/experiment/kd/ctrl_7B_kd.py` to understand how they are defined, and edit as needed.
 
 It is also possible to modify config parameters from the command line. For example:
 
 ```bash
-torchrun --nproc_per_node=8 -m cosmos_transfer1.diffusion.training.train --config=cosmos_transfer1/diffusion/config/config_train.py -- experiment=CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3_pretrain trainer.max_iter=100 checkpoint.save_iter=40
+torchrun --nproc_per_node=8 -m cosmos_transfer1.distillation.train --config=cosmos_transfer1/distillation/config/config_ctrl_kd.py -- experiment=DISTILL_CTRL_7Bv1_edge_fsdp_kd_train trainer.max_iter=100 checkpoint.save_iter=50
 ```
 
-This will update the maximum training iterations to 100 (default in the registered experiments: 999999999) and checkpoint saving frequency to 40 (default: 1000).
+This will update the maximum training iterations to 100 (default in the registered experiments: 100_000) and checkpoint saving frequency to 50 (default: 500).
 
 **Saving Checkpoints and Resuming Training.**
-During training, the checkpoints will be saved in the structure below. Since we use TensorParallel across 8 GPUs, 8 checkpoints will be saved each time.
+During training, the checkpoints will be saved in the structure below in FSDP DCP format.
 
 ```
-checkpoints/cosmos_transfer1_pretrain/CTRL_7Bv1_lvg/CTRL_7Bv1pt3_lvg_tp_121frames_control_input_edge_block3_pretrain/checkpoints/
+checkpoints/cosmos_transfer1_distill/DISTILL_CTRL_7Bv1/DISTILL_CTRL_7Bv1_edge_fsdp_kd_train/checkpoints/
 ├── iter_{NUMBER}.pt             # "master" checkpoint, saving metadata only
-├── iter_{NUMBER}_model_mp_0.pt  # real TP checkpoints
-├── iter_{NUMBER}_model_mp_1.pt
-├── ...
-├── iter_{NUMBER}_model_mp_7.pt
+├── iter_{NUMBER}_model_net      # model checkpoint folder
+├── iter_{NUMBER}_optim_net      # optimizer checkpoint folder
+├── iter_{NUMBER}_scheduler.pt   # scheduler checkpoint file
 ```
 
-Since the `experiment` is uniquely associated with its checkpoint directory, rerunning the same training command after an unexpected interruption will automatically resume from the latest saved checkpoint. -->
+Since the `experiment` is uniquely associated with its checkpoint directory, rerunning the same training command after an unexpected interruption will automatically resume from the latest saved checkpoint.
+
+**Saving Training Visualizations.**
+During training, visualizations will be saved to `checkpoints/cosmos_transfer1_distill/DISTILL_CTRL_7Bv1/DISTILL_CTRL_7Bv1_edge_fsdp_kd_train/EveryNDrawSampleDistillation/`. Each visualization will show the following from top-to-bottom: student model single-step sample, teacher model single-step sample, control input, ground truth data. You can find the callback used to generate the visualizations in `cosmos_transfer1/distillation/callbacks/every_n_draw_sample.py`.
 
 ### Improved Distribution Matching Distillation (DMD2)
 
-<!-- discuss negative prompt and KD checkpoint loading nuances -->
+#### 1. Prepare the Training Data
 
-#### 8. Inference Using Distilled Models
+The dataset format expected for DMD2 training distillation is the same as the format used for post-training. See the [post-training guide example](./training_cosmos_transfer_7b.md#example) for instructions on preparing the dataset.
+
+After you have prepared your DMD2 dataset, use the following script to sanity check the dataset:
+
+```bash
+PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/datasets/example_transfer_dataset.py
+```
+
+#### 2. Combining the Base and Control Checkpoints
+
+On HuggingFace, we provide the base model and control checkpoints in separate files. However, our distillation training codebase assumes a different format, where the base model and control checkpoints are combined in a single file.
+
+Run the following command to combine the base model and control checkpoints used for distillation:
+
+```bash
+PYTHONPATH=$(pwd) python cosmos_transfer1/distillation/scripts/combine_base_ctrl_ckpt.py --ctrl_type edge
+```
+
+Inside the `checkpoints/nvidia/Cosmos-Transfer1-7B/` directory, the script will load `base_model.pt` and `edge_control.pt`, and it will save the combined checkpoint under `checkpoints_teacher/edge_control.pt`. The distillation codebase will then load the teacher model checkpoint directly from this location.
+
+#### 3. Prepare the Negative Prompt Embedding
+
+In the student update phase, we apply CFG to the teacher model, using either a negative prompt or dropout to generate the unconditional prediction. We recommend using a negative prompt for optimal results.
+
+Run the following command to precompute the negative prompt embedding used in the DMD2 training pipeline:
+
+```bash
+PYTHONPATH=$(pwd) python cosmos_transfer1/distillation/scripts/save_negative_prompt.py
+```
+
+In the script, we provide the recommended negative prompt used for Cosmos-Transfer1. The embedding will be saved to `datasets/negative_prompt/transfer1.pkl`.
+
+#### 4. Dry-run a Training Job
+
+As a sanity check, run the following command to dry-run an example training job. The command will generate a full configuration of the experiment.
+
+```bash
+export OUTPUT_ROOT=checkpoints # default value
+
+torchrun --nproc_per_node=1 -m cosmos_transfer1.distillation.train --dryrun --config=cosmos_transfer1/distillation/config/config_ctrl_dmd2.py -- experiment=DISTILL_CTRL_7Bv1_edge_fsdp_dmd2_train
+```
+
+Explanation of the command:
+
+- The trainer and the passed base config script will, in the background, load the detailed experiment configurations defined in `cosmos_transfer1/distillation/config/experiment/dmd2/ctrl_7B_dmd2.py`, and register the experiments configurations for all `hint_keys` (control modalities). We use [Hydra](https://hydra.cc/docs/intro/) for advanced configuration composition and overriding.
+
+- The `DISTILL_CTRL_7Bv1_edge_fsdp_dmd2_train` corresponds to an experiment name registered in `ctrl_7B_dmd2.py`. By specifiying this name, all the detailed config will be generated and then written to `checkpoints/cosmos_transfer1_distill/DISTILL_CTRL_7Bv1/DISTILL_CTRL_7Bv1_edge_fsdp_dmd2_train/config.yaml`.
+
+- To customize your training, see `cosmos_transfer1/distillation/config/experiment/dmd2/ctrl_7B_dmd2.py` to understand how the detailed configs of the model, trainer, dataloader etc. are defined, and edit as needed. The base config can be found in `cosmos_transfer1/distillation/config/config_ctrl_dmd2.py`, and the core distillation model config can be found in `cosmos_transfer1/distillation/config/base/model.py`. See `cosmos_transfer1/distillation/config/registry.py` for the comprehensive list of registered configs you can use in your experiments.
+
+- For demo purposes, the sample experiment config uses mock data that you can find in `cosmos_transfer1/distillation/datasets/mock_distill_dataset.py`. Once your dataset is set up properly, you can replace the `data_train` and `data_val` defaults to use your own data instead:
+
+```python
+{"override /data_train": f"dmd2_transfer_train_data_{hint_key}"},
+{"override /data_val": f"dmd2_transfer_val_data_{hint_key}"},
+```
+
+#### 5. Launch Training
+
+Now we can start a real training job! Removing the `--dryrun` and setting `--nproc_per_node=8` will start a real training job on 8 GPUs:
+
+```bash
+torchrun --nproc_per_node=8 -m cosmos_transfer1.distillation.train --config=cosmos_transfer1/distillation/config/config_ctrl_dmd2.py -- experiment=DISTILL_CTRL_7Bv1_edge_fsdp_dmd2_train
+```
+
+**Config group and override.** An `experiment` determines a complete group of configuration parameters (model architecture, data, trainer behavior, checkpointing, etc.). Changing the `experiment` value in the command above will decide which ControlNet model is trained.
+
+To customize your training, see the experiment config in `cosmos_transfer1/distillation/config/experiment/dmd2/ctrl_7B_dmd2.py` to understand how they are defined, and edit as needed.
+
+It is also possible to modify config parameters from the command line. For example:
+
+```bash
+torchrun --nproc_per_node=8 -m cosmos_transfer1.distillation.train --config=cosmos_transfer1/distillation/config/config_ctrl_dmd2.py -- experiment=DISTILL_CTRL_7Bv1_edge_fsdp_dmd2_train trainer.max_iter=100 checkpoint.save_iter=50
+```
+
+This will update the maximum training iterations to 100 (default in the registered experiments: 100_000) and checkpoint saving frequency to 50 (default: 500).
+
+**Loading from KD Checkpoints.**
+In order to initialize the student model using a KD warmup checkpoint, override the `checkpoint.load_path` field in the experiment config. It is also necessary to set `skip_load_discriminator=True` and `skip_load_fake_score=True` to ensure that the checkpoint is loaded correctly.
+
+**Saving Checkpoints and Resuming Training.**
+During training, the checkpoints will be saved in the structure below in FSDP DCP format.
+
+```
+checkpoints/cosmos_transfer1_distill/DISTILL_CTRL_7Bv1/DISTILL_CTRL_7Bv1_edge_fsdp_kd_train/checkpoints/
+├── iter_{NUMBER}.pt                    # "master" checkpoint, saving metadata only
+├── iter_{NUMBER}_model_discriminator   # model checkpoint folder for discriminator
+├── iter_{NUMBER}_model_fake_score      # model checkpoint folder for fake score network
+├── iter_{NUMBER}_model_net             # model checkpoint folder for student model
+├── iter_{NUMBER}_optim_discriminator   # optimizer checkpoint folder for discriminator
+├── iter_{NUMBER}_optim_fake_score      # optimizer checkpoint folder for fake score network
+├── iter_{NUMBER}_optim_net             # optimizer checkpoint folder for student model
+├── iter_{NUMBER}_scheduler.pt          # scheduler checkpoint file
+```
+
+Since the `experiment` is uniquely associated with its checkpoint directory, rerunning the same training command after an unexpected interruption will automatically resume from the latest saved checkpoint.
+
+**Saving Training Visualizations.**
+During training, visualizations will be saved to `checkpoints/cosmos_transfer1_distill/DISTILL_CTRL_7Bv1/DISTILL_CTRL_7Bv1_edge_fsdp_dmd2_train/EveryNDrawSampleDistillation/`. Each visualization will show the following from top-to-bottom: student model single-step sample, teacher model single-step sample, control input, ground truth data. You can find the callback used to generate the visualizations in `cosmos_transfer1/distillation/callbacks/every_n_draw_sample.py`.
+
+#### 6. Inference Using Distilled Models
 
 **Converting the FSDP DCP checkpoints to a consolidated PyTorch checkpoint:** To convert FSDP DCP checkpoints to a consolidated PyTorch format, use the conversion script `convert_fsdp_dcp_to_native_ckpt.py`.
 

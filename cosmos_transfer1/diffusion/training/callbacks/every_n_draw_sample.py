@@ -209,7 +209,7 @@ class EveryNDrawSample(EveryN):
             hint = data_batch[data_batch["hint_key"]]
             to_show.append(hint.float().cpu())
 
-        base_fp_wo_ext = f"{tag}_ReplicateID{self.data_parallel_id:04d}_x0_Iter{iteration:09d}"
+        base_fp_wo_ext = f"{tag}_ReplicaID{self.data_parallel_id:04d}_x0_Iter{iteration:09d}"
 
         local_path = self.run_save(to_show, batch_size, base_fp_wo_ext)
         return local_path, torch.tensor(mse_loss_list).cuda(), sigmas
@@ -238,7 +238,7 @@ class EveryNDrawSample(EveryN):
             if self.save_verbose and self.data_parallel_id < self.n_sample_to_save:
                 easy_io.dump(
                     batch_info,
-                    f"{self.local_dir}/BatchInfo_ReplicateID{self.data_parallel_id:04d}_Iter{iteration:09d}.json",
+                    f"{self.local_dir}/BatchInfo_ReplicaID{self.data_parallel_id:04d}_Iter{iteration:09d}.json",
                 )
 
         log.debug("entering, every_n_impl", rank0_only=False)
@@ -320,7 +320,7 @@ class EveryNDrawSample(EveryN):
                 x_rgb = hint[:, idx : idx + 3]
                 to_show.append(x_rgb.float().cpu())
 
-        base_fp_wo_ext = f"{tag}_ReplicateID{self.data_parallel_id:04d}_Sample_Iter{iteration:09d}"
+        base_fp_wo_ext = f"{tag}_ReplicaID{self.data_parallel_id:04d}_Sample_Iter{iteration:09d}"
 
         batch_size = output_batch["x0"].shape[0]
         if is_tp_cp_pp_rank0():

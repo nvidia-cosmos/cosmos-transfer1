@@ -116,7 +116,7 @@ class EveryNDrawSampleDistillation(EveryNDrawSample):
         raw_data = raw_data.float().cpu()
         to_show.append(raw_data)
 
-        base_fp_wo_ext = f"{tag}_ReplicateID{self.data_parallel_id:04d}_Sample_Iter{iteration:09d}"
+        base_fp_wo_ext = f"{tag}_ReplicaID{self.data_parallel_id:04d}_Sample_Iter{iteration:09d}"
 
         batch_size = output_batch[self.output_key].shape[0]
         if is_tp_cp_pp_rank0():

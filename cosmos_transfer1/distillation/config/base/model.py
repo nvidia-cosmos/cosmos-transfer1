@@ -104,7 +104,7 @@ class DMD2ModelConfig(DistillModelConfig):
     # Set to True to only use reconstruction loss. Can be optionally used as an alternative warmup stage for DMD2.
     recon_loss_only: bool = False
 
-    # Whether to use negative prompt for CFG in DMD2.
+    # Whether to use negative prompt for CFG in DMD2. We recommend setting this to True.
     use_negative_prompt: bool = False
     # Path to the negative prompt embedding file.
     negative_prompt_path: str = "datasets/negative_prompt/transfer1.pkl"
