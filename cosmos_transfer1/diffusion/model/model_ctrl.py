@@ -726,7 +726,6 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
     def build_model(self) -> torch.nn.ModuleDict:
         log.info("Start creating base model")
         base_model = super().build_model()
-        # initialize base model
         log.info("Done creating base model")
 
         log.info("Start creating ctrlnet model")
@@ -734,53 +733,14 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
         net.base_model.net.load_state_dict(base_model["net"].state_dict())
         conditioner = base_model.conditioner
         logvar = base_model.logvar
-        # initialize controlnet encoder
         model = torch.nn.ModuleDict({"net": net, "conditioner": conditioner, "logvar": logvar})
-        model.base_model = net.base_model.net
 
         self.hint_key = self.config.hint_key["hint_key"]
         return model
 
     @property
-    def base_net(self):
-        return self.model.base_model.net
-
-    @property
     def conditioner(self):
         return self.model.conditioner
-
-    def get_data_and_condition(
-        self, data_batch: dict[str, Tensor], **kwargs
-    ) -> Tuple[Tensor, VideoConditionerWithCtrl]:
-        # process the control input
-        hint_key = self.config.hint_key["hint_key"]
-        _data = {hint_key: data_batch[hint_key]}
-        if IS_PREPROCESSED_KEY in data_batch:
-            _data[IS_PREPROCESSED_KEY] = data_batch[IS_PREPROCESSED_KEY]
-        data_batch[hint_key] = _data[hint_key]
-        data_batch["hint_key"] = hint_key
-        raw_state, latent_state, condition = super().get_data_and_condition(data_batch, **kwargs)
-        use_multicontrol = (
-            ("control_weight" in data_batch)
-            and not isinstance(data_batch["control_weight"], float)
-            and data_batch["control_weight"].shape[0] > 1
-        )
-        if use_multicontrol:  # encode individual conditions separately
-            latent_hint = []
-            num_conditions = data_batch[data_batch["hint_key"]].size(1) // 3
-            for i in range(num_conditions):
-                cond_mask = [False] * num_conditions
-                cond_mask[i] = True
-                latent_hint += [self.encode_latent(data_batch, cond_mask=cond_mask)]
-            latent_hint = torch.cat(latent_hint)
-        else:
-            latent_hint = self.encode_latent(data_batch)
-
-        # add extra conditions
-        data_batch["latent_hint"] = latent_hint
-        setattr(condition, hint_key, latent_hint)
-        setattr(condition, "base_model", self.model.base_model)
-        return raw_state, latent_state, condition
 
     def get_x_from_clean(
         self,
@@ -827,16 +787,12 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
     def generate_samples_from_batch(
         self,
         data_batch: Dict,
-        guidance: float = 1.5,
         seed: int = 1,
         state_shape: Tuple | None = None,
         n_sample: int | None = None,
-        is_negative_prompt: bool = False,
-        num_steps: int = 1,  # Ignored for distilled models
         condition_latent: Union[torch.Tensor, None] = None,
         num_condition_t: Union[int, None] = None,
         condition_video_augment_sigma_in_inference: float = None,
-        x_sigma_max: Optional[torch.Tensor] = None,
         sigma_max: float | None = None,
         target_h: int = 88,
         target_w: int = 160,
@@ -851,7 +807,6 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
         self._augment_image_dim_inplace(data_batch)
 
         if n_sample is None:
-            # input_key = self.input_image_key if is_image_batch else self.input_data_key
             input_key = self.input_data_key
             n_sample = data_batch[input_key].shape[0]
         if state_shape is None:
@@ -859,16 +814,6 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
             state_shape = self.state_shape
         if sigma_max is None:
             sigma_max = self.sde.sigma_max
-        if x_sigma_max is None:
-            x_sigma_max = (
-                misc.arch_invariant_rand(
-                    (n_sample,) + tuple(state_shape),
-                    torch.float32,
-                    self.tensor_kwargs["device"],
-                    seed,
-                )
-                * sigma_max
-            )
 
         # Generate initial noise
         batch_shape = (n_sample, *state_shape)
@@ -876,11 +821,8 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
         generator.manual_seed(seed)
         random_noise = torch.randn(*batch_shape, generator=generator, **self.tensor_kwargs)
 
-        if is_negative_prompt:
-            condition, uncondition = self.conditioner.get_condition_with_negative_prompt(data_batch)
-        else:
-            condition, uncondition = self.conditioner.get_condition_uncondition(data_batch)
         # Handle conditioning
+        condition, _ = self.conditioner.get_condition_uncondition(data_batch)
         if condition_latent is None:
             condition_latent = torch.zeros(data_batch["latent_hint"].shape, **self.tensor_kwargs)
             num_condition_t = 0
@@ -890,38 +832,22 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
         condition = self.add_condition_video_indicator_and_video_input_mask(
             condition_latent, condition, num_condition_t
         )
-        uncondition.video_cond_bool = True  # Not do cfg on condition frames
-        uncondition = self.add_condition_video_indicator_and_video_input_mask(
-            condition_latent, uncondition, num_condition_t
-        )
-        uncondition.condition_video_indicator = condition.condition_video_indicator.clone()
-        uncondition.condition_video_input_mask = condition.condition_video_input_mask.clone()
 
         latent_hint = data_batch["latent_hint"]
         hint_key = data_batch["hint_key"]
         setattr(condition, hint_key, latent_hint)
-        if "use_none_hint" in data_batch and data_batch["use_none_hint"]:
-            setattr(uncondition, hint_key, None)
-        else:
-            setattr(uncondition, hint_key, latent_hint)
 
         to_cp = self.net.is_context_parallel_enabled
         # For inference, check if parallel_state is initialized
         if parallel_state.is_initialized():
             condition = broadcast_condition(condition, to_tp=False, to_cp=to_cp)
-            uncondition = broadcast_condition(uncondition, to_tp=False, to_cp=to_cp)
 
             cp_group = parallel_state.get_context_parallel_group()
             latent_hint = getattr(condition, hint_key)
             seq_dim = 3 if latent_hint.ndim == 6 else 2
             latent_hint = split_inputs_cp(latent_hint, seq_dim=seq_dim, cp_group=cp_group)
             setattr(condition, hint_key, latent_hint)
-            if getattr(uncondition, hint_key) is not None:
-                setattr(uncondition, hint_key, latent_hint)
 
-        # not sure if this is consistent w the new distilled model?
-        setattr(condition, "base_model", self.model.base_model)
-        setattr(uncondition, "base_model", self.model.base_model)
         if hasattr(self, "hint_encoders"):
             self.model.net.hint_encoders = self.hint_encoders
 
@@ -930,25 +856,16 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
             random_noise = split_inputs_cp(x=random_noise, seq_dim=2, cp_group=self.net.cp_group)
 
         condition.gt_latent = condition_latent
-        uncondition.gt_latent = condition_latent
-
-        if self.net.is_context_parallel_enabled:
-            x_sigma_max = broadcast(x_sigma_max, to_tp=False, to_cp=True)
-            x_sigma_max = split_inputs_cp(x=x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
 
         samples = self._forward_distilled(
             epsilon=random_noise,
             condition=condition,
-            uncondition=uncondition,
-            guidance=guidance,
-            hint_key=hint_key,
             condition_video_augment_sigma_in_inference=condition_video_augment_sigma_in_inference,
             target_h=target_h,
             target_w=target_w,
             patch_h=patch_h,
             patch_w=patch_w,
             seed=seed,
-            inference_mode=True,
             **kwargs,
         )
         cp_enabled = self.net.is_context_parallel_enabled
@@ -961,21 +878,15 @@ class VideoDistillModelWithCtrl(DistillV2WModel):
         self,
         epsilon: torch.Tensor,
         condition: Any,
-        uncondition: Any,
-        guidance: float,
-        hint_key: str,
         condition_video_augment_sigma_in_inference: float = 0.001,
         target_h: int = 88,
         target_w: int = 160,
         patch_h: int = 88,
         patch_w: int = 160,
         seed: int = 1,
-        inference_mode: bool = True,
         **kwargs,
     ) -> torch.Tensor:
         """Single forward pass for distilled models"""
-        B = epsilon.shape[0]  # Batch dimension
-
         w, h = target_w, target_h
         n_img_w = (w - 1) // patch_w + 1
         n_img_h = (h - 1) // patch_h + 1

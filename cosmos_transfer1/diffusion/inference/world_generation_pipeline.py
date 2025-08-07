@@ -1245,7 +1245,12 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
 
         with skip_init_linear():
             self.model.set_up_model()
-        checkpoint_path = f"{self.checkpoint_dir}/{self.checkpoint_name}"
+
+        assert len(self.control_inputs) == 1, "Distilled model only supports single control input"
+        for _, config in self.control_inputs.items():
+            checkpoint_path = config["ckpt_path"]
+            break
+        log.info(f"Loading checkpoint from {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
         state_dict = checkpoint.get("model", checkpoint)
 
@@ -1264,7 +1269,6 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
         # Load base model weights
         if base_state_dict:
             self.model.model["net"].base_model.net.load_state_dict(base_state_dict, strict=False)
-            self.model.model.base_model.load_state_dict(base_state_dict, strict=False)
         # Load control weights
         if ctrl_state_dict:
             self.model.model["net"].net_ctrl.load_state_dict(ctrl_state_dict, strict=False)
@@ -1340,12 +1344,9 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
         N_clip = (num_total_frames_with_padding - self.num_input_frames) // num_new_generated_frames
 
         video = []
-        initial_condition_input = None
-
         prev_frames = None
         log.info(f"N_clip: {N_clip}")
         for i_clip in tqdm(range(N_clip)):
-            # data_batch_i = {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in data_batch.items()}
             data_batch_i = {k: v for k, v in data_batch.items()}
             start_frame = num_new_generated_frames * i_clip
             end_frame = num_new_generated_frames * (i_clip + 1) + self.num_input_frames
@@ -1356,7 +1357,6 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
                 x0 = self.model.encode(input_frames).contiguous()
                 x_sigma_max = self.model.get_x_from_clean(x0, self.sigma_max, seed=(self.seed + i_clip))
             else:
-                assert False
                 x_sigma_max = None
 
             data_batch_i[hint_key] = control_input[:, :, start_frame:end_frame].cuda()
@@ -1397,7 +1397,7 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
             latents = generate_world_from_control(
                 model=self.model,
                 state_shape=state_shape,
-                is_negative_prompt=True,
+                is_negative_prompt=False,  # Unused for distilled models
                 data_batch=data_batch_i,
                 guidance=self.guidance,
                 num_steps=self.num_steps,
