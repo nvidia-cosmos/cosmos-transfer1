@@ -55,7 +55,7 @@ For each distillation stage, there are 3 steps involved: preparing a dataset, pr
 
 ### Knowledge Distillation (KD)
 
-For Knowledge Distillation, you need to first prepare a dataset of teacher-generated videos.
+For Knowledge Distillation, you need to first prepare a dataset of teacher-generated videos and their corresponding inputs.
 
 The dataset should contain the following:
 
@@ -109,17 +109,17 @@ Otherwise, follow the steps below to obtain the control input signals from the i
 
 For VisControl and EdgeControl models:
 
-- In our post-training pipeline, we compute these modalities on-the-fly. However, for Knowledge Distillation, we need to precompute the control input data for these modalities. This is because we need the control inputs to correspond to the data used to generate the teacher output videos, rather than the control signals that are computed from the teacher output videos themselves.
+- In our post-training pipeline, we compute these modalities on-the-fly. However, for Knowledge Distillation, we need to precompute the control input data for these modalities. We need the control inputs to correspond to the data used to generate the teacher output videos, rather than the control signals that are computed from the teacher output videos themselves.
 
-- You can adapt our inference pipeline to additionally save the vis and edge control inputs used to generate the teacher output videos.
+- You can adapt our inference pipeline to additionally save the vis or edge control inputs used to generate the teacher output videos.
 
 #### 4. Generating Teacher Data and Saving Noise Input
 
-Follow the steps in the [inference README](./inference_cosmos_transfer1_7b.md) to generate output videos using the teacher model. You will need to modify the inference pipeline to save the noise inputs used to generate the teacher data.
+Follow the steps in the [inference README](./inference_cosmos_transfer1_7b.md) to generate output videos using the teacher model. You will need to modify the inference pipeline to additionally save the noise inputs used to generate the teacher data.
 
 #### 5. Combining the Base and Control Checkpoints
 
-On HuggingFace, we provide the base model and control checkpoints in separate files. However, our distillation codebase assumes a different format, where the base model and control checkpoints are combined in a single file.
+On HuggingFace, we provide the base model and control checkpoints in separate files. However, our distillation training codebase assumes a different format, where the base model and control checkpoints are combined in a single file.
 
 Run the following command to combine the base model and control checkpoints used for distillation:
 
@@ -127,14 +127,7 @@ Run the following command to combine the base model and control checkpoints used
 PYTHONPATH=$(pwd) python cosmos_transfer1/distillation/scripts/combine_base_ctrl_ckpt.py --ctrl_type edge
 ```
 
-This command will load the following checkpoints from `checkpoints/nvidia/Cosmos-Transfer1-7B/ directory`:
-
-- base_model.pt
-- edge_control.pt
-
-And save the combined checkpoint inside the same directory:
-
-- checkpoints_teacher/edge_control.pt
+Inside the `checkpoints/nvidia/Cosmos-Transfer1-7B/` directory, the script will load `base_model.pt` and `edge_control.pt`, and it will save the combined checkpoint under `checkpoints_teacher/edge_control.pt`. The distillation codebase will then load the teacher model checkpoint directly from this location.
 
 <!-- #### 6. (Optional): Dry-run a Training Job
 
@@ -194,6 +187,8 @@ Since the `experiment` is uniquely associated with its checkpoint directory, rer
 
 ### Improved Distribution Matching Distillation (DMD2)
 
+<!-- discuss negative prompt and KD checkpoint loading nuances -->
+
 #### 8. Inference Using Distilled Models
 
 **Converting the FSDP DCP checkpoints to a consolidated PyTorch checkpoint:** To convert FSDP DCP checkpoints to a consolidated PyTorch format, use the conversion script `convert_fsdp_dcp_to_native_ckpt.py`.
@@ -202,10 +197,10 @@ Example usage (with 8 GPUs):
 
 ```bash
 PYTHONPATH=$(pwd) torchrun --nproc_per_node=8 cosmos_transfer1/distillation/scripts/convert_fsdp_dcp_to_native_ckpt.py \
-        --config=cosmos_transfer1/distillation/config/config_ctrl_dmd2.py -- \
-        experiment=DISTILL_CTRL_7Bv1_edge_fsdp_dmd2_train \
-        job.name=checkpoint_conversion \
-        checkpoint.load_path=<path_to_checkpoint>
+    --config=cosmos_transfer1/distillation/config/config_ctrl_dmd2.py -- \
+    experiment=DISTILL_CTRL_7Bv1_edge_fsdp_dmd2_train \
+    job.name=checkpoint_conversion \
+    checkpoint.load_path=<path_to_checkpoint>
 ```
 
 The script will save the consolidated checkpoint under `iter_xxxxx_full.pt` in the same checkpoint directory as the FSDP DCP checkpoints.
