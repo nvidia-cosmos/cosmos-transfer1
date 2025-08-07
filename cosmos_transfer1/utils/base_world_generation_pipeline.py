@@ -37,6 +37,7 @@ class BaseWorldGenerationPipeline(ABC):
         offload_tokenizer: bool = False,
         offload_text_encoder_model: bool = False,
         offload_guardrail_models: bool = False,
+        disable_guardrail: bool = False,
     ):
         """Initialize base world generation pipeline.
 
@@ -55,6 +56,7 @@ class BaseWorldGenerationPipeline(ABC):
             offload_tokenizer: If True, moves tokenizer to CPU after use
             offload_text_encoder_model: If True, moves T5 encoder to CPU after encoding
             offload_guardrail_models: If True, moves safety models to CPU after checks
+            disable_guardrail: If True, disables all safety checks and guardrail models
         """
         self.inference_type = inference_type
         self.checkpoint_dir = checkpoint_dir
@@ -66,6 +68,7 @@ class BaseWorldGenerationPipeline(ABC):
         self.offload_tokenizer = offload_tokenizer
         self.offload_text_encoder_model = offload_text_encoder_model
         self.offload_guardrail_models = offload_guardrail_models
+        self.disable_guardrail = disable_guardrail
 
         # Initialize model instances
         self.text_guardrail = None
@@ -77,7 +80,7 @@ class BaseWorldGenerationPipeline(ABC):
 
         if not self.offload_text_encoder_model:
             self._load_text_encoder_model()
-        if not self.offload_guardrail_models:
+        if not self.offload_guardrail_models and not self.disable_guardrail:
             if self.has_text_input:
                 self._load_text_guardrail()
             self._load_video_guardrail()
@@ -231,6 +234,10 @@ class BaseWorldGenerationPipeline(ABC):
         Returns:
             bool: True if prompt passes all safety checks, False otherwise
         """
+
+        if self.disable_guardrail:
+            return True
+
         if self.offload_guardrail_models:
             self._load_text_guardrail()
 
@@ -266,6 +273,10 @@ class BaseWorldGenerationPipeline(ABC):
         Note:
             Guardrail models are offloaded after checks if enabled.
         """
+
+        if self.disable_guardrail:
+            return video
+
         if self.offload_guardrail_models:
             self._load_video_guardrail()
 

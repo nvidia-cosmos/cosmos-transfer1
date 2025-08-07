@@ -151,6 +151,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         regional_prompts: List[str] = None,
         region_definitions: Union[List[List[float]], torch.Tensor] = None,
         waymo_example: bool = False,
+        disable_guardrail: bool = False,
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -178,6 +179,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             offload_prompt_upsampler: Whether to offload prompt upsampler after use
             process_group: Process group for distributed training
             waymo_example: Whether to use the waymo example post-training checkpoint
+            disable_guardrail: Whether to disable guardrail checks
         """
         self.num_input_frames = num_input_frames
         self.control_inputs = control_inputs
@@ -210,6 +212,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             offload_tokenizer=offload_tokenizer,
             offload_text_encoder_model=offload_text_encoder_model,
             offload_guardrail_models=offload_guardrail_models,
+            disable_guardrail=disable_guardrail,
         )
 
         # Initialize prompt upsampler if needed
@@ -409,6 +412,10 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             video = video.clamp(0, 1)
         video = (video * 255).to(torch.uint8).cpu()
         return video
+
+    def reload_model(self, control_inputs: Optional[dict]):
+        self._offload_network()
+        self._load_network()
 
     def _run_model_with_offload(
         self,

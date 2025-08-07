@@ -215,6 +215,9 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             num_condition_t = 0
             condition_video_augment_sigma_in_inference = 1000
 
+        condition.video_cond_bool = True
+        uncondition.video_cond_bool = True
+
         if use_batch_processing:
             condition = self.add_condition_video_indicator_and_video_input_mask(
                 condition_latent, condition, num_condition_t
@@ -229,8 +232,6 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
             uncondition = self.add_condition_video_indicator_and_video_input_mask(
                 condition_latent[:1], uncondition, num_condition_t
             )
-        condition.video_cond_bool = True
-        uncondition.video_cond_bool = False  # Not do cfg on condition frames
 
         # Add extra conditions for ctrlnet.
         latent_hint = data_batch["latent_hint"]

@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
 import argparse
 import copy
 import json
 import os
+import time
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Workaround to suppress MP warning
 
