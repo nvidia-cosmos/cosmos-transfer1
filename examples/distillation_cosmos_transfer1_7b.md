@@ -125,7 +125,7 @@ Follow the steps in the [inference README](./inference_cosmos_transfer1_7b.md) t
 
 #### 5. Combining the Base and Control Checkpoints
 
-On HuggingFace, we provide the base model and control checkpoints in separate files. However, our distillation training codebase assumes a different format, where the base model and control checkpoints are combined in a single file.
+On Hugging Face, we provide the base model and control checkpoints in separate files. However, our distillation training codebase assumes a different format, where the base model and control checkpoints are combined in a single file.
 
 Run the following command to combine the base model and control checkpoints used for distillation:
 
@@ -200,7 +200,7 @@ During training, visualizations will be saved to `checkpoints/cosmos_transfer1_d
 
 #### 1. Prepare the Training Data
 
-The dataset format expected for DMD2 training distillation is the same as the format used for post-training. See the [post-training guide example](./training_cosmos_transfer_7b.md#example) for instructions on preparing the dataset.
+The dataset format expected for DMD2 training distillation is the same as the format used for post-training. See the [post-training guide](./training_cosmos_transfer_7b.md#example) for instructions on preparing the dataset.
 
 After you have prepared your DMD2 dataset, use the following script to sanity check the dataset:
 
@@ -210,7 +210,7 @@ PYTHONPATH=$(pwd) python cosmos_transfer1/diffusion/datasets/example_transfer_da
 
 #### 2. Combining the Base and Control Checkpoints
 
-On HuggingFace, we provide the base model and control checkpoints in separate files. However, our distillation training codebase assumes a different format, where the base model and control checkpoints are combined in a single file.
+On Hugging Face, we provide the base model and control checkpoints in separate files. However, our distillation training codebase assumes a different format, where the base model and control checkpoints are combined in a single file.
 
 Run the following command to combine the base model and control checkpoints used for distillation:
 
@@ -222,7 +222,7 @@ Inside the `checkpoints/nvidia/Cosmos-Transfer1-7B/` directory, the script will 
 
 #### 3. Prepare the Negative Prompt Embedding
 
-In the student update phase, we apply CFG to the teacher model, using either a negative prompt or dropout to generate the unconditional prediction. We recommend using a negative prompt for optimal results.
+In the student update phase, we apply classifier-free guidance to the teacher model, using either a negative prompt or dropout to generate the unconditional prediction. We recommend using a negative prompt for optimal results.
 
 Run the following command to precompute the negative prompt embedding used in the DMD2 training pipeline:
 
