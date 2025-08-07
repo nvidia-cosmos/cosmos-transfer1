@@ -90,10 +90,7 @@ class KDModelMixin(DiffusionModel, ABC):
         **kwargs,
     ):
         """
-        Compute the KD loss
-
-        Args:
-            uncondition (BaseVideoCondition, unused): Passed through inheritance chain.
+        Compute the KD loss.
 
         Returns:
             Tuple(output_batch, loss): pair containing an output dictionary and the scaled L2 reconstruction loss.

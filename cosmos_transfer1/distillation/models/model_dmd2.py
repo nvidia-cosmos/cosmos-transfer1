@@ -39,9 +39,6 @@ from cosmos_transfer1.utils.lazy_config import LazyDict
 from cosmos_transfer1.utils.lazy_config import instantiate as lazy_instantiate
 
 
-# The use of Mixin allows for clean code reuse and modularisation. Inheriting from DiffusionModel, the highest common
-# class of relevance in this codebase, instead of accompanying implementation classes, creates a clean and extensible
-# diamond pattern with consistent MRO (method retrieval order) while allowing IDEs to resolve super signatures.
 class DMD2ModelMixin(DiffusionModel, ABC):
     """DMD2 mixin class for diffusion step distillation."""
 
@@ -63,7 +60,6 @@ class DMD2ModelMixin(DiffusionModel, ABC):
             model_dict["fake_score"] = self.fake_score
 
         if self.config.gan_loss_weight_gen > 0:
-            # instantiate the discriminator in DMD2
             log.info("Instantiating the discriminator")
             self.discriminator = lazy_instantiate(config.discriminator)
             model_dict["discriminator"] = self.discriminator
@@ -97,9 +93,9 @@ class DMD2ModelMixin(DiffusionModel, ABC):
     def get_optimizers(self, iteration: int) -> list[torch.optim.Optimizer]:
         """
         Get the optimizers for the current iteration
+
         Args:
             iteration (int): The current training iteration
-
         """
         if iteration % self.config.student_update_freq == 0:
             return [self.optimizer_dict["net"]]
@@ -114,9 +110,9 @@ class DMD2ModelMixin(DiffusionModel, ABC):
     def get_lr_schedulers(self, iteration: int) -> list[torch.optim.lr_scheduler.LRScheduler]:
         """
         Get the lr schedulers for the current iteration
+
         Args:
             iteration (int): The current training iteration
-
         """
         if iteration % self.config.student_update_freq == 0:
             return [self.scheduler_dict["net"]]
@@ -239,8 +235,8 @@ class DMD2ModelMixin(DiffusionModel, ABC):
         if self.config.recon_loss_weight > 0 or self.config.recon_loss_only:
             recon_loss = torch.nn.functional.mse_loss(x0_gen, x0, reduction="mean")
             if self.config.recon_loss_only:
-                # Only update the student with the reconstruction loss
-                # This is to warm up the student before the distillation phase
+                # Update the student with the reconstruction loss only
+                # This can be used as an alternative way to warm up the student before DMD2
                 output_batch = {"gen_rand": x0_gen, "recon_loss": recon_loss}
                 return output_batch, recon_loss
 

@@ -94,9 +94,7 @@ class BaseDistillationMixin(DiffusionModel, ABC):
 
     def _load_pretrained_net(self, net: GeneralDIT, model_dict: torch.nn.ModuleDict = None) -> None:
         """
-        Loading pre-trained base model to net. This function is based on the original set_up_model function in class
-        CtrlNetModel in `cosmos/diffusion/v1/models/model_ctrl.py`. It is modified to only load the base model (net)
-        from pre-trained checkpoint.
+        Loading pre-trained base model to net.
 
         Args:
             net: The DiT net in pre-trained diffusion model
@@ -282,6 +280,7 @@ class BaseDistillationMixin(DiffusionModel, ABC):
     def get_optimizers(self, iteration: int) -> list[torch.optim.Optimizer]:
         """
         Get the optimizers for the current iteration
+
         Args:
             iteration (int): The current training iteration
         """
@@ -290,6 +289,7 @@ class BaseDistillationMixin(DiffusionModel, ABC):
     def get_lr_schedulers(self, iteration: int) -> list[torch.optim.lr_scheduler.LRScheduler]:
         """
         Get the lr schedulers for the current iteration
+
         Args:
             iteration (int): The current training iteration
         """
