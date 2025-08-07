@@ -28,10 +28,10 @@ import os
 
 from hydra.core.config_store import ConfigStore
 
-from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.diffusion.config.transfer.conditioner import CTRL_HINT_KEYS_COMB
 from cosmos_transfer1.diffusion.inference.inference_utils import default_model_names
 from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
+from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
 cs = ConfigStore.instance()
 

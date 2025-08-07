@@ -26,8 +26,8 @@ import numpy as np
 import torch
 import torchvision
 import torchvision.transforms.functional as transforms_F
-from matplotlib import pyplot as plt
 from einops import rearrange
+from matplotlib import pyplot as plt
 
 from cosmos_transfer1.auxiliary.guardrail.common.io_utils import save_video
 from cosmos_transfer1.checkpoints import (

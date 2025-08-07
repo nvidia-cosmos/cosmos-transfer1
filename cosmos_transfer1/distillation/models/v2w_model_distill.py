@@ -18,13 +18,13 @@ from typing import Dict, List, Optional, Set, Tuple
 import torch
 from megatron.core import parallel_state
 
-from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.conditioner import DataType, VideoExtendCondition
 from cosmos_transfer1.diffusion.config.base.conditioner import VideoCondBoolConfig
+from cosmos_transfer1.diffusion.functional.batch_ops import batch_mul
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.diffusion.training.models.extend_model import ExtendDiffusionModel, VideoDenoisePrediction
 from cosmos_transfer1.distillation.models.base_model_distill import BaseDistillationMixin
-from cosmos_transfer1.diffusion.functional.batch_ops import batch_mul
+from cosmos_transfer1.utils import log
 
 
 class V2WDistillationMixin(BaseDistillationMixin, ABC):

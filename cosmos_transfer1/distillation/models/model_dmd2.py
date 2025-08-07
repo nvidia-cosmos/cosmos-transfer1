@@ -19,24 +19,24 @@ from typing import Tuple
 import torch
 from megatron.core import parallel_state
 
-from cosmos_transfer1.utils.lazy_config import LazyDict
-from cosmos_transfer1.utils.lazy_config import instantiate as lazy_instantiate
-from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.conditioner import BaseVideoCondition
+from cosmos_transfer1.diffusion.diffusion.functional.batch_ops import batch_mul
 from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, cat_outputs_cp_with_grad
-from cosmos_transfer1.distillation.models.ctrl_model_distill import CtrlDistillationModel
+from cosmos_transfer1.diffusion.training.models.model import DiffusionModel
+from cosmos_transfer1.diffusion.training.utils.optim_instantiate import get_base_scheduler
 from cosmos_transfer1.distillation.models.base_model_distill import BaseDistillationModel
+from cosmos_transfer1.distillation.models.ctrl_model_distill import CtrlDistillationModel
 from cosmos_transfer1.distillation.models.v2w_model_distill import V2WDistillationModel
 from cosmos_transfer1.distillation.networks.distill_controlnet_wrapper import DistillControlNet
-from cosmos_transfer1.diffusion.training.models.model import DiffusionModel
 from cosmos_transfer1.distillation.utils.losses import (
     denoising_score_matching_loss,
     gan_loss_discriminator,
     gan_loss_generator,
     variational_score_distillation_loss,
 )
-from cosmos_transfer1.diffusion.diffusion.functional.batch_ops import batch_mul
-from cosmos_transfer1.diffusion.training.utils.optim_instantiate import get_base_scheduler
+from cosmos_transfer1.utils import log
+from cosmos_transfer1.utils.lazy_config import LazyDict
+from cosmos_transfer1.utils.lazy_config import instantiate as lazy_instantiate
 
 
 # The use of Mixin allows for clean code reuse and modularisation. Inheriting from DiffusionModel, the highest common

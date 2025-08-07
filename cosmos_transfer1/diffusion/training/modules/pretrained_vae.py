@@ -735,6 +735,7 @@ class JointImageVideoSharedJITTokenizer(JointImageVideoTokenizer):
         self.image_vae.encoder = self.video_vae.encoder
         self.image_vae.decoder = self.video_vae.decoder
 
+
 class DummyJointImageVideoTokenizer(BaseVAE, VideoTokenizerInterface):
     def __init__(
         self,

@@ -17,9 +17,9 @@ import omegaconf
 
 from cosmos_transfer1.diffusion.training.modules.pretrained_vae import (
     JITVAE,
+    DummyJointImageVideoTokenizer,
     JointImageVideoSharedJITTokenizer,
     VideoJITTokenizer,
-    DummyJointImageVideoTokenizer,
 )
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
@@ -36,6 +36,7 @@ def tokenizer_register(key):
 
 
 DebugTokenizerConfig: LazyDict = L(DummyJointImageVideoTokenizer)(name="dummy_joint_image_video")
+
 
 @tokenizer_register("cosmos_diffusion_tokenizer_comp8x8x8")
 def get_cosmos_diffusion_tokenizer_comp8x8x8(resolution: str, chunk_duration: int) -> omegaconf.dictconfig.DictConfig:

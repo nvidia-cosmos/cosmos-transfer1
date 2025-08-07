@@ -23,8 +23,8 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp import ShardingStrategy
 from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
 
-from cosmos_transfer1.utils import distributed, log
 from cosmos_transfer1.diffusion.training.utils.fsdp_helper import apply_fsdp_checkpointing, hsdp_device_mesh
+from cosmos_transfer1.utils import distributed, log
 
 if TYPE_CHECKING:
     from cosmos_transfer1.distillation.models.base_model_distill import BaseDistillationModel

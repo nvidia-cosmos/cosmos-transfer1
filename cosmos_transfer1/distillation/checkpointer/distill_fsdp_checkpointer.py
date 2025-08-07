@@ -38,11 +38,11 @@ from torch.distributed.checkpoint.state_dict import (
 from torch.distributed.checkpoint.stateful import Stateful
 
 from cosmos_transfer1.checkpointer.base import AbstractCheckpointer
+from cosmos_transfer1.checkpointer.ema_fsdp_checkpointer import CheckpointConfig
+from cosmos_transfer1.utils import callback, distributed, log, misc
 from cosmos_transfer1.utils.config import JobConfig
 from cosmos_transfer1.utils.ddp_config import make_freezable
-from cosmos_transfer1.utils import callback, distributed, log, misc
 from cosmos_transfer1.utils.easy_io import easy_io
-from cosmos_transfer1.checkpointer.ema_fsdp_checkpointer import CheckpointConfig
 
 if TYPE_CHECKING:
     from cosmos_transfer1.distillation.models.base_model_distill import BaseDistillationModel

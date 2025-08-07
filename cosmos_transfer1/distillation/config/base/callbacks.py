@@ -15,8 +15,8 @@
 
 from cosmos_transfer1.diffusion.training.callbacks.iter_speed import IterSpeed
 from cosmos_transfer1.diffusion.training.callbacks.low_precision import LowPrecisionCallback
-from cosmos_transfer1.distillation.callbacks.grad_clip import GradClip as GradClipDistillation
 from cosmos_transfer1.distillation.callbacks.every_n_draw_sample import EveryNDrawSampleDistillation
+from cosmos_transfer1.distillation.callbacks.grad_clip import GradClip as GradClipDistillation
 from cosmos_transfer1.utils.callback import ProgressBarCallback
 from cosmos_transfer1.utils.lazy_config import PLACEHOLDER
 from cosmos_transfer1.utils.lazy_config import LazyCall as L

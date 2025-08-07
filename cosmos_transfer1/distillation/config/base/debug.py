@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.diffusion.training.networks.general_dit_video_conditioned import VideoExtendGeneralDIT
+from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
 """
 Sample command to run the debug experiment:

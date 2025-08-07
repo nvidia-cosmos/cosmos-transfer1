@@ -25,8 +25,8 @@ import cosmos_transfer1.diffusion.config.training.registry as base_training_regi
 from cosmos_transfer1.diffusion.config.base.data import register_data_ctrlnet
 from cosmos_transfer1.diffusion.config.registry import register_conditioner
 from cosmos_transfer1.diffusion.config.training.tokenizer import (
-    get_cosmos_diffusion_tokenizer_comp8x8x8,
     DebugTokenizerConfig,
+    get_cosmos_diffusion_tokenizer_comp8x8x8,
 )
 from cosmos_transfer1.diffusion.config.transfer.conditioner import (
     CTRL_HINT_KEYS,
@@ -87,6 +87,7 @@ num_blocks = DebugDITConfigTrain["num_blocks"]
 DebugDITEncoderConfigTrain = copy.deepcopy(DebugDITConfigTrain)
 DebugDITEncoderConfigTrain["_target_"] = GeneralDITEncoder
 DebugDITEncoderConfigTrain["layer_mask"] = [True if i > 2 else False for i in range(num_blocks)]
+
 
 def register_net_train(cs):
     cs.store(

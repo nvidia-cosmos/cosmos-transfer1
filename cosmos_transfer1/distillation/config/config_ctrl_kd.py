@@ -17,16 +17,16 @@ from typing import Any, List
 
 import attrs
 
-from cosmos_transfer1.utils import config
-from cosmos_transfer1.utils.lazy_config import PLACEHOLDER
-from cosmos_transfer1.utils.lazy_config import LazyCall as L
-from cosmos_transfer1.utils.lazy_config import LazyDict
-from cosmos_transfer1.utils.config_helper import import_all_modules_from_package
 from cosmos_transfer1.distillation.checkpointer.distill_fsdp_checkpointer import DistillCheckpointConfig
 from cosmos_transfer1.distillation.config.base.model import DistillCtrlModelConfig
 from cosmos_transfer1.distillation.config.registry import register_configs
 from cosmos_transfer1.distillation.models.model_kd import KDDistillCtrlModel
 from cosmos_transfer1.distillation.trainer.distillation_trainer import Trainer
+from cosmos_transfer1.utils import config
+from cosmos_transfer1.utils.config_helper import import_all_modules_from_package
+from cosmos_transfer1.utils.lazy_config import PLACEHOLDER
+from cosmos_transfer1.utils.lazy_config import LazyCall as L
+from cosmos_transfer1.utils.lazy_config import LazyDict
 
 
 @attrs.define(slots=False)

@@ -17,10 +17,10 @@ from typing import List
 
 import attrs
 
+from cosmos_transfer1.diffusion.config.training.ema import PowerEMAConfig
+from cosmos_transfer1.diffusion.training.modules.edm_sde import EDMSDE
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
-from cosmos_transfer1.diffusion.training.modules.edm_sde import EDMSDE
-from cosmos_transfer1.diffusion.config.training.ema import PowerEMAConfig
 
 
 @attrs.define(slots=False)

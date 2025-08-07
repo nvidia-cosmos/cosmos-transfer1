@@ -14,8 +14,8 @@
 # limitations under the License.
 
 import torch
-from apex.multi_tensor_apply import multi_tensor_applier
 
+from apex.multi_tensor_apply import multi_tensor_applier
 from cosmos_transfer1.utils import distributed, log
 
 

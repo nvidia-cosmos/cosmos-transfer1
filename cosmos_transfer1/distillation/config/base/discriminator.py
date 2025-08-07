@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from cosmos_transfer1.distillation.networks.discriminators import Discriminator
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.utils.lazy_config import LazyDict
-from cosmos_transfer1.distillation.networks.discriminators import Discriminator
 
 # tiny debug model
 CONV3D_POOL_TINY_FA_Config: LazyDict = L(Discriminator)(feature_indices=None, in_ch=256, nc=320, num_blocks=4)

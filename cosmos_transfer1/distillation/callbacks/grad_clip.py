@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING
 import torch
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
-from cosmos_transfer1.utils import distributed
 from cosmos_transfer1.diffusion.training.callbacks.grad_clip import GradClip as GradClipVideo
+from cosmos_transfer1.utils import distributed
 
 if TYPE_CHECKING:
     from cosmos_transfer1.distillation.models.base_model_distill import BaseDistillationModel

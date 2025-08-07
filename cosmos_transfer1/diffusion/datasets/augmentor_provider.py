@@ -19,13 +19,13 @@ from cosmos_transfer1.diffusion.datasets.augmentors.basic_augmentors import (
     ReflectionPadding,
     ResizeLargestSideAspectPreserving,
 )
-from cosmos_transfer1.diffusion.datasets.augmentors.text_transforms_for_video import TextTransformForVideo
 from cosmos_transfer1.diffusion.datasets.augmentors.control_input import (
     VIDEO_RES_SIZE_INFO,
     AddControlInput,
     AddControlInputComb,
 )
 from cosmos_transfer1.diffusion.datasets.augmentors.merge_datadict import DataDictMerger
+from cosmos_transfer1.diffusion.datasets.augmentors.text_transforms_for_video import TextTransformForVideo
 from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
 AUGMENTOR_OPTIONS = {}

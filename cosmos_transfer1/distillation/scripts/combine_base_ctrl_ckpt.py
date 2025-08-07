@@ -28,8 +28,9 @@ Usage:
 """
 
 import argparse
-import torch
 from pathlib import Path
+
+import torch
 
 
 def combine_checkpoints(base_model_path: str, control_model_path: str, output_path: str):

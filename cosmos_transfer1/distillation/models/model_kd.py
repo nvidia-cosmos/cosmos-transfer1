@@ -19,13 +19,13 @@ from typing import Tuple
 import torch
 from megatron.core import parallel_state
 
-from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.conditioner import BaseVideoCondition
 from cosmos_transfer1.diffusion.module.parallel import split_inputs_cp
 from cosmos_transfer1.diffusion.training.models.model import DiffusionModel, _broadcast
-from cosmos_transfer1.distillation.models.ctrl_model_distill import CtrlDistillationModel
 from cosmos_transfer1.distillation.models.base_model_distill import BaseDistillationModel
+from cosmos_transfer1.distillation.models.ctrl_model_distill import CtrlDistillationModel
 from cosmos_transfer1.distillation.models.v2w_model_distill import V2WDistillationModel
+from cosmos_transfer1.utils import log
 
 
 class KDModelMixin(DiffusionModel, ABC):

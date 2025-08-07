@@ -20,7 +20,7 @@ import torch
 
 from cosmos_transfer1.diffusion.datasets.augmentors.text_transforms_for_video import pad_and_resize
 from cosmos_transfer1.utils.easy_io import easy_io
-from scripts.get_t5_embeddings import init_t5, encode_for_batch
+from scripts.get_t5_embeddings import encode_for_batch, init_t5
 
 """
 Script to generate T5 embeddings for a given text prompt and save as .pkl file.

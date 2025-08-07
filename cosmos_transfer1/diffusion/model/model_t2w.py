@@ -16,8 +16,8 @@
 from enum import Enum
 
 import torch
-from torch import Tensor
 from einops import rearrange
+from torch import Tensor
 
 from cosmos_transfer1.diffusion.conditioner import BaseVideoCondition, CosmosCondition
 from cosmos_transfer1.diffusion.diffusion.functional.batch_ops import batch_mul

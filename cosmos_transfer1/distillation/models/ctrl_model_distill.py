@@ -20,13 +20,13 @@ import torch
 from einops import rearrange
 from megatron.core import parallel_state
 
-from cosmos_transfer1.utils import log
 from cosmos_transfer1.diffusion.conditioner import BaseVideoCondition, DataType, VideoExtendCondition
-from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.diffusion.inference.inference_utils import merge_patches_into_video, split_video_into_patches
+from cosmos_transfer1.diffusion.module.parallel import cat_outputs_cp, split_inputs_cp
 from cosmos_transfer1.diffusion.training.models.model import broadcast_condition
 from cosmos_transfer1.diffusion.training.models.model_ctrl import VideoDiffusionModelWithCtrl
 from cosmos_transfer1.distillation.models.v2w_model_distill import V2WDistillationMixin
+from cosmos_transfer1.utils import log
 
 
 class CtrlDistillationMixin(V2WDistillationMixin, ABC):

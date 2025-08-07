@@ -25,10 +25,10 @@ from loguru import logger as logging
 from omegaconf import OmegaConf
 
 from cosmos_transfer1.diffusion.config.config import Config
-from cosmos_transfer1.utils.lazy_config import instantiate
-from cosmos_transfer1.utils.lazy_config.lazy import LazyConfig
 from cosmos_transfer1.utils import log, misc
 from cosmos_transfer1.utils.config_helper import get_config_module, override
+from cosmos_transfer1.utils.lazy_config import instantiate
+from cosmos_transfer1.utils.lazy_config.lazy import LazyConfig
 
 if TYPE_CHECKING:
     from cosmos_transfer1.distillation.models.base_model_distill import BaseDistillationModel

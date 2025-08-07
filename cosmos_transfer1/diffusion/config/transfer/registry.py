@@ -22,10 +22,7 @@ from cosmos_transfer1.diffusion.config.transfer.conditioner import (
     VideoConditionerFpsSizePaddingWithCtrlConfig,
     ViewConditionedVideoConditionerFpsSizePaddingWithCtrlConfig,
 )
-from cosmos_transfer1.diffusion.config.transfer.net_ctrl import (
-    FADITV2EncoderConfig,
-    FADITV2MultiCamEncoderConfig,
-)
+from cosmos_transfer1.diffusion.config.transfer.net_ctrl import FADITV2EncoderConfig, FADITV2MultiCamEncoderConfig
 
 
 def register_experiment_ctrlnet(cs):

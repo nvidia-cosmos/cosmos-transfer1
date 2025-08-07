@@ -16,13 +16,13 @@
 from megatron.core import parallel_state
 from torch.utils.data import DataLoader, DistributedSampler
 
-from cosmos_transfer1.utils.lazy_config import LazyCall as L
 from cosmos_transfer1.diffusion.datasets.example_transfer_dataset import ExampleTransferDataset
 from cosmos_transfer1.distillation.datasets.example_kd_dataset import KDTransferDataset
 from cosmos_transfer1.distillation.datasets.mock_distill_dataset import (
     get_mock_distill_ctrlnet_dataset,
     get_mock_distill_dataset,
 )
+from cosmos_transfer1.utils.lazy_config import LazyCall as L
 
 MOCK_DISTILL_DATA_LOADER = L(DataLoader)(
     dataset=L(get_mock_distill_dataset)(

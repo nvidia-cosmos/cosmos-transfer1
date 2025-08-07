@@ -21,12 +21,12 @@ import importlib
 from loguru import logger as logging
 from torch.distributed.fsdp import FullStateDictConfig, FullyShardedDataParallel, StateDictType
 
+from cosmos_transfer1.diffusion.config.config import Config
+from cosmos_transfer1.distillation.train import destroy_distributed, instantiate_model
+from cosmos_transfer1.distillation.utils import fsdp_distill
 from cosmos_transfer1.utils import distributed, log
 from cosmos_transfer1.utils.config_helper import get_config_module, override
 from cosmos_transfer1.utils.easy_io import easy_io
-from cosmos_transfer1.diffusion.config.config import Config
-from cosmos_transfer1.distillation.utils import fsdp_distill
-from cosmos_transfer1.distillation.train import instantiate_model, destroy_distributed
 
 """
 Script to convert a distributed FSDP distilled checkpoint to a native checkpoint.
