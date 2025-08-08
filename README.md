@@ -23,14 +23,18 @@ Cosmos-Transfer1 includes the following:
 - [2025/08] **Cosmos-Transfer1-7B Edge Distilled** is available! Now you can generate videos in a single diffusion step (vs. 35 steps), significantly speeding up inference. We provide the distillation recipe and training code, so you can even distill your own models! Try it out and tell us what you think!
 
   - [Inference guide](examples/inference_cosmos_transfer1_7b.md#example-2-distilled-single-control-edge)
+
   - [Distill your own models](examples/distillation_cosmos_transfer1_7b.md)
+
   - [Hugging Face model](https://huggingface.co/nvidia/Cosmos-Transfer1-7B/blob/main/edge_control_distilled.pt)
 
 - [2025/05] **Cosmos AV Single2MultiView** is available! Now you can create dynamic, multi-view clips from just one video. Try it out and tell us what you think!  
-    - [Inference guide](examples/inference_cosmos_transfer1_7b_sample_av_single2multiview.md)  
-    - [Build your own or PyTorch post-training](examples/training_cosmos_transfer_7B_sample_AV.md)  
 
-    - [Hugging Face model](https://huggingface.co/nvidia/Cosmos-Transfer1-7B-Sample-AV-Single2MultiView)
+  - [Inference guide](examples/inference_cosmos_transfer1_7b_sample_av_single2multiview.md)  
+
+  - [Build your own or PyTorch post-training](examples/training_cosmos_transfer_7B_sample_AV.md)  
+
+  - [Hugging Face model](https://huggingface.co/nvidia/Cosmos-Transfer1-7B-Sample-AV-Single2MultiView)
 
 - [2025/04] [Post training](README.md#post-train-pre-trained-cosmos-transfer1-models) is available! Now you can customize Transfer1 models in your own way. Please try it out and we look forward to your feedback.
 
