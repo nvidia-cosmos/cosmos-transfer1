@@ -39,7 +39,8 @@ RUN echo "Installing dependencies. This will take a while..." && \
 
 # Create Python symlink
 RUN ln -s /usr/bin/python3.12 /usr/bin/python
-RUN apt-get install -y libmagic1
+RUN apt-get update && apt-get install -y --no-install-recommends libmagic1 && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 RUN mkdir -p /workspace
 WORKDIR /workspace
