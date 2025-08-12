@@ -36,11 +36,28 @@ class Preprocessors:
         self.vis_model = None
         self.edge_model = None
 
-    def __call__(self, input_video, input_prompt, control_inputs, output_folder, regional_prompts=None, blur_strength="medium", canny_threshold="medium", ):
+    def __call__(
+        self,
+        input_video,
+        input_prompt,
+        control_inputs,
+        output_folder,
+        regional_prompts=None,
+        blur_strength="medium",
+        canny_threshold="medium",
+    ):
         for hint_key in control_inputs:
             if hint_key in valid_hint_keys:
                 if hint_key in ["depth", "seg", "keypoint", "vis", "edge"]:
-                    self.gen_input_control(input_video, input_prompt, hint_key, control_inputs[hint_key], output_folder, blur_strength, canny_threshold)
+                    self.gen_input_control(
+                        input_video,
+                        input_prompt,
+                        hint_key,
+                        control_inputs[hint_key],
+                        output_folder,
+                        blur_strength,
+                        canny_threshold,
+                    )
 
                 # for all hints we need to create weight tensor if not present
                 control_input = control_inputs[hint_key]
@@ -97,7 +114,16 @@ class Preprocessors:
 
         return control_inputs
 
-    def gen_input_control(self, in_video, in_prompt, hint_key, control_input, output_folder, blur_strength="medium", canny_threshold="medium"):
+    def gen_input_control(
+        self,
+        in_video,
+        in_prompt,
+        hint_key,
+        control_input,
+        output_folder,
+        blur_strength="medium",
+        canny_threshold="medium",
+    ):
         # if input control isn't provided we need to run preprocessor to create input control tensor
         # for depth no special params, for SAM we need to run with prompt
         if control_input.get("input_control", None) is None:
@@ -123,14 +149,18 @@ class Preprocessors:
                     out_video=out_video,
                 )
             elif hint_key == "vis":
-                log.info(f"no input_control provided for {hint_key}. generating input control video with VisControlModel")
+                log.info(
+                    f"no input_control provided for {hint_key}. generating input control video with VisControlModel"
+                )
                 self.vis(
                     in_video=in_video,
                     out_video=out_video,
                     blur_strength=blur_strength,
                 )
             elif hint_key == "edge":
-                log.info(f"no input_control provided for {hint_key}. generating input control video with EdgeControlModel")
+                log.info(
+                    f"no input_control provided for {hint_key}. generating input control video with EdgeControlModel"
+                )
                 self.edge(
                     in_video=in_video,
                     out_video=out_video,

@@ -14,22 +14,22 @@
 # limitations under the License.
 
 import os
+
 import cv2
+import imageio
 import numpy as np
 import torch
-import imageio
 
 from cosmos_transfer1.utils import log
+
 
 class EdgeControlModel:
     def __init__(self, canny_threshold="medium", use_random=True):
         self.use_random = use_random
         self.preset_strength = canny_threshold
-    
+
     def _load_frame(self, video_path: str) -> np.ndarray:
-        log.info(
-            f"Processing video: {video_path} for edge control"
-        )
+        log.info(f"Processing video: {video_path} for edge control")
         assert os.path.exists(video_path)
         try:
             reader = imageio.get_reader(video_path, "ffmpeg")
@@ -37,7 +37,7 @@ class EdgeControlModel:
             reader.close()
         except Exception as e:
             raise ValueError(f"Failed to load video frames from {video_path}") from e
-        
+
         # Convert from (T, H, W, C) to (C, T, H, W) format
         frames = frames.transpose((3, 0, 1, 2))
         return frames
@@ -46,7 +46,7 @@ class EdgeControlModel:
         log.info(f"EdgeControlModel: {input_video=} {output_video=}")
         # Resize the frames to target size before blurring.
         frames = self._load_frame(input_video)
-        
+
         if self.use_random:
             t_lower = np.random.randint(20, 100)  # Get a random lower thre within [0, 255]
             t_diff = np.random.randint(50, 150)  # Get a random diff between lower and upper
@@ -76,7 +76,7 @@ class EdgeControlModel:
         # Save the output video
         self._save_output_video(edge_maps, output_video)
         return edge_maps
-    
+
     def _save_output_video(self, frames: torch.Tensor, output_path: str) -> None:
         """Save processed frames as a video file."""
         # Convert tensor to numpy and change format from (C, T, H, W) to (T, H, W, C)
@@ -84,30 +84,30 @@ class EdgeControlModel:
             frames_np = frames.detach().cpu().numpy()
         else:
             frames_np = frames
-        
+
         # Transpose from (C, T, H, W) to (T, H, W, C)
         frames_np = frames_np.transpose((1, 2, 3, 0))
-        
+
         # Ensure values are in the correct range [0, 255] and convert to uint8
         if frames_np.max() <= 1.0:
             frames_np = (frames_np * 255).astype(np.uint8)
         else:
             frames_np = np.clip(frames_np, 0, 255).astype(np.uint8)
-        
+
         # Ensure RGB format (drop alpha channel if present)
         if frames_np.shape[-1] == 4:
             frames_np = frames_np[:, :, :, :3]
         elif frames_np.shape[-1] == 1:
             frames_np = np.repeat(frames_np, 3, axis=-1)
-        
+
         try:
             # Create output directory if it doesn't exist
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            
+
             with imageio.get_writer(output_path, fps=30, macro_block_size=8) as writer:
                 for frame in frames_np:
                     writer.append_data(frame)
-            
+
             log.info(f"Successfully saved edge control video to: {output_path}")
         except Exception as e:
             log.error(f"Failed to save edge control video to {output_path}: {e}")
