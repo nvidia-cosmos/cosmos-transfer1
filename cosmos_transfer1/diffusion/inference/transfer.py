@@ -315,6 +315,8 @@ def demo(cfg, control_inputs):
                 current_control_inputs,
                 video_save_subfolder,
                 cfg.regional_prompts if hasattr(cfg, "regional_prompts") else None,
+                blur_strength=cfg.blur_strength,
+                canny_threshold=cfg.canny_threshold,
             )
             batch_control_inputs.append(current_control_inputs)
 

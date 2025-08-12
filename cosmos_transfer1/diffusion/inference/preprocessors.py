@@ -19,8 +19,10 @@ import os
 import torch
 
 from cosmos_transfer1.auxiliary.depth_anything.model.depth_anything import DepthAnythingModel
+from cosmos_transfer1.auxiliary.edge_control.edge_control import EdgeControlModel
 from cosmos_transfer1.auxiliary.human_keypoint.human_keypoint import HumanKeypointModel
 from cosmos_transfer1.auxiliary.sam2.sam2_model import VideoSegmentationModel
+from cosmos_transfer1.auxiliary.vis_control.vis_control import VisControlModel
 from cosmos_transfer1.diffusion.inference.inference_utils import valid_hint_keys
 from cosmos_transfer1.utils import log
 from cosmos_transfer1.utils.video_utils import is_valid_video, video_to_tensor
@@ -31,12 +33,14 @@ class Preprocessors:
         self.depth_model = None
         self.seg_model = None
         self.keypoint_model = None
+        self.vis_model = None
+        self.edge_model = None
 
-    def __call__(self, input_video, input_prompt, control_inputs, output_folder, regional_prompts=None):
+    def __call__(self, input_video, input_prompt, control_inputs, output_folder, regional_prompts=None, blur_strength="medium", canny_threshold="medium", ):
         for hint_key in control_inputs:
             if hint_key in valid_hint_keys:
-                if hint_key in ["depth", "seg", "keypoint"]:
-                    self.gen_input_control(input_video, input_prompt, hint_key, control_inputs[hint_key], output_folder)
+                if hint_key in ["depth", "seg", "keypoint", "vis", "edge"]:
+                    self.gen_input_control(input_video, input_prompt, hint_key, control_inputs[hint_key], output_folder, blur_strength, canny_threshold)
 
                 # for all hints we need to create weight tensor if not present
                 control_input = control_inputs[hint_key]
@@ -44,7 +48,7 @@ class Preprocessors:
                 # the user provides "control_weight_prompt". The object specified in the
                 # control_weight_prompt will be treated as foreground and have control_weight for these locations.
                 # Everything else will be treated as background and have control weight 0 at those locations.
-                if control_input.get("control_weight_prompt", None) is not None:
+                if control_input.get("control_weight_prompt", None) is not None and hint_key in ["seg"]:
                     prompt = control_input["control_weight_prompt"]
                     log.info(f"{hint_key}: generating control weight tensor with SAM using {prompt=}")
                     out_tensor = os.path.join(output_folder, f"{hint_key}_control_weight.pt")
@@ -93,7 +97,7 @@ class Preprocessors:
 
         return control_inputs
 
-    def gen_input_control(self, in_video, in_prompt, hint_key, control_input, output_folder):
+    def gen_input_control(self, in_video, in_prompt, hint_key, control_input, output_folder, blur_strength="medium", canny_threshold="medium"):
         # if input control isn't provided we need to run preprocessor to create input control tensor
         # for depth no special params, for SAM we need to run with prompt
         if control_input.get("input_control", None) is None:
@@ -118,12 +122,38 @@ class Preprocessors:
                     in_video=in_video,
                     out_video=out_video,
                 )
+            elif hint_key == "vis":
+                log.info(f"no input_control provided for {hint_key}. generating input control video with VisControlModel")
+                self.vis(
+                    in_video=in_video,
+                    out_video=out_video,
+                    blur_strength=blur_strength,
+                )
+            elif hint_key == "edge":
+                log.info(f"no input_control provided for {hint_key}. generating input control video with EdgeControlModel")
+                self.edge(
+                    in_video=in_video,
+                    out_video=out_video,
+                    canny_threshold=canny_threshold,
+                )
             else:
                 log.info(f"no input_control provided for {hint_key}. generating input control video with Openpose")
                 self.keypoint(
                     in_video=in_video,
                     out_video=out_video,
                 )
+
+    def vis(self, in_video, out_video, blur_strength="medium"):
+        if self.vis_model is None:
+            self.vis_model = VisControlModel(blur_strength=blur_strength)
+
+        self.vis_model(in_video, out_video)
+
+    def edge(self, in_video, out_video, canny_threshold="medium"):
+        if self.edge_model is None:
+            self.edge_model = EdgeControlModel(canny_threshold=canny_threshold)
+
+        self.edge_model(in_video, out_video)
 
     def depth(self, in_video, out_video):
         if self.depth_model is None:
