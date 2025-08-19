@@ -334,12 +334,30 @@ class TransferPipeline:
         log.info(f"current_control_inputs: {json.dumps(current_control_inputs, indent=4)}")
 
         log.info("Running preprocessor")
-        self.preprocessors(
-            input_video,
-            prompt,
-            current_control_inputs,
-            output_dir,
-        )
+        # In distributed runs, ensure only rank 0 writes files, then sync
+        if self.process_group is not None:
+            import torch.distributed as dist
+
+            if self.device_rank == 0:
+                self.preprocessors(
+                    input_video,
+                    prompt,
+                    current_control_inputs,
+                    output_dir,
+                )
+            # Wait for rank 0 to finish writing files
+            dist.barrier(self.process_group)
+            # Broadcast updated control inputs (with generated file paths) to all ranks
+            obj_list = [current_control_inputs] if self.device_rank == 0 else [None]
+            dist.broadcast_object_list(obj_list, src=0, group=self.process_group)
+            current_control_inputs = obj_list[0]
+        else:
+            self.preprocessors(
+                input_video,
+                prompt,
+                current_control_inputs,
+                output_dir,
+            )
 
         # TODO: add support for regional prompts and region definitions
         if hasattr(self.pipeline, "regional_prompts"):
