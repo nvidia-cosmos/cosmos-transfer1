@@ -487,9 +487,14 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         # Process regional prompts if provided
         log.info(f"regional_prompts passed to _run_model: {self.regional_prompts}")
         log.info(f"region_definitions passed to _run_model: {self.region_definitions}")
-        regional_embeddings, _ = self._run_text_embedding_on_prompt_with_offload(self.regional_prompts)
+
+        # Safely handle optional regional prompts
+        regional_embeddings = None
         regional_contexts = None
         region_masks = None
+        if self.regional_prompts:
+            regional_embeddings, _ = self._run_text_embedding_on_prompt_with_offload(self.regional_prompts)
+
         if self.regional_prompts and self.region_definitions:
             # Prepare regional prompts using the existing text embedding function
             _, regional_contexts, region_masks = prepare_regional_prompts(
@@ -533,7 +538,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         control_input = data_batch[hint_key]  # [B, C, T, H, W]
         input_video = data_batch.get("input_video", None)
         control_weight = data_batch.get("control_weight", None)
-        num_new_generated_frames = self.num_video_frames - self.num_input_frames
+        #num_new_generated_frames = self.num_video_frames - self.num_input_frames
+        num_new_generated_frames = 121 - self.num_input_frames
         B, C, T, H, W = control_input.shape
 
         if (T - self.num_input_frames) % num_new_generated_frames != 0:  # pad duplicate frames at the end
@@ -692,11 +698,9 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 latents, use_batch=False if is_upscale_case else True
             )
             log.info("Completed VAE decode")
-            frames = torch.from_numpy(frames).permute(3, 0, 1, 2)[None]
             intermediate_frames = []
             for intermeduate in intermediates:
                 temp = self._run_tokenizer_decoding(intermeduate)
-                temp = torch.from_numpy(temp).permute(3, 0, 1, 2)[None]
                 intermediate_frames.append(temp)
 
             if i_clip == 0:
@@ -1028,7 +1032,9 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         control_input = data_batch[hint_key]
         control_weight = data_batch["control_weight"]
 
-        num_new_generated_frames = self.num_video_frames - self.num_input_frames  # 57 - 9 = 48
+        # Number of *new* frames produced per diffusion chunk
+        #   (chunk_length  – overlap_length)
+        num_new_generated_frames = self.num_video_frames - self.num_input_frames
         B, C, T, H, W = control_input.shape
         T = T // self.model.n_views
         assert T == total_T
@@ -1417,6 +1423,8 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
         control_input = data_batch[hint_key]  # [B, C, T, H, W]
         input_video = data_batch.get("input_video", None)
         control_weight = data_batch.get("control_weight", None)
+        # Number of *new* frames produced per diffusion chunk
+        #   (chunk_length  – overlap_length)
         num_new_generated_frames = self.num_video_frames - self.num_input_frames
         B, C, T, H, W = control_input.shape
         if (T - self.num_input_frames) % num_new_generated_frames != 0:  # pad duplicate frames at the end

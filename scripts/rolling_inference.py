@@ -164,13 +164,22 @@ class RollingWindowGenerator:
         # starts a new sampling run
         self.pipeline.seed = int(np.random.randint(0, 2**31 - 1))
 
-        video, _ = self.pipeline._run_model_with_offload(
-            prompt_embedding=getattr(self.pipeline, "_cached_prompt_emb"),
-            negative_prompt_embedding=getattr(self.pipeline, "_cached_neg_prompt_emb"),
-            video_path="",  # no disk video
-            control_inputs=control_inputs,
+        # Adapt to the updated pipeline API which expects batched inputs (lists)
+        prompt_emb = getattr(self.pipeline, "_cached_prompt_emb")
+        neg_prompt_emb = getattr(self.pipeline, "_cached_neg_prompt_emb")
+        prompt_embeddings = [prompt_emb]
+        negative_prompt_embeddings = [neg_prompt_emb] if neg_prompt_emb is not None else None
+        video_paths = [""]  # No disk video provided
+        control_inputs_list = [control_inputs]
+        video_list, _ = self.pipeline._run_model_with_offload(
+            prompt_embeddings=prompt_embeddings,
+            video_paths=video_paths,
+            negative_prompt_embeddings=negative_prompt_embeddings,
+            control_inputs_list=control_inputs_list,
             input_video_tensor=input_video_tensor,
         )
+        # Unpack single-element batch
+        video = video_list[0]
 
         if not self.disable_guardrail:
             video = self.pipeline._run_guardrail_on_video_with_offload(video)
@@ -308,6 +317,7 @@ def main() -> None:
     parser.add_argument("--warmup_frames", type=int, default=0, help="Number of initial frames to generate before using RGB context")
     parser.add_argument("--disable_guardrail", action="store_true", help="Disable prompt and video guardrail checks")
     parser.add_argument("--online", action="store_true", help="Stream control inputs in an online fashion (one frame at a time)")
+    parser.add_argument("--use_distilled", action="store_true", help="Use distilled ControlNet model variant")
 
     # NEW: rolling-window control parameters
     parser.add_argument(
@@ -337,6 +347,7 @@ def main() -> None:
         checkpoint_dir=args.checkpoint_dir,
         sigma_max=args.warmup_sigma_max if args.warmup_frames > 0 else args.sigma_max,
         input_video_path=args.input_video_path,
+        use_distilled=args.use_distilled,
     )
     control_inputs_raw, _ = load_controlnet_specs(dummy_cfg)
     control_inputs = validate_controlnet_specs(dummy_cfg, control_inputs_raw)

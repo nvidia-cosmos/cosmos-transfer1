@@ -525,7 +525,7 @@ def get_batched_ctrl_batch(
         blur_strength, canny_threshold: ControlNet augmentation parameters.
         cutoff_frame (int): If > -1, separates past / future frames in the input video —frames up to
             this index remain unchanged; later frames are zero-masked in the latent and the guided-sampling
-            fields are populated so the model only inpaints the “future” portion.
+            fields are populated so the model only inpaints the "future" portion.
         input_video_tensor: Optional tensor of input video frames,
             used when the caller already has the frames
 
@@ -614,7 +614,7 @@ def get_ctrl_batch(
         canny_threshold (str): Preset for Canny-edge augmentor
         cutoff_frame (int): If > ‑1, only frames up to this index are preserved; frames
             after the cutoff are zero-masked in the latent and corresponding
-            guided-mask tensors are added so the model inpaints the “future”.
+            guided-mask tensors are added so the model inpaints the "future".
         input_video_tensor (torch.Tensor): Optional RGB video as a tensor with shape C×T×H×W,
             uint8 range [0,255], used when the caller already has the frames.
 
@@ -757,8 +757,9 @@ def get_ctrl_batch(
         num_control_frames_to_use = clip_len_final
 
     # Log final decision on how many frames are used for context and control streams
+    ctx_frames_for_log = clip_len_final if context_num_frames != -1 else 0
     log.info(
-        f"Preparing batch: context_frames={clip_len_final}, control_frames={num_control_frames_to_use}"
+        f"Preparing batch: context_frames={ctx_frames_for_log}, control_frames={num_control_frames_to_use}"
     )
 
     if len(control_inputs) > 1:
@@ -766,8 +767,18 @@ def get_ctrl_batch(
             cur_key = f"control_input_{hint_key}"
             if cur_key in control_input_dict:
                 control_input_dict[cur_key] = control_input_dict[cur_key][:, :num_control_frames_to_use]
+                control_input_dict[cur_key] = pad_last_frame(control_input_dict[cur_key], num_video_frames, dim=1)
+                log.info(f"control_input_dict[cur_key].shape: {control_input_dict[cur_key].shape}")
 
-    hint_key = "control_input_" + "_".join(control_inputs.keys())
+    # If the control spec includes 'edge' but we have no RGB video in this
+    # batch (e.g. warm-up where context is generated from scratch), skip the
+    # edge hint for this call to avoid augmentor failures.
+    effective_control_keys = list(control_inputs.keys())
+    if "edge" in effective_control_keys and data_batch["input_video"] is None:
+        log.info("No context video provided, skipping edge hint")
+        effective_control_keys.remove("edge")
+
+    hint_key = "control_input_" + "_".join(effective_control_keys) if effective_control_keys else "control_input_none"
     add_control_input = get_augmentor_for_eval(
         input_key="video",
         output_key=hint_key,
@@ -1385,7 +1396,10 @@ def validate_controlnet_specs(cfg, controlnet_specs) -> Dict[str, Any]:
         if not input_video_path and sigma_max < 80:
             raise ValueError("Must have 'input_video' specified if sigma_max < 80")
 
-        if not input_video_path and "input_control" not in config:
+        # Edge control can be computed dynamically from the video frames passed
+        # later at runtime, so we do not require an explicit input_control clip
+        # or --input_video_path for that specific hint.
+        if hint_key != "edge" and not input_video_path and "input_control" not in config:
             raise ValueError(
                 f"{hint_key} controlnet must have 'input_control' video specified if no 'input_video' specified."
             )

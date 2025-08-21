@@ -535,8 +535,16 @@ class AddControlInputEdge(Augmentor):
         if "control_input_edge" in data_dict:
             # already processed
             return data_dict
-        key_img = self.input_keys[1]
+
+        key_img = self.input_keys[1]  # typically 'video'
         key_out = self.output_keys[0]
+
+        # In some situations (e.g. warm-up frames) the caller may not provide
+        # RGB frames.  In that case we simply skip edge computation and leave
+        # the dict unchanged so the pipeline can proceed without this hint.
+        if key_img not in data_dict:
+            return data_dict
+
         frames = data_dict[key_img]
         # Get lower and upper threshold for canny edge detection.
         if self.use_random:  # always on for training, always off for inference
@@ -556,6 +564,11 @@ class AddControlInputEdge(Augmentor):
                 t_lower, t_upper = 300, 400
             else:
                 raise ValueError(f"Preset {self.preset_strength} not recognized.")
+
+        # If frames is a torch tensor (potentially on GPU), move to CPU and convert
+        # to numpy so that subsequent OpenCV operations work correctly.
+        if torch.is_tensor(frames):
+            frames = frames.detach().cpu().numpy()
         frames = np.array(frames)
         is_image = len(frames.shape) < 4
 
@@ -571,6 +584,38 @@ class AddControlInputEdge(Augmentor):
         edge_maps = torch.from_numpy(edge_maps).expand(3, -1, -1, -1)
         if is_image:
             edge_maps = edge_maps[:, 0]
+
+        # ------------------------------------------------------------------
+        # DEBUG: Save one side-by-side sample (RGB | edges) the first time we
+        #        compute an edge map during a run.  This helps verify that the
+        #        edge input looks sensible when running the regular pipeline.
+        # ------------------------------------------------------------------
+        try:
+            if True:
+                import os, uuid
+
+                if is_image:
+                    rgb_frame = frames  # HWC uint8
+                    edge_vis = edge_maps[0].numpy()  # HxW uint8
+                else:
+                    # Take first temporal slice
+                    rgb_frame = frames[:, 0].transpose(1, 2, 0)  # HWC
+                    edge_vis = edge_maps[0, 0].numpy()  # HxW
+
+                edge_vis_rgb = cv2.cvtColor(edge_vis, cv2.COLOR_GRAY2BGR)
+                rgb_frame_bgr = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
+                canvas = np.concatenate([rgb_frame_bgr, edge_vis_rgb], axis=1)
+
+                out_dir = "/home/lab/mapodaca/cosmos-transfer1-github/edge_debug/"
+                os.makedirs(out_dir, exist_ok=True)
+                fname = os.path.join(out_dir, f"edge_debug_{uuid.uuid4().hex[:8]}.png")
+                cv2.imwrite(fname, canvas)
+                log.info(f"Saved edge debug frame to {fname}")
+                self._debug_saved = True
+        except Exception as _e:
+            # Don't crash the pipeline if debug save fails
+            log.warning(f"Edge debug save failed: {_e}")
+
         data_dict[key_out] = edge_maps
         return data_dict
 

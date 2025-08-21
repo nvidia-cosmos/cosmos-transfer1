@@ -72,7 +72,13 @@ def parse_arguments() -> argparse.Namespace:
         type=int,
         default=1,
         help="Number of conditional frames for long video generation",
-        choices=[1],
+        choices=[1, 9],
+    )
+    parser.add_argument(
+        "--num_video_frames",
+        type=int,
+        default=121,
+        help="Number of video frames per diffusion chunk (set >121 for automatic multi-chunk generation).",
     )
     parser.add_argument("--sigma_max", type=float, default=70.0, help="sigma_max for partial denoising")
     parser.add_argument(
@@ -242,6 +248,7 @@ def demo(cfg, control_inputs):
             num_steps=cfg.num_steps,
             fps=cfg.fps,
             seed=cfg.seed,
+            num_video_frames=cfg.num_video_frames,
             num_input_frames=cfg.num_input_frames,
             control_inputs=control_inputs,
             sigma_max=cfg.sigma_max,
@@ -266,6 +273,7 @@ def demo(cfg, control_inputs):
             num_steps=cfg.num_steps,
             fps=cfg.fps,
             seed=cfg.seed,
+            num_video_frames=cfg.num_video_frames,
             num_input_frames=cfg.num_input_frames,
             control_inputs=control_inputs,
             sigma_max=cfg.sigma_max,
@@ -411,13 +419,13 @@ def demo(cfg, control_inputs):
                             video_save_quality=5,
                             video_save_path=intermediate_video_save_path,
                         )
-                # Create GIF of intermediate videos
-                create_gif(
-                    intermediate_video_save_folder,
-                    os.path.join(intermediate_video_save_folder, "diffusion_intermediates.gif"),
-                    (1080, 720),
-                    10,
-                )
+                    # Create GIF of intermediate videos
+                    create_gif(
+                        intermediate_video_save_folder,
+                        os.path.join(intermediate_video_save_folder, "diffusion_intermediates.gif"),
+                        (1080, 720),
+                        10,
+                    )
 
                 # Save prompt to text file alongside video
                 with open(prompt_save_path, "wb") as f:
