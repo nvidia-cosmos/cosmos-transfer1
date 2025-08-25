@@ -33,7 +33,7 @@ class DepthAnythingModel:
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # Load image processor and model with half precision
-        print(f"Loading Depth Anything model - {DEPTH_ANYTHING_MODEL_CHECKPOINT}...")
+        log.info(f"Loading Depth Anything model - {DEPTH_ANYTHING_MODEL_CHECKPOINT}...")
         self.image_processor = AutoImageProcessor.from_pretrained(
             DEPTH_ANYTHING_MODEL_CHECKPOINT,
             torch_dtype=torch.float16,
@@ -82,7 +82,7 @@ class DepthAnythingModel:
 
         cap = cv2.VideoCapture(input_video)
         if not cap.isOpened():
-            print("Error: Cannot open video file.")
+            log.info("Error: Cannot open video file.")
             return
 
         # Retrieve video properties

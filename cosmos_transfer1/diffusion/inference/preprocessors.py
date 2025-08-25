@@ -29,6 +29,10 @@ from cosmos_transfer1.utils.video_utils import is_valid_video, video_to_tensor
 
 
 class Preprocessors:
+    """Preprocessor class to handle input control generation for various modalities.
+    Note that this class will run on each rank, so each file name must be unique per rank to avoid potential file corruption.
+    """
+
     def __init__(self):
         self.depth_model = None
         self.seg_model = None
@@ -68,8 +72,12 @@ class Preprocessors:
                 if control_input.get("control_weight_prompt", None) is not None and hint_key in ["seg"]:
                     prompt = control_input["control_weight_prompt"]
                     log.info(f"{hint_key}: generating control weight tensor with SAM using {prompt=}")
-                    out_tensor = os.path.join(output_folder, f"{hint_key}_control_weight.pt")
-                    out_video = os.path.join(output_folder, f"{hint_key}_control_weight.mp4")
+                    out_tensor = os.path.join(
+                        output_folder, f"{hint_key}_control_weight_{int(os.environ.get('LOCAL_RANK', 0))}.pt"
+                    )
+                    out_video = os.path.join(
+                        output_folder, f"{hint_key}_control_weight_{int(os.environ.get('LOCAL_RANK', 0))}.mp4"
+                    )
                     weight_scaler = (
                         control_input["control_weight"] if isinstance(control_input["control_weight"], float) else 1.0
                     )
@@ -86,10 +94,14 @@ class Preprocessors:
             log.info(f"processing regional prompts: {regional_prompts}")
             for i, regional_prompt in enumerate(regional_prompts):
                 log.info(f"generating regional context for {regional_prompt}")
-                out_tensor = os.path.join(output_folder, f"regional_context_{i}.pt")
+                out_tensor = os.path.join(
+                    output_folder, f"regional_context_r{int(os.environ.get('LOCAL_RANK', 0))}_{i}.pt"
+                )
                 if "mask_prompt" in regional_prompt:
                     prompt = regional_prompt["mask_prompt"]
-                    out_video = os.path.join(output_folder, f"regional_context_{i}.mp4")
+                    out_video = os.path.join(
+                        output_folder, f"regional_context_r{int(os.environ.get('LOCAL_RANK', 0))}_{i}.mp4"
+                    )
                     self.segmentation(
                         in_video=input_video,
                         out_tensor=out_tensor,
@@ -127,7 +139,9 @@ class Preprocessors:
         # if input control isn't provided we need to run preprocessor to create input control tensor
         # for depth no special params, for SAM we need to run with prompt
         if control_input.get("input_control", None) is None:
-            out_video = os.path.join(output_folder, f"{hint_key}_input_control.mp4")
+            out_video = os.path.join(
+                output_folder, f"{hint_key}_input_control_{int(os.environ.get('LOCAL_RANK', 0))}.mp4"
+            )
             control_input["input_control"] = out_video
             if hint_key == "seg":
                 prompt = control_input.get("input_control_prompt", in_prompt)
