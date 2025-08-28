@@ -708,7 +708,8 @@ def generate_world_from_control(
     x_sigma_max=None,
     augment_sigma=None,
     use_batch_processing: bool = True,
-) -> Tuple[np.array, list, list]:
+    save_input_noise: bool = False,
+) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
     """Generate video using a conditioning video/image input.
 
     Args:
@@ -721,9 +722,10 @@ def generate_world_from_control(
         seed (int): Random seed for generation
         condition_latent (torch.Tensor): Latent tensor from conditioning video/image file
         num_input_frames (int): Number of input frames
+        save_input_noise (bool): Whether to save input noise
 
     Returns:
-        np.array: Generated video frames in shape [T,H,W,C], range [0,255]
+        Generated video frames tensor or tuple of (video frames tensor, input noise tensor)
     """
     assert not model.config.conditioner.video_cond_bool.sample_tokens_start_from_p_or_i, "not supported"
 
@@ -759,6 +761,7 @@ def generate_world_from_control(
         patch_h=h,
         patch_w=w,
         use_batch_processing=use_batch_processing,
+        save_input_noise=save_input_noise,
     )
     return sample
 

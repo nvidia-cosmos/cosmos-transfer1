@@ -146,6 +146,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         region_definitions: Union[List[List[float]], torch.Tensor] = None,
         waymo_example: bool = False,
         disable_guardrail: bool = False,
+        save_input_noise: bool = False,
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -174,6 +175,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             process_group: Process group for distributed training
             waymo_example: Whether to use the waymo example post-training checkpoint
             disable_guardrail: Whether to disable guardrail checks
+            save_input_noise: Whether to save input noise for ODE pairs generation used for Knowledge Distillation
         """
         self.num_input_frames = num_input_frames
         self.control_inputs = control_inputs
@@ -197,6 +199,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         self.seed = seed
         self.regional_prompts = regional_prompts
         self.region_definitions = region_definitions
+        self.save_input_noise = save_input_noise
 
         super().__init__(
             checkpoint_dir=checkpoint_dir,
@@ -417,7 +420,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         video_paths: list[str],
         negative_prompt_embeddings: Optional[list[torch.Tensor]] = None,
         control_inputs_list: list[dict] = None,
-    ) -> list[np.ndarray]:
+        save_input_noise: bool = False,
+    ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         """Generate world representation with automatic model offloading.
 
         Wraps the core generation process with model loading/offloading logic
@@ -428,6 +432,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             video_paths: List of paths to input videos
             negative_prompt_embeddings: Optional list of embeddings for negative prompt guidance
             control_inputs_list: List of control input dictionaries
+            save_input_noise: Whether to save input noise
 
         Returns:
             list[np.ndarray]: List of generated world representations as numpy arrays
@@ -447,6 +452,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             negative_prompt_embeddings=negative_prompt_embeddings,
             video_paths=video_paths,
             control_inputs_list=control_inputs_list,
+            save_input_noise=save_input_noise,
         )
 
         if self.offload_network:
@@ -463,7 +469,8 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         video_paths: list[str],  # [B]
         negative_prompt_embeddings: Optional[torch.Tensor] = None,  # [B, ...] or None
         control_inputs_list: list[dict] = None,  # [B] list of dicts
-    ) -> np.ndarray:
+        save_input_noise: bool = False,
+    ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         """
         Batched world generation with model offloading.
         Each batch element corresponds to a (prompt, video, control_inputs) triple.
@@ -547,7 +554,9 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         video = []
         prev_frames = None
+        input_noise = None
         for i_clip in tqdm(range(N_clip)):
+            log.error(f"i_clip: {i_clip}")
             # data_batch_i = {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in data_batch.items()}
             data_batch_i = {k: v for k, v in data_batch.items()}
             start_frame = num_new_generated_frames * i_clip
@@ -605,7 +614,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
             # Generate video frames for this clip (batched)
             log.info("Starting diffusion sampling")
-            latents = generate_world_from_control(
+            samples = generate_world_from_control(
                 model=self.model,
                 state_shape=state_shape,
                 is_negative_prompt=True,
@@ -618,7 +627,15 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
                 sigma_max=self.sigma_max if x_sigma_max is not None else None,
                 x_sigma_max=x_sigma_max,
                 use_batch_processing=False if is_upscale_case else True,
+                save_input_noise=save_input_noise,
             )
+            if self.save_input_noise:
+                latents, noise = samples
+                if i_clip == 0:
+                    input_noise = noise.to(torch.float32).cpu().numpy()
+            else:
+                latents = samples
+
             log.info("Completed diffusion sampling")
             log.info("Starting VAE decode")
             frames = self._run_tokenizer_decoding(
@@ -636,7 +653,10 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         video = torch.cat(video, dim=2)[:, :, :T]
         video = video.permute(0, 2, 3, 4, 1).numpy()
-        return video
+        if self.save_input_noise:
+            return video, input_noise
+        else:
+            return video
 
     def generate(
         self,
@@ -646,7 +666,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         control_inputs: dict | list[dict] = None,
         save_folder: str = "outputs/",
         batch_size: int = 1,
-    ) -> tuple[np.ndarray, str | list[str]] | None:
+    ) -> tuple[np.ndarray, list[str], list[np.ndarray]] | tuple[np.ndarray, list[str]] | None:
         """Generate video from text prompt and control video.
 
         Pipeline steps:
@@ -666,6 +686,10 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         Returns:
             tuple: (
                 Generated video frames as uint8 np.ndarray [T, H, W, C],
+                Final prompt used for generation (may be enhanced),
+                Input noise as float32 np.ndarray
+            ), or tuple: (
+                Generated video frames as uint8 np.ndarray [T, H, W, C],
                 Final prompt used for generation (may be enhanced)
             ), or None if content fails guardrail safety checks
         """
@@ -684,6 +708,7 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         # Process prompts in batch
         all_videos = []
         all_final_prompts = []
+        all_input_noise = []
 
         # Upsample prompts if enabled
         if self.prompt_upsampler and int(os.environ["RANK"]) == 0:
@@ -748,12 +773,17 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
 
         all_neg_embeddings = [emb[1] for emb in all_prompt_embeddings]
         all_prompt_embeddings = [emb[0] for emb in all_prompt_embeddings]
-        videos = self._run_model_with_offload(
+        model_outputs = self._run_model_with_offload(
             prompt_embeddings=all_prompt_embeddings,
             negative_prompt_embeddings=all_neg_embeddings,
             video_paths=safe_video_paths,
             control_inputs_list=safe_control_inputs,
+            save_input_noise=self.save_input_noise,
         )
+        if self.save_input_noise:
+            videos, input_noise = model_outputs
+        else:
+            videos = model_outputs
         log.info("Finish generation")
 
         log.info("Run guardrail on generated videos")
@@ -762,12 +792,17 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
             if safe_video is not None:
                 all_videos.append(safe_video)
                 all_final_prompts.append(safe_prompts[i])
+                if self.save_input_noise:
+                    all_input_noise.append(input_noise[i])
             else:
                 log.critical(f"Generated video {i+1} is not safe")
         if not all_videos:
             log.critical("All generated videos failed safety checks")
             return None
-        return all_videos, all_final_prompts
+        if self.save_input_noise:
+            return all_videos, all_final_prompts, all_input_noise
+        else:
+            return all_videos, all_final_prompts
 
 
 class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGenerationPipeline):
@@ -812,6 +847,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         view_condition_video="",
         initial_condition_video="",
         control_inputs: dict = None,
+        **kwargs,
     ) -> np.ndarray:
         """Generate world representation with automatic model offloading.
 
@@ -851,6 +887,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         view_condition_video="",
         initial_condition_video="",
         control_inputs: dict = None,
+        **kwargs,
     ) -> torch.Tensor:
         """Generate video frames using the diffusion model.
 
@@ -1175,6 +1212,7 @@ class DiffusionControl2WorldMultiviewGenerationPipeline(DiffusionControl2WorldGe
         initial_condition_video: str,
         control_inputs: dict = None,
         save_folder: str = "outputs/",
+        **kwargs,
     ) -> tuple[np.ndarray, str] | None:
         """Generate video from text prompt and control video.
 
@@ -1284,6 +1322,7 @@ class DistilledControl2WorldGenerationPipeline(DiffusionControl2WorldGenerationP
         video_paths: list[str],  # [B]
         negative_prompt_embeddings: Optional[torch.Tensor] = None,  # [B, ...] or None
         control_inputs_list: list[dict] = None,  # [B] list of dicts
+        **kwargs,
     ) -> np.ndarray:
         """
         Batched world generation with model offloading.

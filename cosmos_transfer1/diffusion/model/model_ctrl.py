@@ -375,7 +375,8 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
         patch_h: int = 88,
         patch_w: int = 160,
         use_batch_processing: bool = True,
-    ) -> Tensor:
+        save_input_noise: bool = False,
+    ) -> Tensor | Tuple[Tensor, Tensor]:
         """
         Generate samples from the batch. Based on given batch, it will automatically determine whether to generate image or video samples.
         Different from the base model, this function support condition latent as input, it will create a differnt x0_fn if condition latent is given.
@@ -429,6 +430,11 @@ class VideoDiffusionModelWithCtrl(DiffusionV2WModel):
 
         if self.net.is_context_parallel_enabled:
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
+
+        if save_input_noise:
+            if self.net.is_context_parallel_enabled:
+                x_sigma_max = cat_outputs_cp(x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
+            return samples, x_sigma_max / self.sde.sigma_max
 
         return samples
 
@@ -671,6 +677,7 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
         condition_video_augment_sigma_in_inference: float = None,
         x_sigma_max: Optional[torch.Tensor] = None,
         sigma_max: float | None = None,
+        save_input_noise: bool = False,
         **kwargs,
     ) -> Tensor:
         """
@@ -720,6 +727,12 @@ class VideoDiffusionT2VModelWithCtrl(DiffusionT2WModel):
 
         if self.net.is_context_parallel_enabled:
             samples = cat_outputs_cp(samples, seq_dim=2, cp_group=self.net.cp_group)
+
+        if save_input_noise:
+            if self.net.is_context_parallel_enabled:
+                x_sigma_max = cat_outputs_cp(x_sigma_max, seq_dim=2, cp_group=self.net.cp_group)
+            return samples, x_sigma_max / self.sde.sigma_max
+
         return samples
 
 

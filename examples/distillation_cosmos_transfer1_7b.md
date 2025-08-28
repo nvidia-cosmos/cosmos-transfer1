@@ -121,7 +121,7 @@ PYTHONPATH=$(pwd) python cosmos_transfer1/distillation/datasets/example_kd_datas
 
 #### 4. Generating Teacher Data and Saving Noise Input
 
-Follow the steps in the [inference README](./inference_cosmos_transfer1_7b.md) to generate output videos using the teacher model. You will need to modify the inference pipeline to additionally save the noise inputs used to generate the teacher data.
+Follow the steps in the [inference README](./inference_cosmos_transfer1_7b.md) to generate output videos using the teacher model. In order to configure the inference pipeline to additionally save the noise inputs used to generate the teacher data, pass the `--save_input_noise` flag.
 
 #### 5. Combining the Base and Control Checkpoints
 

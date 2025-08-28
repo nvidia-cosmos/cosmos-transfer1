@@ -23,6 +23,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Workaround to suppress MP warn
 
 import sys
 from io import BytesIO
+import pickle
 
 import torch
 
@@ -38,6 +39,7 @@ from cosmos_transfer1.diffusion.inference.world_generation_pipeline import (
     DistilledControl2WorldGenerationPipeline,
 )
 from cosmos_transfer1.utils import log, misc
+from cosmos_transfer1.utils.easy_io import easy_io
 from cosmos_transfer1.utils.io import read_prompts_from_file, save_video
 
 torch.enable_grad(False)
@@ -155,6 +157,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Offload prompt upsampler model after inference",
     )
     parser.add_argument("--use_distilled", action="store_true", help="Use distilled ControlNet model variant")
+    parser.add_argument(
+        "--save_input_noise",
+        action="store_true",
+        help="Save input noise for ODE pairs generation used for Knowledge Distillation",
+    )
 
     parser.add_argument(
         "--benchmark",
@@ -224,6 +231,7 @@ def demo(cfg, control_inputs):
 
     if cfg.use_distilled:
         assert not cfg.is_av_sample
+        assert not cfg.save_input_noise, "Saving input noise is not supported for distilled models"
         checkpoint = EDGE2WORLD_CONTROLNET_7B_DISTILLED_CHECKPOINT_PATH
         pipeline = DistilledControl2WorldGenerationPipeline(
             checkpoint_dir=cfg.checkpoint_dir,
@@ -266,6 +274,7 @@ def demo(cfg, control_inputs):
             upsample_prompt=cfg.upsample_prompt,
             offload_prompt_upsampler=cfg.offload_prompt_upsampler,
             process_group=process_group,
+            save_input_noise=cfg.save_input_noise,
         )
 
     if cfg.batch_input_path:
@@ -369,15 +378,22 @@ def demo(cfg, control_inputs):
             time_avg = time_sum / (num_repeats - 1)
             log.critical(f"The benchmarked generation time for Cosmos-Transfer1 is {time_avg:.1f} seconds.")
 
-        videos, final_prompts = batch_outputs
-        for i, (video, prompt) in enumerate(zip(videos, final_prompts)):
+        if cfg.save_input_noise:
+            videos, final_prompts, input_noise = batch_outputs
+        else:
+            videos, final_prompts = batch_outputs
+            input_noise = [None] * len(videos)
+
+        for i, (video, prompt, noise) in enumerate(zip(videos, final_prompts, input_noise)):
             if cfg.batch_input_path:
                 video_save_subfolder = os.path.join(cfg.video_save_folder, f"video_{batch_start+i}")
                 video_save_path = os.path.join(video_save_subfolder, "output.mp4")
                 prompt_save_path = os.path.join(video_save_subfolder, "prompt.txt")
+                noise_save_path = os.path.join(video_save_subfolder, "noise.pickle")
             else:
                 video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
                 prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
+                noise_save_path = os.path.join(cfg.video_save_folder, "noise.pickle")
 
             # Save video and prompt
             if device_rank == 0:
@@ -390,13 +406,16 @@ def demo(cfg, control_inputs):
                     video_save_quality=5,
                     video_save_path=video_save_path,
                 )
+                log.info(f"Saved video to {video_save_path}")
 
                 # Save prompt to text file alongside video
                 with open(prompt_save_path, "wb") as f:
                     f.write(prompt.encode("utf-8"))
-
-                log.info(f"Saved video to {video_save_path}")
                 log.info(f"Saved prompt to {prompt_save_path}")
+
+                if cfg.save_input_noise:
+                    easy_io.dump(noise, noise_save_path)
+                    log.info(f"Saved input noise to {noise_save_path}")
 
     # clean up properly
     if cfg.num_gpus > 1:
