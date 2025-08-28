@@ -556,7 +556,6 @@ class DiffusionControl2WorldGenerationPipeline(BaseWorldGenerationPipeline):
         prev_frames = None
         input_noise = None
         for i_clip in tqdm(range(N_clip)):
-            log.error(f"i_clip: {i_clip}")
             # data_batch_i = {k: v.clone() if isinstance(v, torch.Tensor) else v for k, v in data_batch.items()}
             data_batch_i = {k: v for k, v in data_batch.items()}
             start_frame = num_new_generated_frames * i_clip

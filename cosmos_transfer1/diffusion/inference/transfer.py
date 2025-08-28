@@ -21,9 +21,9 @@ import time
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Workaround to suppress MP warning
 
+import pickle
 import sys
 from io import BytesIO
-import pickle
 
 import torch
 
