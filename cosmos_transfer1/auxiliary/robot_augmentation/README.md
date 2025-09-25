@@ -48,7 +48,7 @@ This script extracts foreground (robot) and background information from semantic
 - An input video file
 
 Here is an example input format:
-[Example input directory](https://github.com/google-deepmind/cosmos/tree/main/assets/robot_augmentation_example/example1)
+[Example input directory](https://github.com/nvidia-cosmos/cosmos-transfer1/tree/main/assets/robot_augmentation_example/example1)
 
 #### Usage
 
