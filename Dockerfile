@@ -16,31 +16,42 @@
 # Use NVIDIA PyTorch container as base image
 FROM nvcr.io/nvidia/tritonserver:25.04-vllm-python-py3
 
-# Install basic tools
-RUN apt-get update && apt-get install -y git tree ffmpeg wget
-RUN rm /bin/sh && ln -s /bin/bash /bin/sh && ln -s /lib64/libcuda.so.1 /lib64/libcuda.so
-RUN apt-get install -y libglib2.0-0
+# Install basic tools and build dependencies like nasm to fix tensorstore build.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    tree \
+    ffmpeg \
+    wget \
+    nasm \
+    libglib2.0-0 \
+    libmagic1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm /bin/sh && ln -s /bin/bash /bin/sh \
+    && ln -s /lib64/libcuda.so.1 /lib64/libcuda.so \
+    && ln -s /usr/bin/python3.12 /usr/bin/python
 
-# Copy the cosmos-transfer1.yaml and requirements.txt files to the container
+# Copy the application files to the container
 COPY ./cosmos-transfer1.yaml /cosmos-transfer1.yaml
 COPY ./requirements_docker.txt /requirements.txt
 
-RUN ls -l /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info && rm -rf /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info
+# Workaround for a specific package conflict in the base image.
+RUN if [ -d /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info ]; then \
+        echo "Removing existing blinker dist-info to prevent conflicts." && \
+        rm -rf /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info; \
+    fi
+
+# Install Python dependencies.
 RUN echo "Installing dependencies. This will take a while..." && \
     pip install --no-cache-dir -r /requirements.txt && \
     pip install -v --upgrade --no-build-isolation --no-dependencies sam2==1.1.0 && \
     pip install -v transformer-engine[pytorch]==2.5.0 && \
-    pip install decord==0.6.0 && \
+    pip install -v decord==0.6.0 && \
     git clone https://github.com/NVIDIA/apex && \
     pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./apex && \
     rm -rf apex && \
-    pip install -v decord==0.6.0 && \
     echo "Environment setup complete"
 
-# Create Python symlink
-RUN ln -s /usr/bin/python3.12 /usr/bin/python
-RUN apt-get install -y libmagic1
-
+# Set up the workspace
 RUN mkdir -p /workspace
 WORKDIR /workspace
 
