@@ -1,6 +1,6 @@
 # Distilling Cosmos-Transfer1 Models
 
-In July 2025, we released a distilled version of the Cosmos-Transfer1-7B Edge model. We distilled the original 35-step Cosmos-Transfer1-7B Edge model into a single-step model while preserving output quality.
+We previously released a distilled version of the Cosmos-Transfer1-7B Edge model. While the original model required 72 total inferences (36 steps x 2) due to classifier-free guidance (CFG), the distilled model requires only a single inference without CFG. This achieves a 72x speedup while maintaining output quality.
 
 We now provide our distillation recipe and training code, so that you can replicate the diffusion step distillation process using your own models and data.
 

@@ -31,7 +31,7 @@ Cosmos-Transfer1 includes the following:
 
 ## News
 
-- [2025/08] **Cosmos-Transfer1-7B Edge Distilled** is available! Now you can generate videos in a single diffusion step (vs. 35 steps), significantly speeding up inference. We provide the distillation recipe and training code, so you can even distill your own models! Try it out and tell us what you think!
+- [2025/08] **Cosmos-Transfer1-7B Edge Distilled** is available! Now you can generate videos in a single diffusion step (vs. 36 steps), significantly speeding up inference. We provide the distillation recipe and training code, so you can even distill your own models! Try it out and tell us what you think!
 
   - [Inference guide](examples/inference_cosmos_transfer1_7b.md#example-2-distilled-single-control-edge)
 
