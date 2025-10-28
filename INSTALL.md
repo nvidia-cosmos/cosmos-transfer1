@@ -10,6 +10,30 @@ git submodule update --init --recursive
 Cosmos runs only on Linux systems. We have tested the installation with Ubuntu 24.04, 22.04, and 20.04.
 Cosmos requires the Python version to be `3.12.x`.
 
+### libnvrtc check
+
+Check libnvrtc.so exists
+
+`find /usr -name "libnvrtc.so*" 2>/dev/null | head -n 10`
+
+If no output then below are the steps to install libnvrtc
+
+####  Steps to install libnvrtc
+
+1. determine cuda version using nvidia-smi command
+`nvidia-smi | grep "CUDA Version"`
+2. If the cuda version output is 12.8 set CUDA_VERSION=12-8
+3. CUDA_VERSION=12-8
+4. apt-get update && apt-get install -y wget gnupg
+5. wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+
+If you are using ubuntu 20.04 instead of ubuntu 22.04 then run
+
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.1-1_all.deb
+
+6. dpkg -i cuda-keyring_1.1-1_all.deb
+7. apt-get -y update && apt-get install -y cuda-nvrtc-$CUDA_VERSION libcublas-$CUDA_VERSION libcurand-$CUDA_VERSION libcusparse-$CUDA_VERSION
+
 ### Inference using conda
 
 Please also make sure you have `conda` installed ([instructions](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html)).
@@ -25,10 +49,20 @@ pip install -r requirements.txt
 # Install vllm
 pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
 export VLLM_ATTENTION_BACKEND=FLASHINFER
-pip install vllm==0.9.0
+pip install vllm==0.9.2
 # Install decord
 pip install decord==0.6.0
-pip install torch==2.7.0 torchvision==0.22.0 --ignore-installed --index-url https://download.pytorch.org/whl/cu128
+# pip install torch==2.7.0 torchvision==0.22.0 --ignore-installed --index-url https://download.pytorch.org/whl/cu128
+pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/flash_attn-2.6.3+cu128.torch271-cp312-cp312-linux_x86_64.whl
+
+pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/natten-0.21.0+cu128.torch271-cp312-cp312-linux_x86_64.whl
+
+pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/transformer_engine-1.13.0+cu128.torch271-cp312-cp312-linux_x86_64.whl
+
+pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/torch-2.7.1+cu128-cp312-cp312-manylinux_2_28_x86_64.whl
+
+pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/torchvision-0.22.1+cu128-cp312-cp312-manylinux_2_28_x86_64.whl
+
 # Patch Transformer engine linking issues in conda environments.
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.12
@@ -76,11 +110,6 @@ pip install decord==0.6.0
 # Patch Transformer engine linking issues in conda environments.
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.12
-# Install Transformer engine.
-pip install transformer-engine[pytorch]
-# Install Apex for full training with bfloat16.
-git clone https://github.com/NVIDIA/apex
-pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./apex
 ```
 
 You can test the environment setup for post-training with
