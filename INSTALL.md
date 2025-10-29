@@ -52,7 +52,9 @@ export VLLM_ATTENTION_BACKEND=FLASHINFER
 pip install vllm==0.9.2
 # Install decord
 pip install decord==0.6.0
-# pip install torch==2.7.0 torchvision==0.22.0 --ignore-installed --index-url https://download.pytorch.org/whl/cu128
+
+pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/apex-0.1+cu128.torch271-cp312-cp312-linux_x86_64.whl
+
 pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/flash_attn-2.6.3+cu128.torch271-cp312-cp312-linux_x86_64.whl
 
 pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/natten-0.21.0+cu128.torch271-cp312-cp312-linux_x86_64.whl
@@ -66,8 +68,8 @@ pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/downlo
 # Patch Transformer engine linking issues in conda environments.
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/
 ln -sf $CONDA_PREFIX/lib/python3.12/site-packages/nvidia/*/include/* $CONDA_PREFIX/include/python3.12
-# Install Transformer engine.
-pip install transformer-engine[pytorch]
+
+apt-get install -y libmagic1
 ```
 
 To test the environment setup for inference run
@@ -104,7 +106,7 @@ pip install -r requirements.txt
 # Install vllm
 pip install https://download.pytorch.org/whl/cu128/flashinfer/flashinfer_python-0.2.5%2Bcu128torch2.7-cp38-abi3-linux_x86_64.whl
 export VLLM_ATTENTION_BACKEND=FLASHINFER
-pip install vllm==0.9.0
+pip install vllm==0.9.2
 # Install decord
 pip install decord==0.6.0
 # Patch Transformer engine linking issues in conda environments.

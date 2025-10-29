@@ -26,6 +26,9 @@ import sys
 from io import BytesIO
 
 import torch
+# This import needs to be before any import that may load vllm or its transformers_utils/configs modules
+# because vllm tries to register aimv2 config that's already registered by transformers
+import cosmos_transfer1.utils.fix_vllm_registration
 
 from cosmos_transfer1.checkpoints import (
     BASE_7B_CHECKPOINT_AV_SAMPLE_PATH,
