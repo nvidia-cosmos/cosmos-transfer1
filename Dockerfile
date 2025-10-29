@@ -29,16 +29,24 @@ RUN ls -l /usr/lib/python3/dist-packages/blinker-1.7.0.dist-info && rm -rf /usr/
 RUN echo "Installing dependencies. This will take a while..." && \
     pip install --no-cache-dir -r /requirements.txt && \
     pip install -v --upgrade --no-build-isolation --no-dependencies sam2==1.1.0 && \
-    pip install -v transformer-engine[pytorch]==2.5.0 && \
-    pip install decord==0.6.0 && \
-    git clone https://github.com/NVIDIA/apex && \
-    pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./apex && \
-    rm -rf apex && \
     pip install -v decord==0.6.0 && \
     echo "Environment setup complete"
 
+RUN pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/apex-0.1+cu128.torch271-cp312-cp312-linux_x86_64.whl
+
+RUN pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/flash_attn-2.6.3+cu128.torch271-cp312-cp312-linux_x86_64.whl
+
+RUN pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/natten-0.21.0+cu128.torch271-cp312-cp312-linux_x86_64.whl
+
+RUN pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/transformer_engine-1.13.0+cu128.torch271-cp312-cp312-linux_x86_64.whl
+
+RUN pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/torch-2.7.1+cu128-cp312-cp312-manylinux_2_28_x86_64.whl
+
+RUN pip install https://github.com/nvidia-cosmos/cosmos-dependencies/releases/download/v1.1.0/torchvision-0.22.1+cu128-cp312-cp312-manylinux_2_28_x86_64.whl
+
 # Create Python symlink
 RUN ln -s /usr/bin/python3.12 /usr/bin/python
+# Fix megatron core package issue
 RUN apt-get install -y libmagic1
 
 RUN mkdir -p /workspace

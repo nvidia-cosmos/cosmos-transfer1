@@ -35,6 +35,7 @@ nltk==3.9.1
 numpy==2.2.6
 nvidia_ml_py==12.570.86
 omegaconf==2.3.0
+onnxruntime==1.23.2
 opencv_python==4.10.0.84
 opencv_python_headless==4.11.0.86
 packaging==25.0
@@ -49,6 +50,7 @@ PyYAML==6.0.2
 retinaface_py==0.0.2
 rtmlib==0.0.13
 sam2==1.1.0
+setuptools-scm==9.2.2
 termcolor==3.1.0
 tqdm==4.67.1
 transformers==4.49.0
