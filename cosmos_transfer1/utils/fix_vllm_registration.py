@@ -28,6 +28,7 @@ import warnings
 try:
     # import the AutoConfig object to patch
     from transformers.models.auto import configuration_auto as _conf_mod
+
     AutoConfig = getattr(_conf_mod, "AutoConfig", None)
 except Exception as e:
     AutoConfig = None
@@ -62,4 +63,3 @@ else:
     # apply monkeypatch
     AutoConfig.register = staticmethod(_safe_register)
     warnings.warn("[patch] Patched AutoConfig.register to ignore duplicate-key ValueError.")
-
