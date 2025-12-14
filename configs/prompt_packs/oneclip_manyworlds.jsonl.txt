@@ -1,0 +1,6 @@
+{"visual_input":"assets/example1_input_video.mp4","prompt":"Same motion and layout. Nighttime, cinematic, photorealistic."}
+{"visual_input":"assets/example1_input_video.mp4","prompt":"Same scene. Rainy weather, wet reflections, photorealistic."}
+{"visual_input":"assets/example1_input_video.mp4","prompt":"Same scene. Bright sunny daylight, crisp shadows, photorealistic."}
+{"visual_input":"assets/example1_input_video.mp4","prompt":"Same scene. Industrial warehouse lighting, realistic materials."}
+{"visual_input":"assets/example1_input_video.mp4","prompt":"Same scene. Clean modern lab, bright neutral lighting, photorealistic."}
+
