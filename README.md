@@ -1,17 +1,17 @@
-<p align="center">
-    <img src="assets/nvidia-cosmos-header.png" alt="NVIDIA Cosmos Header">
-</p>
-
-<h1 align="center">
-
-> 🚨 **Update Notice**  
+> [!IMPORTANT]
+> ## 🚀 [Cosmos 3 Has Arrived](https://github.com/NVIDIA/Cosmos)
 >
-> The latest version of our Cosmos-Transfer is now live!
+> Cosmos 3 is NVIDIA's next-generation foundation model platform for Physical AI. Compared with Cosmos-Transfer1, Cosmos 3 delivers significantly stronger transfer capabilities, enabling higher-fidelity transformation, adaptation, and simulation across diverse domains, sensors, environments, and embodiments.
 >
-> 👉 [**Cosmos-Transfer2.5**](https://github.com/nvidia-cosmos/cosmos-transfer2.5)
-
-We recommend all users migrate to the new version for improved performance, features, and continued support.
-</h1>
+> Beyond improving transfer quality, Cosmos 3 unifies capabilities that previously required multiple specialized models. A single Cosmos 3 model can reason, predict future world states, transfer across domains and modalities, and generate actions and policies for embodied agents within one unified architecture.
+>
+> This repository is no longer under active development and will receive only limited maintenance updates. Future model releases, features, documentation, and community support will be focused on Cosmos 3.
+>
+> 👉 Visit the new Cosmos home: https://github.com/NVIDIA/Cosmos
+>
+> There you will find the latest Cosmos 3 models, technical reports, tutorials, benchmarks, and ecosystem updates.
+>
+> Thank you for your support of Cosmos-Transfer1. We encourage all users to migrate to Cosmos 3 for the latest state-of-the-art Physical AI capabilities.
 
 ### [Product Website](https://www.nvidia.com/en-us/ai/cosmos/) | [Hugging Face](https://huggingface.co/collections/nvidia/cosmos-transfer1-67c9d328196453be6e568d3e) | [Paper](https://arxiv.org/abs/2503.14492) | [Paper Website](https://research.nvidia.com/labs/dir/cosmos-transfer1/)
 
