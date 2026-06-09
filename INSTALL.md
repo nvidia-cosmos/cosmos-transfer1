@@ -2,7 +2,7 @@
 
 Clone the `cosmos-transfer1` source code
 ```bash
-git clone git@github.com:nvidia-cosmos/cosmos-transfer1.git
+git clone https://github.com/nvidia-cosmos/cosmos-transfer1.git
 cd cosmos-transfer1
 git submodule update --init --recursive
 ```
